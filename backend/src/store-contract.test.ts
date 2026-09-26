@@ -82,6 +82,39 @@ describe.each([
     expect(await store.searchCreators("hidden", 10)).toEqual([]);
   });
 
+  it("lists post creators, defaulting to public without a profile", async () => {
+    const anonymous = "kaspatest:anonymous";
+    const privateWithPosts = "kaspatest:private";
+    const publicWithoutPosts = "kaspatest:empty";
+
+    await store.publishPost(post("anonymous-post", anonymous, now));
+    await store.publishPost(post("private-post", privateWithPosts, now));
+    await store.saveProfile({
+      address: privateWithPosts,
+      displayName: "hidden",
+      isPublic: false,
+      updatedAt: now,
+    });
+    await store.publishPost(post("named-post", creator, now));
+    await store.saveProfile({
+      address: creator,
+      displayName: "named",
+      isPublic: true,
+      updatedAt: now,
+    });
+    await store.saveProfile({
+      address: publicWithoutPosts,
+      displayName: "empty",
+      isPublic: true,
+      updatedAt: now,
+    });
+
+    expect(await store.publicCreators(10)).toEqual([
+      { address: anonymous, displayName: null, isPublic: true, updatedAt: 0 },
+      { address: creator, displayName: "named", isPublic: true, updatedAt: now },
+    ]);
+  });
+
   it("returns creator posts newest first and rejects duplicate media", async () => {
     const older = post("older", creator, now);
     const newer = post("newer", creator, now + 1);

@@ -297,6 +297,24 @@ describe("profile visibility", () => {
     expect(response.body).toEqual([]);
   });
 
+  it("lists post creators that have no profile and hides private ones", async () => {
+    const { app, store } = await profileApp();
+    await store.publishPost({ ...post("anonymous-post"), creator: otherAddress });
+    await store.publishPost({ ...post("private-post"), creator: address });
+    await store.saveProfile({
+      address,
+      displayName: "Hidden",
+      isPublic: false,
+      updatedAt: Date.now(),
+    });
+
+    const response = await request(app).get("/api/creators/public");
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([
+      expect.objectContaining({ address: otherAddress, displayName: null }),
+    ]);
+  });
+
   it("keeps the display name when only visibility is toggled", async () => {
     const { app, store } = await profileApp();
 

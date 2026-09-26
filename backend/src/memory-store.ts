@@ -177,14 +177,20 @@ export class MemoryStore implements Repositories {
       .map((v) => structuredClone(v));
   }
   async publicCreators(limit: number) {
-    return [...this.profiles.values()]
-      .filter((v) => v.isPublic)
-      .filter((v) => [...this.posts.values()].some((p) => p.creator === v.address))
+    const addresses = new Set([...this.posts.values()].map((p) => p.creator));
+    return [...addresses]
+      .map((address): Profile | null => {
+        const profile = this.profiles.get(address);
+        if (profile && !profile.isPublic) return null;
+        return profile
+          ? structuredClone(profile)
+          : { address, displayName: null, isPublic: true, updatedAt: 0 };
+      })
+      .filter((v): v is Profile => v !== null)
       .sort((a, b) =>
         (a.displayName ?? a.address).localeCompare(b.displayName ?? b.address),
       )
-      .slice(0, limit)
-      .map((v) => structuredClone(v));
+      .slice(0, limit);
   }
   async publishPost(v: Post) {
     if (
