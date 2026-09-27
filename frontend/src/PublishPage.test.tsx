@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
+import { trackPublishClick } from "./analytics.js";
 import { COPY } from "./copy.js";
 import { PublishPage } from "./PublishPage.js";
 import { api, NETWORK_SWITCH_REQUIRED_EVENT } from "./kasware.js";
@@ -30,6 +31,9 @@ vi.mock("./kasware.js", async () => ({
 }));
 vi.mock("./upload.js", () => ({
   uploadMedia: vi.fn(),
+}));
+vi.mock("./analytics.js", () => ({
+  trackPublishClick: vi.fn(),
 }));
 
 const address = `kaspatest:${"q".repeat(60)}`;
@@ -103,6 +107,7 @@ describe("creator publish experience", () => {
 
     expect(signIn).toHaveBeenCalledOnce();
     expect(uploadMedia).toHaveBeenCalledOnce();
+    expect(trackPublishClick).toHaveBeenCalledOnce();
   });
 
   it("lets captions and price be edited", async () => {
@@ -198,6 +203,7 @@ describe("creator publish experience", () => {
     expect(signIn).toHaveBeenCalledOnce();
     expect(uploadMedia).not.toHaveBeenCalled();
     expect(api).not.toHaveBeenCalled();
+    expect(trackPublishClick).toHaveBeenCalledOnce();
   });
 
   it("opens the existing post when the media was already published", async () => {

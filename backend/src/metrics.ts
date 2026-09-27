@@ -40,6 +40,7 @@ export class Metrics {
   private readonly httpRequests: Counter<"method" | "route" | "status">;
   private readonly httpDuration: Histogram<"method" | "route">;
   private readonly pageVisits: Counter<string>;
+  private readonly publishClicks: Counter<string>;
   private readonly mediaPublish: Counter<"outcome" | "media_type">;
   private readonly mediaPublishBytes: Histogram<"media_type">;
   private readonly mediaValidationFailures: Counter<"category">;
@@ -85,6 +86,11 @@ export class Metrics {
     this.pageVisits = new Counter({
       name: "kaskama_page_visits_total",
       help: "Total homepage visits.",
+      registers,
+    });
+    this.publishClicks = new Counter({
+      name: "kaskama_publish_click_total",
+      help: "Total publish button clicks.",
       registers,
     });
     this.mediaPublish = new Counter({
@@ -224,6 +230,11 @@ export class Metrics {
   /** Records a homepage visit. */
   recordHomepageVisit(): void {
     this.pageVisits.inc();
+  }
+
+  /** Records a publish button click. */
+  recordPublishClick(): void {
+    this.publishClicks.inc();
   }
 
   mediaPublishAttempt(outcome: string, mediaType: string): void {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { mediaHintError, validatePost } from "@kaskama/shared";
+import { trackPublishClick } from "./analytics.js";
 import { COPY } from "./copy.js";
 import { uploadMedia, type UploadResult } from "./upload.js";
 import { Icon } from "./Icons.js";
@@ -183,7 +184,11 @@ export function PublishPage({ address, signIn, signingIn }: WalletProps) {
             </div>
 
             <p className="publish-free-note">Publishing is free.</p>
-            <button className="primary publish-action" disabled={!selectedFile || busy}>
+            <button
+              className="primary publish-action"
+              disabled={!selectedFile || busy}
+              onClick={() => trackPublishClick()}
+            >
               {busy && <Spinner />}
               {actionLabel}
             </button>

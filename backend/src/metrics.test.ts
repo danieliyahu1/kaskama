@@ -24,6 +24,7 @@ describe("metrics endpoint", () => {
       durationSeconds: 0.02,
     });
     metrics.recordHomepageVisit();
+    metrics.recordPublishClick();
     const server = createMetricsServer(metrics);
     servers.push(server);
     const port = await listen(server);
@@ -38,6 +39,7 @@ describe("metrics endpoint", () => {
     expect(body).toContain("kaskama_http_requests_total");
     expect(body).toContain('route="/api/posts/:id"');
     expect(body).toContain("kaskama_page_visits_total 1");
+    expect(body).toContain("kaskama_publish_click_total 1");
     expect(body).toContain("kaskama_http_request_duration_seconds");
     expect(body).toContain("kaskama_build_info");
     expect(body).toContain('revision="abc123"');

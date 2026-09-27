@@ -96,6 +96,7 @@ curl http://localhost:9090/metrics
 Recorded signals include:
 
 - HTTP request rate, error rate, duration, and in-flight requests by route template.
+- Homepage visits and publish button clicks.
 - Media publication outcomes, validation failures, and delivery bytes.
 - Payment and membership preparation, finalization, and verification outcomes.
 - Turso, Cloudflare R2, Kaspa REST, and Kaspa wRPC request duration and failures.

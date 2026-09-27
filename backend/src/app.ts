@@ -1440,6 +1440,14 @@ export function createApp(d: AppDependencies) {
       }
     }),
   );
+  /**
+   * Counts publish button clicks. The browser sends this as a fire-and-forget
+   * beacon, so the route is public, carries no payload, and always succeeds.
+   */
+  app.post("/api/analytics/publish-click", (_req, res) => {
+    metrics.recordPublishClick();
+    res.status(204).end();
+  });
   app.use((e: unknown, req: Request, res: Response, next: NextFunction) => {
     void next;
     if (e instanceof z.ZodError) {
