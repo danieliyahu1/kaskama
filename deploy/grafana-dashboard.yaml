@@ -24,7 +24,7 @@ data:
           "title": "Homepage opens",
           "description": "Full document loads of the homepage. Counts visits, not unique people.",
           "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
-          "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+          "gridPos": { "h": 6, "w": 4, "x": 0, "y": 0 },
           "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
           "targets": [
             {
@@ -41,7 +41,7 @@ data:
           "title": "Sign-ins",
           "description": "Successful wallet sign-ins. Counts sessions created, not unique people.",
           "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
-          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+          "gridPos": { "h": 6, "w": 4, "x": 4, "y": 0 },
           "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
           "targets": [
             {
@@ -58,7 +58,7 @@ data:
           "title": "Reached the creators page",
           "description": "Times the public creators page was opened. Counts visits, not unique people.",
           "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
-          "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+          "gridPos": { "h": 6, "w": 4, "x": 8, "y": 0 },
           "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
           "targets": [
             {
@@ -75,7 +75,7 @@ data:
           "title": "Reached a creator page",
           "description": "Times any creator profile page was opened. Counts visits, not unique people.",
           "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
-          "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+          "gridPos": { "h": 6, "w": 4, "x": 12, "y": 0 },
           "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
           "targets": [
             {
@@ -83,6 +83,23 @@ data:
               "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
               "expr": "sum(increase(kaskama_http_requests_total{job=\"kaskama\",route=\"/api/creators/:address\"}[$__range])) or vector(0)",
               "legendFormat": "creator page opens"
+            }
+          ]
+        },
+        {
+          "id": 23,
+          "type": "stat",
+          "title": "Publish clicks",
+          "description": "Times the publish button was clicked. Counts clicks, not unique people.",
+          "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
+          "gridPos": { "h": 6, "w": 4, "x": 16, "y": 0 },
+          "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
+              "expr": "sum(increase(kaskama_publish_click_total{job=\"kaskama\"}[$__range])) or vector(0)",
+              "legendFormat": "publish clicks"
             }
           ]
         },
@@ -132,6 +149,12 @@ data:
               "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
               "expr": "sum(increase(kaskama_http_requests_total{job=\"kaskama\",route=\"/api/creators/:address\"}[$__interval])) or vector(0)",
               "legendFormat": "GET /api/creators/:address"
+            },
+            {
+              "refId": "E",
+              "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
+              "expr": "sum(increase(kaskama_publish_click_total{job=\"kaskama\"}[$__interval])) or vector(0)",
+              "legendFormat": "publish clicks"
             }
           ]
         },
