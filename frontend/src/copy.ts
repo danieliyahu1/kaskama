@@ -1,8 +1,8 @@
 export const COPY = {
   authPrompt:
     "Connect to Kaskama. This only identifies your wallet. No KAS will be sent.",
-  kaswareMissing:
-    "Open Kasware to connect. Your wallet is used to identify you and approve payments.",
+  kaswareMissing: "Kasware extension not found.",
+  kaswareDownload: "Get Kasware",
   wrongNetwork: "Your wallet is on the wrong network. Switch networks and try again.",
   networkSwitched: "You're on {network} now.",
   walletCancelled: "Wallet connection cancelled.",

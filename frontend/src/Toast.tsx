@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type ToastTone = "error" | "info" | "notice" | "success";
+export type ToastAction = { label: string; href: string };
 export type ToastMessage = {
   message: string;
   tone: ToastTone;
+  action?: ToastAction;
+};
+export type ToastConfig = {
+  message: string;
+  tone?: ToastTone;
+  action?: ToastAction;
 };
 
 const CONFIRMATION_DWELL_MS = 5_000;
@@ -45,9 +52,20 @@ export function useToast() {
     };
   }, []);
 
-  const show = useCallback((message: string, tone: ToastTone = "info") => {
-    publishToast({ message, tone });
-  }, []);
+  const show = useCallback(
+    (message: string | ToastConfig, tone: ToastTone = "info", action?: ToastAction) => {
+      const next =
+        typeof message === "string"
+          ? { message, tone, ...(action === undefined ? {} : { action }) }
+          : {
+              message: message.message,
+              tone: message.tone ?? tone,
+              ...(message.action === undefined ? {} : { action: message.action }),
+            };
+      publishToast(next);
+    },
+    [],
+  );
 
   const dismiss = useCallback(() => publishToast(null), []);
 
@@ -91,6 +109,16 @@ export function Toast({
       onBlur={() => setHeld(false)}
     >
       <span className="toast-message">{toast.message}</span>
+      {toast.action && (
+        <a
+          className="toast-action"
+          href={toast.action.href}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {toast.action.label}
+        </a>
+      )}
       <button
         className="toast-close"
         type="button"

@@ -1089,6 +1089,16 @@ progress {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.toast-action {
+  flex: 0 0 auto;
+  color: var(--acid);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.toast-action:hover,
+.toast-action:focus-visible {
+  text-decoration: underline;
+}
 .toast-close {
   display: inline-grid;
   place-items: center;

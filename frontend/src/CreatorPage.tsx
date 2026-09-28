@@ -25,6 +25,7 @@ import { useToast } from "./Toast.js";
 import { HomeLink, Message } from "./Message.js";
 import { COPY } from "./copy.js";
 import { errorText, isNetworkRequired } from "./errors.js";
+import { presentError } from "./error-toast.js";
 import { ApiError } from "./api-error.js";
 import { formatKas, relativeTime, shortenAddress } from "./format.js";
 import type { WalletProps } from "./wallet.js";
@@ -126,7 +127,8 @@ export function CreatorPage({
     if (isNetworkRequired(error)) return;
     const refresh = error instanceof ApiError && error.retry === RETRY_AFTER_REFRESH;
     if (refresh) await loadCreator();
-    showToast(errorText(error, fallback), refresh ? "info" : "error");
+    const presented = presentError(error, fallback);
+    showToast(presented.message, refresh ? "info" : presented.tone, presented.action);
   }
 
   async function membershipAction() {

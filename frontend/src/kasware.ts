@@ -59,8 +59,16 @@ declare global {
 
 export class WalletError extends Error {}
 
+export class WalletMissingError extends WalletError {}
+
+/**
+ * Where to point users who don't have the Kasware browser extension yet.
+ * The official page lists the Chrome and Brave extensions.
+ */
+export const KASWARE_DOWNLOAD_URL = "https://www.kasware.xyz/";
+
 export function kasware(): Kasware {
-  if (!window.kasware) throw new WalletError(COPY.kaswareMissing);
+  if (!window.kasware) throw new WalletMissingError(COPY.kaswareMissing);
   return window.kasware;
 }
 

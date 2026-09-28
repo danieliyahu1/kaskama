@@ -1,11 +1,14 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { Toast, useToast, type ToastTone } from "./Toast.js";
+import { Toast, useToast, type ToastAction, type ToastTone } from "./Toast.js";
 
-function ToastHarness({ tone = "success" }: { tone?: ToastTone } = {}) {
+function ToastHarness({
+  tone = "success",
+  action,
+}: { tone?: ToastTone; action?: ToastAction } = {}) {
   const { toast, showToast, dismissToast } = useToast();
   return (
     <>
-      <button onClick={() => showToast("Saved.", tone)}>Show</button>
+      <button onClick={() => showToast("Saved.", tone, action)}>Show</button>
       <Toast toast={toast} onDismiss={dismissToast} />
     </>
   );
@@ -58,6 +61,22 @@ describe("Toast", () => {
 
     expect(screen.getByRole("status")).toHaveClass("toast-notice");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("renders an action link that opens a new tab", () => {
+    render(
+      <ToastHarness
+        tone="notice"
+        action={{ label: "Get Kasware", href: "https://example.com/install" }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+
+    const link = screen.getByRole("link", { name: "Get Kasware" });
+    expect(link).toHaveAttribute("href", "https://example.com/install");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
 
   it.each(["success", "notice"] as const)(

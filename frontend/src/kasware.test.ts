@@ -1,14 +1,16 @@
 import { DEFAULT_NETWORK, networkDefinition } from "@kaskama/shared";
 import { COPY } from "./copy.js";
-import { isNetworkRequired } from "./errors.js";
+import { isNetworkRequired, isWalletMissing } from "./errors.js";
 import {
   NETWORK_SWITCH_REQUIRED_EVENT,
   NETWORK_SWITCHED_EVENT,
   SESSION_EXPIRED_EVENT,
+  WalletMissingError,
   WalletNetworkError,
   api,
   authenticate,
   ensureWalletNetwork,
+  kasware,
   signPreparedPayment,
   type Kasware,
 } from "./kasware.js";
@@ -313,5 +315,29 @@ describe("wallet network reconciliation", () => {
     const error = await pending;
     expect(isNetworkRequired(error)).toBe(true);
     expect((error as Error).message).toBe(COPY.wrongNetwork);
+  });
+});
+
+describe("missing Kasware wallet", () => {
+  beforeEach(() => {
+    delete window.kasware;
+  });
+
+  it("is reported as a wallet-missing notice, not a generic error", () => {
+    const error = (() => {
+      try {
+        kasware();
+      } catch (caught) {
+        return caught;
+      }
+    })();
+
+    expect(error).toBeInstanceOf(WalletMissingError);
+    expect(error).toBeInstanceOf(Error);
+    expect(isWalletMissing(error)).toBe(true);
+    expect(isNetworkRequired(error)).toBe(false);
+    expect(error instanceof WalletMissingError ? error.message : null).toBe(
+      COPY.kaswareMissing,
+    );
   });
 });

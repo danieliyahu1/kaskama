@@ -9,6 +9,7 @@ import { LockIcon } from "./Icons.js";
 import { MediaTypeBadge } from "./MediaTypeBadge.js";
 import { HomeLink, Message } from "./Message.js";
 import { errorText, isNetworkRequired } from "./errors.js";
+import { presentError } from "./error-toast.js";
 import { formatKas, relativeTime } from "./format.js";
 import { PostMedia } from "./PostMedia.js";
 import { PreviewImage } from "./PreviewImage.js";
@@ -95,7 +96,7 @@ export function PostPage({ address, signIn, signingIn }: WalletProps) {
       showToast(result.message ?? "Your payment is confirming. Don't pay again.");
     } catch (error) {
       if (!isNetworkRequired(error))
-        showToast(errorText(error, "Payment failed. Nothing was charged."), "error");
+        showToast(presentError(error, "Payment failed. Nothing was charged."));
     } finally {
       setBusy(null);
     }

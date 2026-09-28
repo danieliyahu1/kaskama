@@ -1,5 +1,5 @@
 import { ApiError } from "./api-error.js";
-import { WalletNetworkError } from "./kasware.js";
+import { WalletMissingError, WalletNetworkError } from "./kasware.js";
 
 /**
  * A wrong network is not a failure: the switching action already told the user.
@@ -7,6 +7,14 @@ import { WalletNetworkError } from "./kasware.js";
  */
 export function isNetworkRequired(error: unknown): boolean {
   return error instanceof WalletNetworkError;
+}
+
+/**
+ * A missing extension is not a mistake: no user action caused it, so it is
+ * framed as a notice with a download link instead of an error.
+ */
+export function isWalletMissing(error: unknown): boolean {
+  return error instanceof WalletMissingError;
 }
 
 /**

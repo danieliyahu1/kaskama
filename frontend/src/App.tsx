@@ -27,6 +27,7 @@ import { AccountMenu } from "./AccountMenu.js";
 import { HomeLink, Message } from "./Message.js";
 import { Spinner } from "./Spinner.js";
 import { errorText, isNetworkRequired } from "./errors.js";
+import { presentError } from "./error-toast.js";
 import { Toast, useToast } from "./Toast.js";
 import { reloadPage } from "./navigation.js";
 
@@ -171,7 +172,7 @@ export function App() {
       return authenticatedAddress;
     } catch (error) {
       if (!isNetworkRequired(error))
-        showToast(errorText(error, COPY.verificationFailed), "error");
+        showToast(presentError(error, COPY.verificationFailed));
       return null;
     } finally {
       setSigningIn(false);

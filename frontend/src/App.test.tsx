@@ -4,8 +4,10 @@ import { DEFAULT_NETWORK, PUBLIC_PAGES, networkDefinition } from "@kaskama/share
 import { App } from "./App.js";
 import { COPY } from "./copy.js";
 import {
+  KASWARE_DOWNLOAD_URL,
   NETWORK_SWITCH_REQUIRED_EVENT,
   NETWORK_SWITCHED_EVENT,
+  WalletMissingError,
   api,
   authenticate,
   ensureWalletNetwork,
@@ -201,6 +203,22 @@ describe("session and wallet reconciliation", () => {
     expect(await screen.findByText(/Hi,/i)).toBeInTheDocument();
     expect(apiMock).not.toHaveBeenCalledWith("/api/auth/logout", expect.anything());
     expect(reloadMock).not.toHaveBeenCalled();
+  });
+
+  it("offers to install Kasware as a notice with a download link", async () => {
+    mockApi();
+    authenticateMock.mockRejectedValue(new WalletMissingError(COPY.kaswareMissing));
+
+    render(<App />);
+    const { user } = browser();
+    const signIn = await screen.findByRole("button", { name: "Sign in with Kasware" });
+    await user.click(signIn);
+
+    expect(await screen.findByText(COPY.kaswareMissing)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveClass("toast-notice");
+    const download = screen.getByRole("link", { name: COPY.kaswareDownload });
+    expect(download).toHaveAttribute("href", KASWARE_DOWNLOAD_URL);
+    expect(download).toHaveAttribute("target", "_blank");
   });
 
   it("prompts when an action opens the wallet's network switcher", async () => {
