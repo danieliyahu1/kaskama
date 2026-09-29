@@ -141,7 +141,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
     description:
       "What data Kaskama collects, how it is used, and the choices you have. No email addresses or passwords, and payments stay in your wallet.",
     navLabel: "Privacy",
-    updated: "September 25, 2026",
+    updated: "September 29, 2026",
     heading: "Privacy policy",
     intro: [
       "Kaskama is built around a wallet, not an email and password. This policy explains what we collect, why, and what you can do about it.",
@@ -153,7 +153,9 @@ export const PUBLIC_PAGES: PublicPage[] = [
           "Your Kaspa wallet address, which identifies your account.",
           "Any display name you choose, and whether your creator page is public.",
           "The content you publish, its price, and when it was published.",
+          "Which posts or memberships you unlock, so we can keep your access working.",
           "Feedback you send us, and basic technical logs such as request times and errors.",
+          "Your IP address, used to rate-limit abuse and diagnose errors.",
         ],
       },
       {
@@ -178,7 +180,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
       {
         heading: "Service providers",
         paragraphs: [
-          "We share only what is necessary with providers that host the site, store media, and connect to the Kaspa network. We do not sell your data or use it for advertising.",
+          "We share only what is necessary with providers that host the site, store media, and connect to the Kaspa network. When you send feedback, we deliver it through a private messaging provider. We do not sell your data or use it for advertising.",
         ],
       },
       {
