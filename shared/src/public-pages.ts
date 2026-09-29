@@ -84,7 +84,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
     description:
       "The terms for publishing and unlocking paid content on Kaskama, including the 1% platform fee and direct Kaspa payments.",
     navLabel: "Terms",
-    updated: "September 25, 2026",
+    updated: "September 29, 2026",
     heading: "Terms of service",
     intro: [
       "These terms govern your use of Kaskama. By connecting a wallet, publishing content, or unlocking content, you agree to them. If you do not agree, do not use Kaskama.",
@@ -93,7 +93,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
       {
         heading: "Eligibility",
         paragraphs: [
-          "You must be at least 18 years old and legally able to enter into these terms. You are responsible for your wallet, its keys, and everything done through it.",
+          "You must be legally able to enter into these terms. You are responsible for your wallet, its keys, and everything done through it.",
         ],
       },
       {
