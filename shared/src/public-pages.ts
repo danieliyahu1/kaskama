@@ -39,20 +39,22 @@ export const PUBLIC_PAGES: PublicPage[] = [
     path: "/content-policy",
     title: "Content policy - Kaskama",
     description:
-      "What creators may publish on Kaskama, including the rules for adult material and AI-generated content.",
+      "What creators may publish on Kaskama, including the rules for sensitive content.",
     navLabel: "Content policy",
-    updated: "September 25, 2026",
+    updated: "September 29, 2026",
     heading: "Content policy",
     intro: [
-      "Kaskama is for adult creators and their fans. You must be at least 18 years old to publish or unlock content. This policy explains what is allowed, what is not, and how we enforce it.",
+      "Kaskama is a subscription platform for creators. This policy explains what you may publish, what is not allowed, and how we enforce it.",
     ],
     sections: [
       {
         heading: "What you may publish",
         paragraphs: [
-          "Legal, consensual adult content that you own or have permission to publish.",
-          "AI-generated and synthetic media, as long as it is clearly labeled, does not depict a real, identifiable person without that person's consent, and does not fall into a prohibited category below.",
+          "Original or licensed content you have the rights to publish - art, photography, fitness, music, education, commentary, and more.",
+          "Lawful, consensual adult material. If you publish it, set your profile to Private.",
+          "AI-generated and synthetic media.",
           "Photos and videos that respect the privacy and rights of everyone shown.",
+          "The creators directory is suitable for a general audience. Private profiles are not shown there, but anyone with your link or address can still find you and subscribe.",
         ],
       },
       {
@@ -64,12 +66,6 @@ export const PUBLIC_PAGES: PublicPage[] = [
           "Content that depicts sexual violence, coercion, bestiality, incest, or extreme violence.",
           "Content you do not have the rights to publish, or that infringes someone else's copyright or trademarks.",
           "Content that promotes illegal goods or services, or that is otherwise unlawful in the places Kaskama operates.",
-        ],
-      },
-      {
-        heading: "Labeling AI-generated content",
-        paragraphs: [
-          "If a photo or video is generated or significantly altered with AI, say so in the caption. Labels protect fans and keep synthetic media from being mistaken for real events or real people.",
         ],
       },
       {
