@@ -1589,7 +1589,7 @@ describe("Server-rendered public pages", () => {
     expect(response.status).toBe(200);
     expect(response.text).toContain("<title>Creators - Kaskama</title>");
     expect(response.text).toContain(`href="${origin}/creators"`);
-    expect(response.text).toContain("Browse creators publishing");
+    expect(response.text).toContain("Browse creators selling access");
     expect(response.text).not.toContain(
       '<link rel="canonical" href="https://kaskama.com/"',
     );

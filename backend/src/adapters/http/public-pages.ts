@@ -15,7 +15,7 @@ export interface PublicRouteMatch {
 
 const CREATORS_BODY =
   '<div class="find-page"><header><h1>Creators.</h1></header>' +
-  '<p class="feedback inline">Browse creators publishing paid photos and videos on Kaskama.</p></div>';
+  '<p class="feedback inline">Browse creators selling access to their work on Kaskama.</p></div>';
 
 const FIND_BODY =
   '<div class="find-page"><header><h1>Find a creator.</h1></header>' +
@@ -23,11 +23,11 @@ const FIND_BODY =
 
 const PUBLISH_BODY =
   '<div class="find-page"><header><h1>Publish your work.</h1></header>' +
-  '<p class="feedback inline">Connect your Kasware wallet to publish paid photos and videos on Kaskama.</p></div>';
+  '<p class="feedback inline">Connect your Kasware wallet to publish and sell your work on Kaskama.</p></div>';
 
 const CREATOR_BODY =
   '<div class="find-page"><header><h1>Creator.</h1></header>' +
-  '<p class="feedback inline">Unlock this creator\u2019s paid photos and videos with Kaspa.</p></div>';
+  '<p class="feedback inline">Unlock this creator\u2019s work with Kaspa.</p></div>';
 
 const POST_BODY =
   '<div class="find-page"><header><h1>Post.</h1></header>' +
@@ -47,7 +47,7 @@ const APP_ROUTE_META: Record<string, RouteMeta> = {
   "/creators": {
     title: "Creators - Kaskama",
     description:
-      "Browse creators publishing paid photos and videos on Kaskama and unlock their work with Kaspa.",
+      "Browse creators selling access to their work on Kaskama and unlock it with Kaspa.",
     body: CREATORS_BODY,
   },
   "/find": {
@@ -58,7 +58,7 @@ const APP_ROUTE_META: Record<string, RouteMeta> = {
   "/publish": {
     title: "Publish - Kaskama",
     description:
-      "Publish paid photos and videos, set your own price, and get paid directly by fans on Kaspa.",
+      "Publish your work, set your own price, and get paid directly by fans on Kaspa.",
     body: PUBLISH_BODY,
   },
 };
@@ -93,8 +93,7 @@ export function matchPublicRoute(pathname: string): PublicRouteMatch {
     return {
       status: 200,
       title: "Creator - Kaskama",
-      description:
-        "A creator on Kaskama. Unlock their paid photos and videos with Kaspa.",
+      description: "A creator on Kaskama. Unlock their work with Kaspa.",
       canonicalPath: path,
       body: CREATOR_BODY,
     };

@@ -1,6 +1,6 @@
 # Kaskama
 
-Kaskama is a paid-media application for Kaspa. Creators authenticate with Kasware, upload private media directly to R2, and publish immutable Turso-backed posts. The chain it runs on is selected by `KASPA_NETWORK` (`mainnet` or `testnet-10`).
+Kaskama is a subscription platform where creators sell access to their work. Creators authenticate with Kasware, upload private media directly to R2, and publish immutable Turso-backed posts. The chain it runs on is selected by `KASPA_NETWORK` (`mainnet` or `testnet-10`).
 
 Live app: https://kaskama.com/
 

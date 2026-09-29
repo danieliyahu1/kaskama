@@ -29,9 +29,9 @@ export interface PublicPage {
 
 export const SITE = {
   name: "Kaskama",
-  title: "Kaskama - Get paid directly by your fans and keep 99%",
+  title: "Kaskama - A subscription platform for creators",
   description:
-    "Kaskama lets creators publish paid photos and videos, set their own price, and get paid directly by fans on Kaspa. You keep 99%.",
+    "Kaskama is a subscription platform where creators sell access to their work, set their own price, and get paid directly by fans on Kaspa. You keep 99%.",
 } as const;
 
 export const PUBLIC_PAGES: PublicPage[] = [
