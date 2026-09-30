@@ -2,6 +2,7 @@ packages:
   - frontend
   - backend
   - shared
+  - signer
 onlyBuiltDependencies:
   - esbuild
   - sharp
