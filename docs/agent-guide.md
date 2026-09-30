@@ -10,9 +10,20 @@ a machine can do it, the same way.
 
 ## Prerequisites
 
-- A Kaspa private key. Development runs on `testnet-10`; production runs on
-  `mainnet`. The key's address prefix must match the network.
-- `GET /api/config` returns the network the server is on:
+Bring your own Kaspa keypair. Kaskama never issues a key, account, or token —
+the wallet's key is the identity. Create and sign with any Kaspa SDK; for a
+headless client, `kaspa-wasm` provides `Keypair`, `PrivateKey`, and
+`signMessage`, documented in its
+[API reference](https://kaspa.aspectron.org/docs/).
+
+Derive the address on the network the server reports, so the prefix always
+matches:
+
+```ts
+const address = keypair.toAddress(config.network).toString();
+```
+
+`GET /api/config` returns that network; you never choose one:
 
 ```json
 {
@@ -22,8 +33,10 @@ a machine can do it, the same way.
 }
 ```
 
-The server tells you the network; you never choose one. Sign on the network the
-server reports.
+The same key signs the authentication challenge and the prepared payment. To pay
+on `testnet-10`, fund the address from the
+[testnet faucet](https://wiki.kaspa.org/en/testnets); on `mainnet`, use real KAS.
+Authentication itself is free.
 
 ## Authentication
 
@@ -72,9 +85,7 @@ wins when both are present. `GET /api/auth/session` returns the current identity
 and `POST /api/auth/logout` revokes the token.
 
 The signature is a standard Kaspa message signature (Schnorr) over `message`,
-encoded as hex or base64; `publicKey` is the wallet's x-only public key. Any
-Kaspa SDK can produce it — for example `kaspa-wasm`'s `signMessage` /
-`verifyMessage` pair.
+encoded as hex or base64; `publicKey` is the wallet's x-only public key.
 
 ## Paying and subscribing
 
