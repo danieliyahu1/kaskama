@@ -293,7 +293,7 @@ export function createApp(d: AppDependencies) {
   });
   async function optional(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = req.cookies[sessionCookie] as string | undefined;
+      const id = presentedSessionToken(req);
       if (!id) return next();
       const session = await sessions.getSession(id, now());
       if (!session) {
@@ -374,6 +374,7 @@ export function createApp(d: AppDependencies) {
       setCookie(res, result.session.id, Boolean(d.production));
       metrics.authSessionAttempt("created");
       res.status(201).json({
+        token: result.session.id,
         address: result.session.address,
         expiresAt: new Date(result.session.expiresAt).toISOString(),
       });
@@ -396,7 +397,7 @@ export function createApp(d: AppDependencies) {
     "/api/auth/logout",
     optional,
     asyncHandler(async (req, res) => {
-      const id = req.cookies[sessionCookie] as string | undefined;
+      const id = presentedSessionToken(req);
       if (id) await sessions.logout(id);
       res.clearCookie(sessionCookie, cookieOptions(Boolean(d.production)));
       res.status(204).end();
@@ -1572,6 +1573,20 @@ function cookieOptions(production: boolean) {
     maxAge: SESSION_IDLE_TTL_MS,
     path: "/",
   };
+}
+/**
+ * The session token the caller presented. A browser carries it in the
+ * `kaskama_session` cookie; any other client carries the same token in the
+ * `Authorization: Bearer` header. Transport is a detail; the token is not.
+ * An explicit header wins over the ambient cookie.
+ */
+function presentedSessionToken(req: Request): string | undefined {
+  const authorization = req.get("authorization");
+  if (authorization) {
+    const match = /^Bearer\s+(.+)$/i.exec(authorization.trim());
+    if (match?.[1]) return match[1].trim();
+  }
+  return (req.cookies[sessionCookie] as string | undefined) || undefined;
 }
 function apiError(
   res: Response,

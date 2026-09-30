@@ -161,6 +161,49 @@ describe("authentication outcomes", () => {
     expect(store.sessions.size).toBe(1);
   });
 
+  it("issues a bearer token that authenticates the same session as the cookie", async () => {
+    const store = new MemoryStore();
+    const app = appFor(store, true);
+    const challengeResponse = await request(app)
+      .post("/api/auth/challenge")
+      .set("Origin", publicOrigin)
+      .send({ address })
+      .expect(201);
+
+    const session = await request(app)
+      .post("/api/auth/session")
+      .set("Origin", publicOrigin)
+      .send({
+        challengeId: challengeResponse.body.challengeId,
+        address,
+        publicKey: "a".repeat(64),
+        signature: "signature",
+      })
+      .expect(201);
+
+    expect(session.body.token).toEqual(expect.any(String));
+    expect(session.body.address).toBe(address);
+    // The cookie and the bearer token carry the one session id.
+    const setCookie = session.headers["set-cookie"];
+    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+    expect(cookies.join(";")).toContain(
+      `kaskama_session=${session.body.token}`,
+    );
+
+    const profile = await request(app)
+      .get("/api/profile")
+      .set("Authorization", `Bearer ${session.body.token}`)
+      .expect(200);
+    expect(profile.body.address).toBe(address);
+  });
+
+  it("rejects an unknown bearer token", async () => {
+    await request(appFor(new MemoryStore(), true))
+      .get("/api/profile")
+      .set("Authorization", "Bearer unknown-token")
+      .expect(401);
+  });
+
   it("rejects an empty creator search at the HTTP boundary", async () => {
     await request(appFor(new MemoryStore(), true))
       .get("/api/creators/search?q=   ")
