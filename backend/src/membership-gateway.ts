@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  addressFromScriptPublicKey,
   covenantId,
   Encoding,
   payToScriptHashScript,
@@ -14,6 +15,7 @@ import {
   type MembershipGateway,
   type PaymentSubmission,
   type PreparedMembershipTransaction,
+  type TransactionEvidenceStore,
 } from "./application/ports.js";
 import {
   membershipFeeSompi,
@@ -44,9 +46,12 @@ const WALLET_COMPUTE_BUDGET = 50;
 const COVENANT_COMPUTE_BUDGET = 50;
 const CONNECT_TIMEOUT_MS = 10_000;
 const CONNECT_RETRY_INTERVAL_MS = 1_000;
-const CONFIRM_MAX_ATTEMPTS = 9;
+// The immediate confirmation attempt is short: a transaction that is not yet
+// visible is reported as pending, and the reconciler settles it later. Waiting
+// minutes inside the request buys nothing and stalls the caller.
+const CONFIRM_MAX_ATTEMPTS = 4;
 const CONFIRM_BASE_DELAY_MS = 1_000;
-const CONFIRM_MAX_DELAY_MS = 16_000;
+const CONFIRM_MAX_DELAY_MS = 4_000;
 
 type MembershipTransactionRelay = (signedTransaction: string) => Promise<string>;
 type Sleep = (milliseconds: number) => Promise<void>;
@@ -91,8 +96,36 @@ type ChainOutput = {
 type ChainTransaction = {
   version?: number;
   is_accepted?: boolean;
+  payload?: string;
   outputs?: ChainOutput[];
 };
+
+/**
+ * Reads a captured transaction back into the loose chain shape this gateway
+ * consumes, so a covenant's parent transaction can be checked from evidence we
+ * saved rather than from a node.
+ */
+function evidenceToChainTransaction(transactionJson: string): ChainTransaction {
+  const tx = JSON.parse(transactionJson) as {
+    version?: number;
+    payload?: string;
+    outputs?: {
+      value?: string;
+      scriptPublicKey?: string;
+      covenant?: { covenantId?: string; authorizingInput?: number } | null;
+    }[];
+  };
+  return {
+    ...(tx.version !== undefined ? { version: tx.version } : {}),
+    is_accepted: true,
+    ...(tx.payload !== undefined ? { payload: tx.payload } : {}),
+    outputs: (tx.outputs ?? []).map((output) => ({
+      amount: output.value ?? "",
+      script_public_key: (output.scriptPublicKey ?? "").replace(/^0000/, ""),
+      covenant: output.covenant ?? null,
+    })),
+  };
+}
 
 export class KaspaMembershipGateway implements MembershipGateway {
   private readonly relay: MembershipTransactionRelay;
@@ -105,6 +138,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
     private readonly logger: Logger = defaultLogger,
     private readonly metrics: Metrics = defaultMetrics,
     private readonly network: NetworkId = DEFAULT_NETWORK,
+    private readonly evidence?: TransactionEvidenceStore,
   ) {
     this.relay =
       relay ??
@@ -504,22 +538,33 @@ export class KaspaMembershipGateway implements MembershipGateway {
     this.logger.info("membership_transaction_relayed", {
       txIdPrefix: transactionId.slice(0, 12),
     });
-    const chain = await this.waitForTransaction(transactionId);
-    if (!chain) {
-      this.logger.warn("membership_transaction_confirmation_timeout", {
+    // Capture the signed transaction now, while we have it, so the verifier can
+    // read the mint transaction from evidence rather than from a node.
+    if (this.evidence)
+      await this.evidence.saveTransactionEvidence({
+        transactionId,
+        transaction: signedTransaction,
+        acceptedAt: Date.now(),
+      });
+    // Confirm by the transaction's effect on the ledger rather than by asking
+    // the node for the transaction id. A node's transaction index is an
+    // implementation detail of the chain that the payment rules must not depend
+    // on: the public REST node does not serve v1 transactions at all, yet the
+    // ledger still records their effect.
+    const accepted = await this.confirmByEffect(
+      preparedValue.transaction,
+      transactionId,
+    );
+    if (!accepted) {
+      this.logger.warn("membership_transaction_pending", {
         txIdPrefix: transactionId.slice(0, 12),
       });
-      throw new MembershipStateChangedError();
+      return { isAccepted: null, transactionId, rejection: null };
     }
     this.logger.info("membership_transaction_confirmed", {
       txIdPrefix: transactionId.slice(0, 12),
-      accepted: chain.is_accepted === true,
     });
-    return {
-      isAccepted: chain.is_accepted ? true : null,
-      transactionId,
-      rejection: null,
-    };
+    return { isAccepted: true, transactionId, rejection: null };
   }
 
   async status(transactionId: string): Promise<PaymentSubmission> {
@@ -531,19 +576,50 @@ export class KaspaMembershipGateway implements MembershipGateway {
     };
   }
 
-  private async waitForTransaction(
+  /**
+   * Whether the transaction has taken effect on the ledger: at least one of its
+   * outputs is now a spendable UTXO at the address named by that output's
+   * script. This proves acceptance from a fact the chain itself reports, so it
+   * holds on any node regardless of that node's transaction index.
+   */
+  private async confirmByEffect(
+    transactionJson: string,
     transactionId: string,
-  ): Promise<{ is_accepted?: boolean } | null> {
+  ): Promise<boolean> {
+    const targets: { index: number; address: string }[] = [];
+    const outputs =
+      (JSON.parse(transactionJson) as { outputs?: { scriptPublicKey?: string }[] })
+        .outputs ?? [];
+    outputs.forEach((output, index) => {
+      try {
+        const address = addressFromScriptPublicKey(
+          output.scriptPublicKey ?? "",
+          this.network,
+        );
+        if (address) targets.push({ index, address: address.toString() });
+      } catch {
+        // An output whose script has no address cannot be observed by effect.
+      }
+    });
     let delay = CONFIRM_BASE_DELAY_MS;
     for (let attempt = 0; attempt <= CONFIRM_MAX_ATTEMPTS; attempt++) {
-      const transaction = await this.transaction(transactionId);
-      if (transaction) return transaction;
+      for (const target of targets) {
+        const utxos = await this.utxos(target.address).catch(() => []);
+        if (
+          utxos.some(
+            (utxo) =>
+              utxo.outpoint.transactionId === transactionId &&
+              utxo.outpoint.index === target.index,
+          )
+        )
+          return true;
+      }
       if (attempt < CONFIRM_MAX_ATTEMPTS) {
         await this.sleep(delay);
         delay = Math.min(delay * 2, CONFIRM_MAX_DELAY_MS);
       }
     }
-    return null;
+    return false;
   }
 
   private async transaction(
@@ -579,6 +655,17 @@ export class KaspaMembershipGateway implements MembershipGateway {
     );
   }
 
+  private async readTransaction(transactionId: string): Promise<ChainTransaction> {
+    // Prefer the transaction we captured at submit; fall back to the node only
+    // when we never saw it.
+    const evidence = await this.evidence?.getTransactionEvidence(transactionId);
+    if (evidence) return evidenceToChainTransaction(evidence.transaction);
+    return this.request<ChainTransaction>(
+      "parent_transaction",
+      `/transactions/${transactionId}`,
+    );
+  }
+
   private async findMinterUtxo(
     utxos: Utxo[],
     minter: MembershipState,
@@ -592,9 +679,8 @@ export class KaspaMembershipGateway implements MembershipGateway {
     );
     const matches = await Promise.all(
       candidates.map(async (utxo) => {
-        const transaction = await this.request<ChainTransaction>(
-          "parent_transaction",
-          `/transactions/${utxo.outpoint.transactionId}`,
+        const transaction = await this.readTransaction(
+          utxo.outpoint.transactionId,
         );
         const output = transaction.outputs?.[utxo.outpoint.index];
         return transaction.version === 1 &&

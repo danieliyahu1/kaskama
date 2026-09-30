@@ -185,14 +185,13 @@ describe("KaspaMembershipGateway", () => {
     expect(inputValue - outputValue).toBe(608_300n);
   });
 
-  it("submits version 1 inputs using compute budgets", async () => {
+  it("confirms a submission by the transaction's effect on the ledger", async () => {
     const transactionId = "44".repeat(32);
     const relay = vi.fn(async () => transactionId);
     const sleep = vi.fn(async () => undefined);
-    let confirmationAttempts = 0;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
         if (url.endsWith("/info/fee-estimate"))
           return Response.json({
@@ -211,17 +210,21 @@ describe("KaspaMembershipGateway", () => {
               },
             },
           ]);
-        if (url.endsWith("/transactions") && init?.method === "POST")
-          return Response.json(
-            { error: "covenant transactions must use wRPC" },
-            { status: 400 },
-          );
-        if (url.endsWith(`/transactions/${transactionId}`)) {
-          confirmationAttempts += 1;
-          if (confirmationAttempts < 3)
-            return Response.json({ detail: "Transaction not found" }, { status: 404 });
-          return Response.json({ is_accepted: true });
-        }
+        // The covenant output of the offer now exists on the ledger.
+        if (url.includes(encodeURIComponent(membershipAddress(minter))))
+          return Response.json([
+            {
+              outpoint: { transactionId, index: 0 },
+              utxoEntry: {
+                amount: MEMBERSHIP_OUTPUT_VALUE.toString(),
+                scriptPublicKey: {
+                  scriptPublicKey: membershipScript(minter).slice(4),
+                },
+                blockDaaScore: "100",
+                isCoinbase: false,
+              },
+            },
+          ]);
         return new Response("not found", { status: 404 });
       }),
     );
@@ -243,8 +246,8 @@ describe("KaspaMembershipGateway", () => {
       transactionId,
     });
     expect(relay).toHaveBeenCalledWith(signedJson);
-    expect(confirmationAttempts).toBe(3);
-    expect(sleep.mock.calls).toEqual([[1_000], [2_000]]);
+    // The effect was already on the ledger, so no retry was needed.
+    expect(sleep).not.toHaveBeenCalled();
   });
 
   function stubOfferSources() {
@@ -301,7 +304,7 @@ describe("KaspaMembershipGateway", () => {
     );
   });
 
-  it("treats a confirmation timeout as a state change to retry", async () => {
+  it("reports a pending submission when confirmation is not yet available", async () => {
     const transactionId = "44".repeat(32);
     stubOfferSources();
     const relay = vi.fn(async () => transactionId);
@@ -314,9 +317,14 @@ describe("KaspaMembershipGateway", () => {
     );
     const { offer, signedJson } = await signedOffer(gateway);
 
-    await expect(gateway.submit(offer, signedJson)).rejects.toBeInstanceOf(
-      MembershipStateChangedError,
-    );
+    // A transaction that cannot be confirmed yet is pending, not rejected: the
+    // caller keeps the prepared record and a reconciler settles it later.
+    await expect(gateway.submit(offer, signedJson)).resolves.toEqual({
+      isAccepted: null,
+      transactionId,
+      rejection: null,
+    });
+    expect(relay).toHaveBeenCalledWith(signedJson);
   });
 
   it("relays signed covenant transactions over wRPC", async () => {

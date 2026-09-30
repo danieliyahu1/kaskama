@@ -1,5 +1,5 @@
 import type { MembershipCheck } from "./domain/models.js";
-import type { MembershipVerifier } from "./application/ports.js";
+import type { MembershipVerifier, TransactionEvidenceStore } from "./application/ports.js";
 import { XOnlyPublicKey } from "@kluster/kaspa-wasm";
 import { DEFAULT_NETWORK, networkDefinition, type NetworkId } from "@kaskama/shared";
 import { logger as defaultLogger, type Logger } from "./observability.js";
@@ -57,6 +57,7 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
     private readonly logger: Logger = defaultLogger,
     private readonly metrics: Metrics = defaultMetrics,
     private readonly network: NetworkId = DEFAULT_NETWORK,
+    private readonly evidence?: TransactionEvidenceStore,
   ) {}
 
   async verifyAddress(
@@ -173,7 +174,11 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
     return utxos.some((utxo) => utxo.outpoint.transactionId === transactionId && utxo.outpoint.index === outputIndex);
   }
 
-  private transaction(transactionId: string): Promise<ChainTransaction> {
+  private async transaction(transactionId: string): Promise<ChainTransaction> {
+    // Prefer the evidence captured at submit; only fall back to the node when
+    // we never saw the transaction ourselves.
+    const evidence = await this.evidence?.getTransactionEvidence(transactionId);
+    if (evidence) return evidenceToChainTransaction(evidence.transaction);
     return this.request<ChainTransaction>("transaction", `/transactions/${transactionId}`);
   }
 
@@ -202,6 +207,36 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
       return body as T;
     });
   }
+}
+
+/**
+ * Reads a transaction we captured at submit back into the loose chain shape the
+ * verifier consumes. Everything it needs — version, payload and outputs — lives
+ * in the signed transaction, so no node is consulted.
+ */
+function evidenceToChainTransaction(transactionJson: string): ChainTransaction {
+  const tx = JSON.parse(transactionJson) as {
+    version?: number;
+    payload?: string;
+    outputs?: {
+      value?: string;
+      scriptPublicKey?: string;
+      covenant?: { covenantId?: string; authorizingInput?: number } | null;
+    }[];
+  };
+  return {
+    ...(tx.version !== undefined ? { version: tx.version } : {}),
+    is_accepted: true,
+    ...(tx.payload !== undefined ? { payload: tx.payload } : {}),
+    outputs: (tx.outputs ?? []).map((output) => ({
+      amount: output.value ?? "",
+      script_public_key: output.scriptPublicKey ?? "",
+      ...(output.covenant?.covenantId ? { covenant_id: output.covenant.covenantId } : {}),
+      ...(output.covenant?.authorizingInput !== undefined
+        ? { covenant_authorizing_input: output.covenant.authorizingInput }
+        : {}),
+    })),
+  };
 }
 
 function membership(

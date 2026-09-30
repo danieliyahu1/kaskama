@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
+import { addressFromScriptPublicKey } from "@kluster/kaspa-wasm";
 import { DEFAULT_NETWORK, networkDefinition, type NetworkId } from "@kaskama/shared";
 import type { Post, PreparedPayment, PaymentSubmission } from "./domain/models.js";
-import type { PaymentGateway } from "./application/ports.js";
+import type { PaymentGateway, TransactionEvidenceStore } from "./application/ports.js";
 import { logger as defaultLogger, type Logger } from "./observability.js";
 import { defaultMetrics, type Metrics } from "./metrics.js";
 import { platformFeeSompi } from "./payment-fee.js";
@@ -30,6 +31,7 @@ export class KaspaPaymentGateway implements PaymentGateway {
     private readonly metrics: Metrics = defaultMetrics,
     relay?: PaymentTransactionRelay,
     private readonly network: NetworkId = DEFAULT_NETWORK,
+    private readonly evidence?: TransactionEvidenceStore,
   ) {
     this.relay =
       relay ??
@@ -93,7 +95,6 @@ export class KaspaPaymentGateway implements PaymentGateway {
     if (digest(prepared.transaction) !== prepared.fingerprint) return this.reject("INVALID_PREPARED_TEMPLATE");
     if (!sameTransaction(original, signed)) return this.reject("PREPARED_TRANSACTION_CHANGED");
     if (!hasAllSignatures(signed)) return this.reject("INVALID_SIGNATURES");
-    await this.validateInputs(signed);
     let transactionId: string;
     try {
       transactionId = await this.relay(signedTransaction);
@@ -101,7 +102,21 @@ export class KaspaPaymentGateway implements PaymentGateway {
       return this.reject(error instanceof Error ? error.message : "TRANSACTION_REJECTED");
     }
     this.logger.info("payment_submitted", { transactionIdPrefix: transactionId.slice(0, 12) });
-    return this.status(transactionId);
+    // Capture the signed transaction now, while we have it, so later reads can
+    // verify the purchase from evidence instead of re-fetching from a node.
+    if (this.evidence)
+      await this.evidence.saveTransactionEvidence({
+        transactionId,
+        transaction: signedTransaction,
+        acceptedAt: Date.now(),
+      });
+    // Confirm by the transaction's effect on the ledger, not by asking the node
+    // for the transaction id: a node's transaction index is an implementation
+    // detail the payment rules must not depend on.
+    const accepted = await this.confirmByEffect(prepared.transaction, transactionId);
+    return accepted
+      ? { isAccepted: true, transactionId, rejection: null }
+      : { isAccepted: null, transactionId, rejection: null };
   }
 
   private reject(reason: string, transactionId: string | null = null): PaymentSubmission {
@@ -118,6 +133,11 @@ export class KaspaPaymentGateway implements PaymentGateway {
   }
 
   async verifyPurchase(transactionId: string, buyer: string, creator: string, amountSompi: string, postId: string, mediaDigest: string): Promise<boolean> {
+    // Prefer the evidence captured at submit: it is the transaction we built and
+    // validated, and it does not depend on any node's transaction index.
+    const evidence = await this.evidence?.getTransactionEvidence(transactionId);
+    if (evidence)
+      return this.verifyEvidence(evidence.transaction, buyer, creator, amountSompi, postId, mediaDigest);
     const tx = await this.requestRetryingMissing<ChainTransaction>(
       "verify_purchase",
       `/transactions/${transactionId}?inputs=true&outputs=true&resolve_previous_outpoints=full`,
@@ -132,6 +152,33 @@ export class KaspaPaymentGateway implements PaymentGateway {
     if (!tx.outputs.some((output) => String(output.amount) === (amount - fee).toString() && output.script_public_key_address === creator)) return false;
     if (fee === 0n) return !tx.outputs.some((output) => output.script_public_key_address === this.platformFeeAddress);
     return tx.outputs.some((output) => String(output.amount) === fee.toString() && output.script_public_key_address === this.platformFeeAddress);
+  }
+
+  /**
+   * Verifies a purchase from the signed transaction we captured, using only
+   * facts our own code can check: the payload commits to the post and media,
+   * every input belonged to the buyer, and the creator (and platform) received
+   * the expected amounts.
+   */
+  private verifyEvidence(transactionJson: string, buyer: string, creator: string, amountSompi: string, postId: string, mediaDigest: string): boolean {
+    let tx: { payload?: string; inputs?: { utxo?: { scriptPublicKey?: string } }[]; outputs?: { value?: string; scriptPublicKey?: string }[] };
+    try { tx = JSON.parse(transactionJson) as typeof tx; } catch { return false; }
+    const payload = parsePpvPayload(tx.payload);
+    if (tx.payload && (!payload || payload.postId !== postId || payload.mediaHash.digest !== mediaDigest.toLowerCase())) return false;
+    const inputs = tx.inputs;
+    if (!Array.isArray(inputs) || inputs.length === 0) return false;
+    if (!inputs.every((input) => this.addressOf(input.utxo?.scriptPublicKey) === buyer)) return false;
+    const amount = BigInt(amountSompi);
+    const fee = platformFeeSompi(amount);
+    const outputs = tx.outputs ?? [];
+    if (!outputs.some((output) => String(output.value) === (amount - fee).toString() && this.addressOf(output.scriptPublicKey) === creator)) return false;
+    if (fee === 0n) return !outputs.some((output) => this.addressOf(output.scriptPublicKey) === this.platformFeeAddress);
+    return outputs.some((output) => String(output.value) === fee.toString() && this.addressOf(output.scriptPublicKey) === this.platformFeeAddress);
+  }
+
+  private addressOf(script: string | undefined): string | undefined {
+    if (!script) return undefined;
+    try { return addressFromScriptPublicKey(script, this.network)?.toString(); } catch { return undefined; }
   }
 
   private async requestRetryingMissing<T>(operation: string, path: string): Promise<T | null> {
@@ -149,15 +196,40 @@ export class KaspaPaymentGateway implements PaymentGateway {
     return null;
   }
 
-  private async validateInputs(transaction: Record<string, unknown>) {
-    for (const input of transaction.inputs as Record<string, unknown>[]) {
-      const id = input.transactionId; const index = input.index;
-      if (typeof id !== "string" || !/^[0-9a-f]{64}$/i.test(id) || typeof index !== "number" || !Number.isInteger(index) || index < 0) throw new Error("INVALID_INPUT");
-      const parent = await this.request<{ outputs?: { amount: string | number; script_public_key: string | { script_public_key?: string; scriptPublicKey?: string } }[] }>("parent_transaction", `/transactions/${id}`);
-      const output = parent.outputs?.[index]; const utxo = input.utxo as Record<string, unknown> | undefined;
-      const script = typeof output?.script_public_key === "string" ? output.script_public_key : output?.script_public_key?.script_public_key ?? output?.script_public_key?.scriptPublicKey;
-      if (!output || !utxo || String(output.amount) !== String(utxo.amount) || !script || `0000${script.replace(/^0000/, "")}` !== utxo.scriptPublicKey) throw new Error("INPUT_CHANGED");
+  /**
+   * Whether the transaction has taken effect on the ledger: at least one of its
+   * outputs is now a spendable UTXO at the address named by that output's
+   * script. This proves acceptance from a fact the chain itself reports, so it
+   * holds on any node regardless of that node's transaction index.
+   */
+  private async confirmByEffect(transactionJson: string, transactionId: string) {
+    const outputs = (
+      JSON.parse(transactionJson) as { outputs?: { scriptPublicKey?: string }[] }
+    ).outputs ?? [];
+    const targets: { index: number; address: string }[] = [];
+    outputs.forEach((output, index) => {
+      try {
+        const address = addressFromScriptPublicKey(output.scriptPublicKey ?? "", this.network);
+        if (address) targets.push({ index, address: address.toString() });
+      } catch {
+        // An output whose script has no address cannot be observed by effect.
+      }
+    });
+    let delay = VERIFY_BASE_DELAY_MS;
+    for (let attempt = 0; attempt <= VERIFY_MAX_ATTEMPTS; attempt++) {
+      for (const target of targets) {
+        const utxos = await this.request<Utxo[]>(
+          "utxos",
+          `/addresses/${encodeURIComponent(target.address)}/utxos`,
+        ).catch(() => [] as Utxo[]);
+        if (utxos.some((utxo) => utxo.outpoint.transactionId === transactionId && utxo.outpoint.index === target.index)) return true;
+      }
+      if (attempt < VERIFY_MAX_ATTEMPTS) {
+        await this.sleep(delay);
+        delay = Math.min(delay * 2, VERIFY_MAX_DELAY_MS);
+      }
     }
+    return false;
   }
 
   private async request<T>(operation: string, path: string, init?: RequestInit): Promise<T> {

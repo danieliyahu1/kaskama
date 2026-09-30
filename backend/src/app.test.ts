@@ -1225,6 +1225,17 @@ describe("membership state changes", () => {
     };
   }
 
+  function gatewayThatPends(): MembershipGateway {
+    return {
+      ...gatewayThatThrows(new Error("unused")),
+      submit: async () => ({
+        isAccepted: null,
+        transactionId: "tx-1",
+        rejection: null,
+      }),
+    };
+  }
+
   async function creatorSession(store: MemoryStore) {
     const creator = `kaspatest:${"c".repeat(60)}`;
     await store.createSession({
@@ -1402,6 +1413,29 @@ describe("membership state changes", () => {
       error: "MEMBERSHIP_PRICE_UPDATE_STALE",
       retry: "AFTER_REFRESH",
       message: staleMessage,
+    });
+  });
+
+  it("keeps the offer pending and preserves the prepared record until the chain settles it", async () => {
+    const store = new MemoryStore();
+    const creator = await creatorSession(store);
+    await seedPrepared(store, creator, "offer");
+    const { app } = appWithGateway(store, gatewayThatPends());
+
+    const response = await request(app)
+      .post("/api/membership/offers/prepared-1/finalize")
+      .set("Cookie", "kaskama_session=creator-session")
+      .send({ signedTransaction: "aa01" });
+
+    expect(response.status).toBe(202);
+    expect(response.body).toMatchObject({ state: "PENDING", transactionId: "tx-1" });
+    // The prepared record survives so the reconciler can still settle it.
+    expect(
+      await store.getPreparedMembership("prepared-1", Date.now()),
+    ).not.toBeNull();
+    expect(await store.getMembershipWorkflow("prepared-1")).toMatchObject({
+      state: "SUBMITTED",
+      transactionId: "tx-1",
     });
   });
 });

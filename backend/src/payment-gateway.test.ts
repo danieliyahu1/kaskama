@@ -74,6 +74,18 @@ describe("KaspaPaymentGateway preparation", () => {
     const relay = vi.fn(async () => transactionId);
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
+      if (url.includes(encodeURIComponent(creator)))
+        return Response.json([
+          {
+            outpoint: { transactionId, index: 0 },
+            utxoEntry: {
+              amount: "100000000",
+              scriptPublicKey: { scriptPublicKey: addressScript(creator).slice(4) },
+              blockDaaScore: "1",
+              isCoinbase: false,
+            },
+          },
+        ]);
       if (url.includes("/utxos")) return Response.json([funding("200000000", parentId)]);
       if (url.endsWith("/info/fee-estimate")) return Response.json({ normalBuckets: [{ feerate: 1 }], priorityBucket: { feerate: 1 } });
       if (url.endsWith(`/transactions/${parentId}`)) return Response.json({ outputs: [{ amount: "200000000", script_public_key: addressScript(buyer) }] });

@@ -116,6 +116,7 @@ const paymentGateway = new KaspaPaymentGateway(
   metrics,
   undefined,
   environment.KASPA_NETWORK,
+  store,
 );
 const membershipGateway = new KaspaMembershipGateway(
   environment.PLATFORM_FEE_ADDRESS,
@@ -125,6 +126,7 @@ const membershipGateway = new KaspaMembershipGateway(
   logger,
   metrics,
   environment.KASPA_NETWORK,
+  store,
 );
 const membershipVerifier = new KaspaMembershipVerifier(
   environment.KASPA_NODE_URL,
@@ -132,6 +134,7 @@ const membershipVerifier = new KaspaMembershipVerifier(
   undefined,
   metrics,
   environment.KASPA_NETWORK,
+  store,
 );
 const app = createApp({
   store,
