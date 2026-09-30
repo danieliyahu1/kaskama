@@ -34,6 +34,24 @@ export const SITE = {
     "Kaskama is a subscription platform where creators sell access to their work, set their own price, and get paid directly by fans on Kaspa. You keep 99%.",
 } as const;
 
+/**
+ * The documents a machine can read, kept in one place so the sitemap, robots
+ * rules, footer, and llms.txt all point at the same paths. The HTTP API is the
+ * product, so an agent is a first-class client, not a special case.
+ */
+
+/** The rendered, human-facing API reference. */
+export const API_DOCS_PATH = "/docs/api";
+
+/** The agent guide as markdown, for a client that reads text rather than HTML. */
+export const AGENT_GUIDE_PATH = "/docs/agents.md";
+
+/** The machine-readable contract, published under several well-known paths. */
+export const OPENAPI_PATH = "/api/openapi.json";
+
+/** The agent entry point: a plain-text map of the site for non-browser clients. */
+export const LLMS_TXT_PATH = "/llms.txt";
+
 export const PUBLIC_PAGES: PublicPage[] = [
   {
     path: "/content-policy",

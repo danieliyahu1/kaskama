@@ -302,6 +302,15 @@ footer {
   align-items: center;
   gap: 0.5rem;
 }
+.footer-link {
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.12s ease;
+}
+.footer-link:hover,
+.footer-link:focus-visible {
+  color: var(--acid);
+}
 .social-button {
   display: inline-grid;
   place-items: center;

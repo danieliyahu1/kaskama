@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
-import { PUBLIC_PAGES, type ProfileResponse } from "@kaskama/shared";
+import { API_DOCS_PATH, PUBLIC_PAGES, type ProfileResponse } from "@kaskama/shared";
 import { walletNetworkName } from "./app-config.js";
 import { COPY } from "./copy.js";
 import {
@@ -306,6 +306,10 @@ export function App() {
             ))}
           </nav>
           <div className="footer-links">
+            {/* A server-rendered page, so a full navigation rather than a client route. */}
+            <a className="footer-link" href={API_DOCS_PATH}>
+              API
+            </a>
             <SocialLinks />
             <FeedbackButton />
           </div>

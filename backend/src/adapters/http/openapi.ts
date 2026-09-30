@@ -1,3 +1,5 @@
+import { AGENT_GUIDE_PATH } from "@kaskama/shared";
+
 /**
  * The public HTTP contract. This is the product surface: the browser app, an
  * agent, or any script all speak it. It is authored once here so it can be
@@ -118,7 +120,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     },
     servers: [{ url: origin }],
     externalDocs: {
-      url: "https://github.com/danieliyahu1/kaskama/blob/master/docs/agent-access.md",
+      url: `${origin}${AGENT_GUIDE_PATH}`,
       description: "Headless access and the signing protocol.",
     },
     components: {
@@ -522,12 +524,18 @@ export function openApiDocument(origin: string): Record<string, unknown> {
 }
 
 /** A minimal page that renders the contract from `/api/openapi.json`. */
-export function apiDocsHtml(): string {
+export function apiDocsHtml(origin: string): string {
+  const canonical = new URL("/docs/api", origin).toString();
   return [
     "<!doctype html>",
     '<html lang="en"><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    "<title>Kaskama API</title></head><body>",
+    "<title>Kaskama API</title>",
+    '<meta name="description" content="The Kaskama HTTP API: the same contract the browser app uses, open to any wallet client.">',
+    `<link rel="canonical" href="${canonical}">`,
+    '<meta property="og:title" content="Kaskama API">',
+    `<meta property="og:url" content="${canonical}">`,
+    "</head><body>",
     '<redoc spec-url="/api/openapi.json"></redoc>',
     '<script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>',
     "</body></html>",

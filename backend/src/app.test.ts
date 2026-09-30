@@ -2,7 +2,12 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import request from "supertest";
-import { PUBLIC_PAGES } from "@kaskama/shared";
+import {
+  AGENT_GUIDE_PATH,
+  API_DOCS_PATH,
+  LLMS_TXT_PATH,
+  PUBLIC_PAGES,
+} from "@kaskama/shared";
 import { createApp } from "./app.js";
 import { createMetrics, type Metrics } from "./metrics.js";
 import { MemoryStore } from "./memory-store.js";
@@ -1483,7 +1488,9 @@ describe("API contract", () => {
       "/api/openapi.json",
       "/openapi.json",
       "/.well-known/openapi.json",
-      "/docs/api",
+      API_DOCS_PATH,
+      AGENT_GUIDE_PATH,
+      LLMS_TXT_PATH,
       "/robots.txt",
     ]) {
       const response = await request(app).get(path);
@@ -1675,6 +1682,8 @@ describe("Crawler discoverability", () => {
     expect(response.status).toBe(200);
     expect(response.headers["content-type"]).toContain("text/plain");
     expect(response.text).toContain("User-agent: *");
+    expect(response.text).toContain(`Allow: ${API_DOCS_PATH}`);
+    expect(response.text).toContain("/llms.txt");
     expect(response.text).toContain("Sitemap: http://localhost:5173/sitemap.xml");
     expect(response.text).not.toContain("<div id=\"root\">");
   });
@@ -1688,7 +1697,38 @@ describe("Crawler discoverability", () => {
     expect(response.headers["content-type"]).toContain("xml");
     expect(response.text).toContain("<loc>http://localhost:5173/</loc>");
     expect(response.text).toContain("<loc>http://localhost:5173/creators</loc>");
+    expect(response.text).toContain(
+      `<loc>http://localhost:5173${API_DOCS_PATH}</loc>`,
+    );
     expect(response.text).not.toContain("<div id=\"root\">");
+  });
+
+  it("serves llms.txt that points agents at the contract", async () => {
+    const { app } = testApp();
+
+    const response = await request(app).get(LLMS_TXT_PATH);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/plain");
+    expect(response.text).toContain("# Kaskama");
+    expect(response.text).toContain("http://localhost:5173/api/openapi.json");
+    expect(response.text).toContain(`http://localhost:5173${API_DOCS_PATH}`);
+    expect(response.text).toContain(
+      `http://localhost:5173${AGENT_GUIDE_PATH}`,
+    );
+    // The same contract the browser app uses, with no special agent path.
+    expect(response.text).toContain("no agent-specific account");
+  });
+
+  it("serves the agent guide as markdown at its own path", async () => {
+    const { app } = testApp();
+
+    const response = await request(app).get(AGENT_GUIDE_PATH);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/markdown");
+    expect(response.text).toContain("# Headless access");
+    expect(response.text).toContain("Authorization: Bearer");
   });
 });
 
@@ -1795,5 +1835,6 @@ describe("Server-rendered public pages", () => {
     for (const page of PUBLIC_PAGES) {
       expect(response.text).toContain(`<loc>${origin}${page.path}</loc>`);
     }
+    expect(response.text).toContain(`<loc>${origin}${API_DOCS_PATH}</loc>`);
   });
 });

@@ -9,12 +9,16 @@ import express, { type NextFunction, type Request, type Response } from "express
 import helmet from "helmet";
 import { z } from "zod";
 import {
+  AGENT_GUIDE_PATH,
+  API_DOCS_PATH,
   DEFAULT_NETWORK,
   isFreePost,
+  LLMS_TXT_PATH,
   membershipPriceProblem,
   networkDefinition,
   normalizeDisplayName,
   normalizePostText,
+  OPENAPI_PATH,
   parseMembershipPrice,
   parsePostPrice,
   PUBLIC_PAGES,
@@ -60,6 +64,8 @@ import {
 } from "./observability.js";
 import { diagnoseAddress } from "./adapters/http/address-diagnostic.js";
 import { matchPublicRoute, renderDocument } from "./adapters/http/public-pages.js";
+import { agentGuideMarkdown } from "./adapters/http/agent-guide.js";
+import { llmsTxt } from "./adapters/http/llms.js";
 import { apiDocsHtml, openApiDocument } from "./adapters/http/openapi.js";
 import { defaultMetrics, type Metrics } from "./metrics.js";
 import {
@@ -295,16 +301,31 @@ export function createApp(d: AppDependencies) {
         "Allow: /",
         "Disallow: /api/",
         // The contract is meant to be found; the rest of /api/ is not.
-        "Allow: /api/openapi.json",
-        "Allow: /docs/api",
+        `Allow: ${OPENAPI_PATH}`,
+        `Allow: ${API_DOCS_PATH}`,
         "",
-        `Sitemap: ${d.publicOrigin}/sitemap.xml`,
+        // Agents fetch this directly; naming it here helps the ones that read robots.
+        `# Agents: ${new URL(LLMS_TXT_PATH, d.publicOrigin).toString()}`,
+        `Sitemap: ${new URL("/sitemap.xml", d.publicOrigin).toString()}`,
         "",
       ].join("\n"),
     );
   });
+  app.get(LLMS_TXT_PATH, (_, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.type("text/plain").send(llmsTxt(d.publicOrigin));
+  });
+  app.get(AGENT_GUIDE_PATH, (_, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.type("text/markdown").send(agentGuideMarkdown);
+  });
   app.get("/sitemap.xml", (_, res) => {
-    const urls = ["/", "/creators", ...PUBLIC_PAGES.map((page) => page.path)]
+    const urls = [
+      "/",
+      "/creators",
+      API_DOCS_PATH,
+      ...PUBLIC_PAGES.map((page) => page.path),
+    ]
       .map(
         (path) =>
           `  <url><loc>${new URL(path, d.publicOrigin).toString()}</loc></url>`,
@@ -336,9 +357,9 @@ export function createApp(d: AppDependencies) {
   app.get("/api/openapi.json", serveOpenApi);
   app.get("/openapi.json", serveOpenApi);
   app.get("/.well-known/openapi.json", serveOpenApi);
-  app.get("/docs/api", (_, res) => {
+  app.get(API_DOCS_PATH, (_, res) => {
     res.setHeader("Cache-Control", "no-store");
-    res.type("html").send(apiDocsHtml());
+    res.type("html").send(apiDocsHtml(d.publicOrigin));
   });
   async function optional(req: Request, res: Response, next: NextFunction) {
     try {

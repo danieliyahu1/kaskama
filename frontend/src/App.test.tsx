@@ -1,6 +1,11 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DEFAULT_NETWORK, PUBLIC_PAGES, networkDefinition } from "@kaskama/shared";
+import {
+  API_DOCS_PATH,
+  DEFAULT_NETWORK,
+  PUBLIC_PAGES,
+  networkDefinition,
+} from "@kaskama/shared";
 import { App } from "./App.js";
 import { COPY } from "./copy.js";
 import {
@@ -308,5 +313,16 @@ describe("public documents", () => {
         await screen.findByRole("link", { name: page.navLabel }),
       ).toHaveAttribute("href", page.path);
     }
+  });
+
+  it("links to the API where a person or a crawler can find it", async () => {
+    mockApi();
+
+    render(<App />);
+
+    expect(await screen.findByRole("link", { name: "API" })).toHaveAttribute(
+      "href",
+      API_DOCS_PATH,
+    );
   });
 });

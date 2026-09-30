@@ -19,7 +19,20 @@ function homepageFallback(): Plugin {
 
 export default defineConfig({
   plugins: [react(), homepageFallback()],
-  server: { proxy: { "/api": "http://localhost:3000" } },
+  // The backend owns the contract and the machine-facing documents. Proxy the
+  // same paths in development that Express serves in production, so an agent
+  // (or a person) sees one origin either way.
+  server: {
+    proxy: {
+      "/api": "http://localhost:3000",
+      "/docs": "http://localhost:3000",
+      "/openapi.json": "http://localhost:3000",
+      "/llms.txt": "http://localhost:3000",
+      "/robots.txt": "http://localhost:3000",
+      "/sitemap.xml": "http://localhost:3000",
+      "/.well-known": "http://localhost:3000",
+    },
+  },
   test: {
     environment: "jsdom",
     globals: true,
