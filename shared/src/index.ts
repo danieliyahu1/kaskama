@@ -130,6 +130,13 @@ export interface ProfileResponse {
   isPublic: boolean;
 }
 
+/** The identity of the current session, returned to any client. */
+export interface CurrentSessionResponse {
+  address: string;
+  displayName: string | null;
+  expiresAt: string;
+}
+
 export interface MembershipCheckResponse {
   transactionId: string;
   outputIndex: number;

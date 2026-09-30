@@ -1476,6 +1476,28 @@ describe("API contract", () => {
     expect(root.body).toEqual(canonical.body);
     expect(wellKnown.body).toEqual(canonical.body);
   });
+
+  it("documents the session response exactly as it is served", async () => {
+    const store = new MemoryStore();
+    const address = `kaspatest:${"a".repeat(60)}`;
+    await store.createSession({
+      id: "session-shape",
+      address,
+      expiresAt: Date.now() + 60_000,
+    });
+    const { app } = testApp(store);
+
+    const spec = await request(app).get("/api/openapi.json");
+    const documented = Object.keys(
+      spec.body.components.schemas.CurrentSession.properties,
+    ).sort();
+
+    const actual = await request(app)
+      .get("/api/auth/session")
+      .set("Cookie", "kaskama_session=session-shape");
+    expect(actual.status).toBe(200);
+    expect(Object.keys(actual.body).sort()).toEqual(documented);
+  });
 });
 
 describe("agent and browser clients are served alike", () => {

@@ -24,6 +24,7 @@ import {
   type NetworkConfigResponse,
   type NetworkId,
   type PostResponse,
+  type CurrentSessionResponse,
   MAX_VIDEO_BYTES,
 } from "@kaskama/shared";
 import {
@@ -431,12 +432,13 @@ export function createApp(d: AppDependencies) {
     asyncHandler(async (req, res) => {
       if (!req.walletSession)
         return apiError(res, 401, "AUTHENTICATION_REQUIRED");
-      res.json({
+      const body: CurrentSessionResponse = {
         address: req.walletSession.address,
         displayName:
           (await profiles.get(req.walletSession.address))?.displayName ?? null,
         expiresAt: new Date(req.walletSession.expiresAt).toISOString(),
-      });
+      };
+      res.json(body);
     }),
   );
   app.post(

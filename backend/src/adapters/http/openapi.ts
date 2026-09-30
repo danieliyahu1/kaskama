@@ -146,6 +146,14 @@ export function openApiDocument(origin: string): Record<string, unknown> {
             isPublic: { type: "boolean" },
           },
         },
+        CurrentSession: {
+          type: "object",
+          properties: {
+            address: { type: "string" },
+            displayName: { type: ["string", "null"] },
+            expiresAt: { type: "string" },
+          },
+        },
         CreatorSearchResult: {
           type: "object",
           properties: {
@@ -257,7 +265,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       },
       "/api/auth/session": {
         get: get("Current identity.", {
-          response: { status: "200", schema: ref("Profile") },
+          response: { status: "200", schema: ref("CurrentSession") },
         }),
         post: post("Exchange a signed challenge for a session token.", {
           security: false,
