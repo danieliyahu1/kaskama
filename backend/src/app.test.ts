@@ -1793,6 +1793,9 @@ describe("Crawler discoverability", () => {
     expect(response.headers["content-type"]).toContain("text/markdown");
     expect(response.text).toContain("# Headless access");
     expect(response.text).toContain("Authorization: Bearer");
+    // A runnable signing flow, not a placeholder.
+    expect(response.text).toContain("wallet.signPskt");
+    expect(response.text).not.toContain("signTransaction(prepared.transaction");
   });
 });
 
