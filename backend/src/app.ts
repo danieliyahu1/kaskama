@@ -384,7 +384,8 @@ export function createApp(d: AppDependencies) {
     "/api/auth/session",
     optional,
     asyncHandler(async (req, res) => {
-      if (!req.walletSession) return apiError(res, 401, "AUTH_REQUIRED");
+      if (!req.walletSession)
+        return apiError(res, 401, "AUTHENTICATION_REQUIRED");
       res.json({
         address: req.walletSession.address,
         displayName:
@@ -1467,6 +1468,19 @@ export function createApp(d: AppDependencies) {
       });
     }
     if (e instanceof HttpError) return apiError(res, e.status, e.code);
+    const rejected = rejectedRequest(e);
+    if (rejected) {
+      logger.warn("request_rejected", {
+        requestId: req.requestId,
+        method: req.method,
+        path: req.path,
+        route: routePattern(req),
+        statusCode: rejected.status,
+        errorCode: rejected.code,
+        ...(e instanceof Error ? { errorName: e.name, errorMessage: e.message } : {}),
+      });
+      return apiError(res, rejected.status, rejected.code);
+    }
     const storageFailure = e instanceof StorageError;
     const storageTimedOut = storageFailure && e.category === "STORAGE_TIMEOUT";
     logger.error("request_failed", {
@@ -1598,6 +1612,31 @@ function presentedSessionToken(req: Request): string | undefined {
   }
   return (req.cookies[sessionCookie] as string | undefined) || undefined;
 }
+/**
+ * A request the client got wrong: malformed JSON, an oversized body, an
+ * unsupported encoding. Express body parsers raise these with an HTTP status
+ * and a `type`. Without this mapping they would fall through to the generic
+ * 503, and the caller would be told the server is unavailable when the fault
+ * is its own. Reporting the true 4xx is what lets an agent correct itself.
+ */
+function rejectedRequest(error: unknown): { status: number; code: string } | null {
+  const candidate = error as {
+    type?: unknown;
+    status?: unknown;
+    statusCode?: unknown;
+  };
+  if (typeof candidate?.type !== "string") return null;
+  const status =
+    typeof candidate.status === "number"
+      ? candidate.status
+      : typeof candidate.statusCode === "number"
+        ? candidate.statusCode
+        : undefined;
+  if (status === undefined || status < 400 || status >= 500) return null;
+  if (status === 413) return { status, code: "PAYLOAD_TOO_LARGE" };
+  if (status === 415) return { status, code: "UNSUPPORTED_MEDIA_TYPE" };
+  return { status, code: "INVALID_REQUEST" };
+}
 function apiError(
   res: Response,
   status: number,
@@ -1607,6 +1646,8 @@ function apiError(
 ) {
   res.locals.apiErrorCode = code;
   if (Array.isArray(extra?.errorFields)) res.locals.apiErrorFields = extra.errorFields;
+  // A 401 names the scheme the caller must use, so an agent knows its state.
+  if (status === 401) res.setHeader("WWW-Authenticate", "Bearer");
   return res.status(status).json({
     error: code,
     message: message ?? `${code.toLowerCase().replaceAll("_", " ")}.`,

@@ -236,6 +236,32 @@ describe("authentication outcomes", () => {
     expect(response.body.error).toBe("ORIGIN_MISMATCH");
   });
 
+  it("reports a malformed JSON body as a client error, not a server error", async () => {
+    const response = await request(appFor(new MemoryStore(), true))
+      .post("/api/auth/challenge")
+      .set("Content-Type", "application/json")
+      .send("{ not json")
+      .expect(400);
+    expect(response.body.error).toBe("INVALID_REQUEST");
+  });
+
+  it("reports an oversized body as 413", async () => {
+    const response = await request(appFor(new MemoryStore(), true))
+      .post("/api/auth/challenge")
+      .set("Content-Type", "application/json")
+      .send("x".repeat(2 * 1024 * 1024))
+      .expect(413);
+    expect(response.body.error).toBe("PAYLOAD_TOO_LARGE");
+  });
+
+  it("names the bearer scheme when authentication is required", async () => {
+    const response = await request(appFor(new MemoryStore(), true))
+      .get("/api/profile")
+      .expect(401);
+    expect(response.body.error).toBe("AUTHENTICATION_REQUIRED");
+    expect(response.headers["www-authenticate"]).toBe("Bearer");
+  });
+
   it("rejects an empty creator search at the HTTP boundary", async () => {
     await request(appFor(new MemoryStore(), true))
       .get("/api/creators/search?q=   ")
