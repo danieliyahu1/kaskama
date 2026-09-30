@@ -292,6 +292,9 @@ export function createApp(d: AppDependencies) {
         "User-agent: *",
         "Allow: /",
         "Disallow: /api/",
+        // The contract is meant to be found; the rest of /api/ is not.
+        "Allow: /api/openapi.json",
+        "Allow: /docs/api",
         "",
         `Sitemap: ${d.publicOrigin}/sitemap.xml`,
         "",
