@@ -13,8 +13,7 @@ a machine can do it, the same way.
 Bring your own Kaspa keypair. Kaskama never issues a key, account, or token —
 the wallet's key is the identity. Create and sign with any Kaspa SDK; for a
 headless client, `kaspa-wasm` provides `Keypair`, `PrivateKey`, and
-`signMessage`, documented in its
-[API reference](https://kaspa.aspectron.org/docs/).
+`signMessage` — see [Kaspa's developer resources](https://kaspa.org/build).
 
 Derive the address on the network the server reports, so the prefix always
 matches:
@@ -27,16 +26,14 @@ const address = keypair.toAddress(config.network).toString();
 
 ```json
 {
-  "network": "testnet-10",
-  "walletNetwork": "kaspa_testnet_10",
-  "addressPrefix": "kaspatest"
+  "network": "mainnet",
+  "walletNetwork": "kaspa_mainnet",
+  "addressPrefix": "kaspa"
 }
 ```
 
-The same key signs the authentication challenge and the prepared payment. To pay
-on `testnet-10`, fund the address from the
-[testnet faucet](https://wiki.kaspa.org/en/testnets); on `mainnet`, use real KAS.
-Authentication itself is free.
+The same key signs the authentication challenge and the prepared payment.
+Authentication is free; paying is the only step that spends KAS.
 
 ## Authentication
 
@@ -48,7 +45,7 @@ The only credential is a signature over a server-issued, single-use challenge.
 POST /api/auth/challenge
 Content-Type: application/json
 
-{ "address": "kaspatest:..." }
+{ "address": "kaspa:..." }
 ```
 
 ```json
@@ -67,11 +64,11 @@ Content-Type: application/json
 POST /api/auth/session
 Content-Type: application/json
 
-{ "challengeId": "...", "address": "kaspatest:...", "publicKey": "00...", "signature": "00..." }
+{ "challengeId": "...", "address": "kaspa:...", "publicKey": "00...", "signature": "00..." }
 ```
 
 ```json
-{ "token": "...", "address": "kaspatest:...", "expiresAt": "..." }
+{ "token": "...", "address": "kaspa:...", "expiresAt": "..." }
 ```
 
 4. **Send the token on every subsequent request.**
