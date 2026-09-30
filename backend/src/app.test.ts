@@ -1498,6 +1498,22 @@ describe("API contract", () => {
     }
   });
 
+  it("declares the outcomes a payment finalize can return", async () => {
+    const { app } = testApp();
+
+    const spec = await request(app).get("/api/openapi.json");
+    const responses = spec.body.paths["/api/payments/{id}/finalize"].post.responses;
+    const schemaAt = (status: string) =>
+      responses[status].content["application/json"].schema.$ref;
+
+    expect(Object.keys(responses)).toEqual(
+      expect.arrayContaining(["201", "202", "409", "422"]),
+    );
+    expect(schemaAt("202")).toContain("SubmissionResult");
+    expect(schemaAt("422")).toContain("SubmissionResult");
+    expect(schemaAt("409")).toContain("Error");
+  });
+
   it("documents the session response exactly as it is served", async () => {
     const store = new MemoryStore();
     const address = `kaspatest:${"a".repeat(60)}`;

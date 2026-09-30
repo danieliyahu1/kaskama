@@ -113,6 +113,29 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     required: ["signedTransaction"],
     properties: { signedTransaction: { type: "string" } },
   };
+  // A finalize answers with the money outcome, not the generic error envelope:
+  // 201 confirmed, 202 submitted-but-unconfirmed (do not pay again), 422
+  // rejected with nothing charged. 409 still uses the error envelope.
+  const finalizeSubmission = (summary: string, idDescription: string) => ({
+    summary,
+    parameters: [idempotencyHeader, pathParam("id", idDescription)],
+    requestBody: { required: true, content: json(tokenBody) },
+    responses: {
+      "201": {
+        description: "Confirmed and recorded.",
+        content: json(ref("SubmissionResult")),
+      },
+      "202": {
+        description: "On chain but not confirmed yet. Do not submit again.",
+        content: json(ref("SubmissionResult")),
+      },
+      ...errorResponses,
+      "422": {
+        description: "Rejected. Nothing was charged.",
+        content: json(ref("SubmissionResult")),
+      },
+    },
+  });
 
   return {
     openapi: "3.1.0",
@@ -220,6 +243,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
           properties: {
             state: { type: "string", enum: ["CONFIRMED", "PENDING", "REJECTED"] },
             transactionId: { type: ["string", "null"] },
+            covenantId: { type: ["string", "null"] },
             rejection: { type: ["string", "null"] },
             message: { type: "string" },
           },
@@ -420,11 +444,10 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         }),
       },
       "/api/payments/{id}/finalize": {
-        post: post("Submit the signed payment.", {
-          parameters: [pathParam("id", "Prepared payment id.")],
-          body: tokenBody,
-          response: { status: "201", schema: ref("SubmissionResult") },
-        }),
+        post: finalizeSubmission(
+          "Submit the signed payment.",
+          "Prepared payment id.",
+        ),
       },
       "/api/membership/{creator}/prepare": {
         post: post("Prepare a subscription.", {
@@ -458,32 +481,28 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         }),
       },
       "/api/membership/offers/{id}/finalize": {
-        post: post("Submit the signed offer.", {
-          parameters: [pathParam("id", "Prepared offer id.")],
-          body: tokenBody,
-          response: { status: "201", schema: ref("SubmissionResult") },
-        }),
+        post: finalizeSubmission(
+          "Submit the signed offer.",
+          "Prepared offer id.",
+        ),
       },
       "/api/membership/purchases/{id}/finalize": {
-        post: post("Submit the signed subscription.", {
-          parameters: [pathParam("id", "Prepared purchase id.")],
-          body: tokenBody,
-          response: { status: "201", schema: ref("SubmissionResult") },
-        }),
+        post: finalizeSubmission(
+          "Submit the signed subscription.",
+          "Prepared purchase id.",
+        ),
       },
       "/api/membership/price/{id}/finalize": {
-        post: post("Submit the signed price change.", {
-          parameters: [pathParam("id", "Prepared price update id.")],
-          body: tokenBody,
-          response: { status: "201", schema: ref("SubmissionResult") },
-        }),
+        post: finalizeSubmission(
+          "Submit the signed price change.",
+          "Prepared price update id.",
+        ),
       },
       "/api/membership/cancel/{id}/finalize": {
-        post: post("Submit the signed cancellation.", {
-          parameters: [pathParam("id", "Prepared cancellation id.")],
-          body: tokenBody,
-          response: { status: "201", schema: ref("SubmissionResult") },
-        }),
+        post: finalizeSubmission(
+          "Submit the signed cancellation.",
+          "Prepared cancellation id.",
+        ),
       },
       "/api/verify/membership/address/{address}": {
         get: get("Membership status from chain, by address.", {
