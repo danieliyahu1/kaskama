@@ -177,9 +177,26 @@ reconcileTimer.unref();
 const appServer = app.listen(environment.PORT, "0.0.0.0", () =>
   logger.info("server_started", { port: environment.PORT }),
 );
+// A listener that cannot bind emits `error`. Node treats an unhandled `error`
+// as fatal, so the process would die without a log. The public server cannot
+// serve without its port and exits; metrics are internal and optional, so a
+// bind failure there is logged and the app keeps serving.
+appServer.on("error", (error) => {
+  logger.error("server_listen_failed", {
+    port: environment.PORT,
+    ...safeError(error),
+  });
+  process.exit(1);
+});
 const metricsServer = createMetricsServer(metrics);
 metricsServer.listen(environment.METRICS_PORT, "0.0.0.0", () =>
   logger.info("metrics_started", { port: environment.METRICS_PORT }),
+);
+metricsServer.on("error", (error) =>
+  logger.error("metrics_listen_failed", {
+    port: environment.METRICS_PORT,
+    ...safeError(error),
+  }),
 );
 
 let shuttingDown = false;
