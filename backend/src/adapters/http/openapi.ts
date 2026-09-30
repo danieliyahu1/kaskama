@@ -35,6 +35,14 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     503: { description: "Upstream unavailable.", content: json(ref("Error")) },
   };
 
+  const idempotencyHeader = {
+    name: "Idempotency-Key",
+    in: "header",
+    required: false,
+    schema: { type: "string" },
+    description:
+      "Retry-safe writes: if the same key arrives again on the same path, the first response is replayed instead of acting twice. Keys are scoped to the calling wallet.",
+  };
   const post = (
     summary: string,
     options: {
@@ -45,7 +53,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     },
   ) => ({
     summary,
-    ...(options.parameters ? { parameters: options.parameters } : {}),
+    parameters: [idempotencyHeader, ...(options.parameters ?? [])],
     ...(options.security === false ? { security: [] } : {}),
     ...(options.body
       ? { requestBody: { required: true, content: json(options.body) } }
@@ -304,6 +312,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         get: get("Own profile.", { response: { status: "200", schema: ref("Profile") } }),
         put: {
           summary: "Update own profile.",
+          parameters: [idempotencyHeader],
           requestBody: {
             required: true,
             content: json({
@@ -352,7 +361,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         }),
         delete: {
           summary: "Delete own post.",
-          parameters: [pathParam("id", "Post id.")],
+          parameters: [pathParam("id", "Post id."), idempotencyHeader],
           responses: {
             204: { description: "Deleted." },
             ...errorResponses,

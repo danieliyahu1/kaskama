@@ -174,6 +174,8 @@ export const agentGuideMarkdown = [
   "",
   "- `prepare` results expire; finalize promptly.",
   "- Payment and membership `finalize` are idempotent per prepared id.",
+  "- Send an `Idempotency-Key` header on any write to make a retry replay the",
+  "  first result instead of acting twice; keys are scoped to your wallet.",
   "- A `409` with `retry: \"AFTER_REFRESH\"` is not an error to retry blindly:",
   "  re-read the resource, then decide.",
   "",
