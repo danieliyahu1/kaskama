@@ -25,7 +25,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: kaskama
-          image: ghcr.io/danieliyahu1/kaskama:74698d986d53969b3bf3e7df9d56138c8a753ab4
+          image: ghcr.io/danieliyahu1/kaskama:e1e8f8c40c543c3980db7e104d6a91b57d239abb
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
