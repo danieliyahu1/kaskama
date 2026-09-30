@@ -44,7 +44,7 @@ export const SITE = {
 export const API_DOCS_PATH = "/docs/api";
 
 /** The agent guide as markdown, for a client that reads text rather than HTML. */
-export const AGENT_GUIDE_PATH = "/docs/agents.md";
+export const AGENT_GUIDE_PATH = "/docs/agent-guide.md";
 
 /** The machine-readable contract, published under several well-known paths. */
 export const OPENAPI_PATH = "/api/openapi.json";

@@ -22,7 +22,7 @@ export function llmsTxt(origin: string): string {
     "## Contract",
     "",
     `- [HTTP API reference](${link("/docs/api")}): the rendered contract.`,
-    `- [Agent guide](${link("/docs/agents.md")}): signing, payments, and the rules as markdown.`,
+    `- [Agent guide](${link("/docs/agent-guide.md")}): signing, payments, and the rules as markdown.`,
     `- [OpenAPI document](${link("/api/openapi.json")}): the same contract as JSON.`,
     `- [Network identity](${link("/api/config")}): the chain the server is on.`,
     "",

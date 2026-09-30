@@ -23,6 +23,9 @@ RUN apk add --no-cache ffmpeg
 COPY --from=build /prod/backend ./
 COPY --from=build /app/backend/dist ./dist
 COPY --from=build /app/frontend/dist /app/frontend/dist
+# The agent guide is a document, not code: it is copied into the image and
+# served from /app/docs/agent-guide.md.
+COPY docs /app/docs
 USER 1000
 EXPOSE 3000 9090
 CMD ["node", "dist/server.js"]
