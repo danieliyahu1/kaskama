@@ -71,22 +71,10 @@ The same token is also set as an `HttpOnly` cookie for browsers; a bearer header
 wins when both are present. `GET /api/auth/session` returns the current identity,
 and `POST /api/auth/logout` revokes the token.
 
-`@kaskama/signer` performs steps 2 and 3's signature for you:
-
-```ts
-import { KaskamaSigner } from "@kaskama/signer";
-
-const signer = new KaskamaSigner({ privateKey, network: "testnet-10" });
-const challenge = await post("/api/auth/challenge", { address: signer.address });
-const signature = signer.signChallenge(challenge.message);
-const session = await post("/api/auth/session", {
-  challengeId: challenge.challengeId,
-  address: signer.address,
-  publicKey: signer.publicKey,
-  signature,
-});
-// session.token is the bearer token
-```
+The signature is a standard Kaspa message signature (Schnorr) over `message`,
+encoded as hex or base64; `publicKey` is the wallet's x-only public key. Any
+Kaspa SDK can produce it — for example `kaspa-wasm`'s `signMessage` /
+`verifyMessage` pair.
 
 ## Paying and subscribing
 
@@ -98,10 +86,7 @@ Money moves in two steps so a client never holds state between them:
 
 ```ts
 const prepared = await post(`/api/posts/${postId}/payments/prepare`);
-const signedTransaction = signer.signPreparedTransaction(
-  prepared.transaction,
-  prepared.signInputs, // membership only; post payments omit it
-);
+const signedTransaction = signTransaction(prepared.transaction, privateKey);
 const result = await post(`/api/payments/${prepared.id}/finalize`, {
   signedTransaction,
 });
@@ -115,9 +100,10 @@ const result = await post(`/api/payments/${prepared.id}/finalize`, {
 | `202`  | `{ state: "PENDING", transactionId }`   | On chain but not confirmed yet. **Do not pay again.** |
 | `422`  | `{ state: "REJECTED", rejection }`      | Rejected. Nothing was charged.                        |
 
-`@kaskama/signer.signPreparedTransaction` signs only the inputs the server left
-unsigned. Covenant inputs the server already signed are copied through
-unchanged, and every other field is preserved exactly.
+The client signs only the inputs the server left unsigned — the empty
+`signatureScript`s. Covenant inputs the server already signed must be copied
+through unchanged, and every other field of the transaction preserved exactly;
+the server rejects a transaction that differs from the prepared template.
 
 ## Endpoints
 
