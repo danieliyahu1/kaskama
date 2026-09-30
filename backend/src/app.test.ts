@@ -1477,6 +1477,20 @@ describe("API contract", () => {
     expect(wellKnown.body).toEqual(canonical.body);
   });
 
+  it("tells caches not to store the contract", async () => {
+    const { app } = testApp();
+    for (const path of [
+      "/api/openapi.json",
+      "/openapi.json",
+      "/.well-known/openapi.json",
+      "/docs/api",
+      "/robots.txt",
+    ]) {
+      const response = await request(app).get(path);
+      expect(response.headers["cache-control"]).toBe("no-store");
+    }
+  });
+
   it("documents the session response exactly as it is served", async () => {
     const store = new MemoryStore();
     const address = `kaspatest:${"a".repeat(60)}`;

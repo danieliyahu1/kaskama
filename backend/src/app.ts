@@ -288,6 +288,7 @@ export function createApp(d: AppDependencies) {
     }),
   );
   app.get("/robots.txt", (_, res) => {
+    res.setHeader("Cache-Control", "no-store");
     res.type("text/plain").send(
       [
         "User-agent: *",
@@ -329,12 +330,14 @@ export function createApp(d: AppDependencies) {
   // One document, published at the addresses clients look for: the API prefix,
   // the de facto root path, and the standard well-known location.
   const serveOpenApi = (_req: Request, res: Response) => {
+    res.setHeader("Cache-Control", "no-store");
     res.json(openApiDocument(d.publicOrigin));
   };
   app.get("/api/openapi.json", serveOpenApi);
   app.get("/openapi.json", serveOpenApi);
   app.get("/.well-known/openapi.json", serveOpenApi);
   app.get("/docs/api", (_, res) => {
+    res.setHeader("Cache-Control", "no-store");
     res.type("html").send(apiDocsHtml());
   });
   async function optional(req: Request, res: Response, next: NextFunction) {
