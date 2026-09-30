@@ -1440,6 +1440,59 @@ describe("membership state changes", () => {
   });
 });
 
+describe("API contract", () => {
+  it("serves an OpenAPI document covering the endpoints", async () => {
+    const { app } = testApp();
+    const response = await request(app).get("/api/openapi.json");
+
+    expect(response.status).toBe(200);
+    expect(response.body.openapi).toBe("3.1.0");
+    expect(response.body.paths).toHaveProperty("/api/auth/challenge");
+    expect(response.body.paths).toHaveProperty("/api/posts/publish");
+    expect(response.body.paths).toHaveProperty("/api/membership/offers/prepare");
+    expect(response.body.components.securitySchemes.bearerAuth).toMatchObject({
+      type: "http",
+      scheme: "bearer",
+    });
+  });
+
+  it("serves a page that renders the contract", async () => {
+    const { app } = testApp();
+    const response = await request(app).get("/docs/api");
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("html");
+    expect(response.text).toContain("/api/openapi.json");
+  });
+});
+
+describe("agent and browser clients are served alike", () => {
+  async function session(store: MemoryStore) {
+    await store.createSession({
+      id: "session-parity",
+      address: `kaspatest:${"a".repeat(60)}`,
+      expiresAt: Date.now() + 60_000,
+    });
+  }
+
+  it("returns the same body for a bearer token and a cookie", async () => {
+    const store = new MemoryStore();
+    await session(store);
+    const { app } = testApp(store);
+
+    const viaCookie = await request(app)
+      .get("/api/profile")
+      .set("Cookie", "kaskama_session=session-parity");
+    const viaBearer = await request(app)
+      .get("/api/profile")
+      .set("Authorization", "Bearer session-parity");
+
+    expect(viaCookie.status).toBe(200);
+    expect(viaBearer.status).toBe(200);
+    expect(viaBearer.body).toEqual(viaCookie.body);
+  });
+});
+
 describe("network configuration", () => {
   it("serves the default testnet network to the browser", async () => {
     const { app } = testApp();

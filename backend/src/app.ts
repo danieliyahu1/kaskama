@@ -59,6 +59,7 @@ import {
 } from "./observability.js";
 import { diagnoseAddress } from "./adapters/http/address-diagnostic.js";
 import { matchPublicRoute, renderDocument } from "./adapters/http/public-pages.js";
+import { apiDocsHtml, openApiDocument } from "./adapters/http/openapi.js";
 import { defaultMetrics, type Metrics } from "./metrics.js";
 import {
   MediaValidationError,
@@ -290,6 +291,12 @@ export function createApp(d: AppDependencies) {
       addressPrefix: networkConfig.addressPrefix,
     };
     res.json(body);
+  });
+  app.get("/api/openapi.json", (_, res) => {
+    res.json(openApiDocument(d.publicOrigin));
+  });
+  app.get("/docs/api", (_, res) => {
+    res.type("html").send(apiDocsHtml());
   });
   async function optional(req: Request, res: Response, next: NextFunction) {
     try {
