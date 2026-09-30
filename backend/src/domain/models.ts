@@ -42,6 +42,17 @@ export interface Purchase {
   transactionId: string;
 }
 
+/**
+ * The signed transaction a client submitted, kept so reads (purchase access,
+ * membership verification) can be answered from evidence we captured rather
+ * than re-fetching the transaction from a node whose index may not serve it.
+ */
+export interface TransactionEvidence {
+  transactionId: string;
+  transaction: string;
+  acceptedAt: number;
+}
+
 export interface PreparedPayment {
   transaction: string;
   fingerprint: string;

@@ -16,6 +16,7 @@ import type {
   Profile,
   Purchase,
   Session,
+  TransactionEvidence,
 } from "../domain/models.js";
 
 export type DuplicateOutcome = "CREATED" | "DUPLICATE";
@@ -149,8 +150,18 @@ export interface Repositories
     PostRepository,
     PurchaseRepository,
     CovenantRepository,
-    MembershipPurchaseRepository {
+    MembershipPurchaseRepository,
+    TransactionEvidenceStore {
   initialize(): Promise<void>;
+}
+
+/**
+ * Stores the signed transactions we submit, so later reads can verify from
+ * evidence instead of depending on a node's transaction index.
+ */
+export interface TransactionEvidenceStore {
+  saveTransactionEvidence(value: TransactionEvidence): Promise<void>;
+  getTransactionEvidence(transactionId: string): Promise<TransactionEvidence | null>;
 }
 
 export interface PaymentGateway {

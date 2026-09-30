@@ -10,6 +10,7 @@ import type {
   Profile,
   Purchase,
   Session,
+  TransactionEvidence,
 } from "./domain/models.js";
 import type { DuplicateOutcome, Repositories } from "./application/ports.js";
 
@@ -27,7 +28,16 @@ export class MemoryStore implements Repositories {
   readonly paymentWorkflows = new Map<string, PaymentWorkflow>();
   readonly membershipWorkflows = new Map<string, MembershipWorkflow>();
   readonly preparedMembershipRecords = new Map<string, PreparedMembershipRecord>();
+  readonly transactionEvidence = new Map<string, TransactionEvidence>();
   async initialize() {}
+  async saveTransactionEvidence(v: TransactionEvidence) {
+    if (!this.transactionEvidence.has(v.transactionId))
+      this.transactionEvidence.set(v.transactionId, structuredClone(v));
+  }
+  async getTransactionEvidence(transactionId: string) {
+    const v = this.transactionEvidence.get(transactionId);
+    return v ? structuredClone(v) : null;
+  }
   async createChallenge(v: Challenge) {
     this.challenges.set(v.id, structuredClone(v));
   }

@@ -284,6 +284,17 @@ export const migrations: Migration[] = [
       "CREATE INDEX IF NOT EXISTS membership_workflows_reconcile ON membership_workflows (state, submitted_at)",
     ],
   },
+  {
+    version: 13,
+    name: "transaction_evidence",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS transaction_evidence (
+        transaction_id TEXT PRIMARY KEY NOT NULL,
+        transaction_json TEXT NOT NULL,
+        accepted_at INTEGER NOT NULL CHECK (accepted_at > 0)
+      )`,
+    ],
+  },
 ];
 
 export async function applyMigrations(client: Client): Promise<void> {
@@ -318,6 +329,7 @@ export async function applyMigrations(client: Client): Promise<void> {
 
 export async function resetDatabase(client: Client): Promise<void> {
   const tables = [
+    "transaction_evidence",
     "feedback_outbox",
     "membership_workflows",
     "payment_workflows",

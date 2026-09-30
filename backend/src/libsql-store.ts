@@ -17,6 +17,7 @@ import type {
   Profile,
   Purchase,
   Session,
+  TransactionEvidence,
 } from "./domain/models.js";
 import type { DuplicateOutcome, Repositories } from "./application/ports.js";
 import { logger as defaultLogger, type Logger } from "./observability.js";
@@ -157,6 +158,25 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
       sql: `DELETE FROM prepared_payments WHERE expires_at<=?`,
       args: [now],
     });
+  }
+  async saveTransactionEvidence(v: TransactionEvidence) {
+    await this.execute({
+      sql: `INSERT INTO transaction_evidence (transaction_id, transaction_json, accepted_at) VALUES (?,?,?) ON CONFLICT(transaction_id) DO NOTHING`,
+      args: [v.transactionId, v.transaction, v.acceptedAt],
+    });
+  }
+  async getTransactionEvidence(transactionId: string) {
+    const r = await this.execute({
+      sql: `SELECT * FROM transaction_evidence WHERE transaction_id=?`,
+      args: [transactionId],
+    });
+    return r.rows[0]
+      ? {
+          transactionId: text(r.rows[0].transaction_id),
+          transaction: text(r.rows[0].transaction_json),
+          acceptedAt: number(r.rows[0].accepted_at),
+        }
+      : null;
   }
   async savePaymentWorkflow(v: PaymentWorkflow) {
     await this.execute({
