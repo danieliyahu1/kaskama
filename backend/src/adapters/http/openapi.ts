@@ -118,6 +118,11 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       ].join(" "),
     },
     servers: [{ url: origin }],
+    externalDocs: {
+      url: `${origin}/docs/api`,
+      description:
+        "Rendered reference. The signing protocol is documented in docs/agent-access.md.",
+    },
     components: {
       securitySchemes: {
         bearerAuth: { type: "http", scheme: "bearer" },

@@ -1464,6 +1464,18 @@ describe("API contract", () => {
     expect(response.headers["content-type"]).toContain("html");
     expect(response.text).toContain("/api/openapi.json");
   });
+
+  it("publishes the same document at the well-known addresses", async () => {
+    const { app } = testApp();
+    const canonical = await request(app).get("/api/openapi.json");
+    const root = await request(app).get("/openapi.json");
+    const wellKnown = await request(app).get("/.well-known/openapi.json");
+
+    expect(root.status).toBe(200);
+    expect(wellKnown.status).toBe(200);
+    expect(root.body).toEqual(canonical.body);
+    expect(wellKnown.body).toEqual(canonical.body);
+  });
 });
 
 describe("agent and browser clients are served alike", () => {
