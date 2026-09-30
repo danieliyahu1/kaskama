@@ -1514,6 +1514,23 @@ describe("API contract", () => {
     expect(schemaAt("409")).toContain("Error");
   });
 
+  it("declares which calls need the bearer token", async () => {
+    const { app } = testApp();
+
+    const spec = await request(app).get("/api/openapi.json");
+
+    expect(spec.body.security).toEqual([{ bearerAuth: [] }]);
+    // Required: inherits the root requirement.
+    expect(spec.body.paths["/api/profile"].get.security).toBeUndefined();
+    // Public: opts out.
+    expect(spec.body.paths["/api/config"].get.security).toEqual([]);
+    // Optional: signed in or anonymous.
+    expect(spec.body.paths["/api/creators/{address}"].get.security).toEqual([
+      { bearerAuth: [] },
+      {},
+    ]);
+  });
+
   it("documents the session response exactly as it is served", async () => {
     const store = new MemoryStore();
     const address = `kaspatest:${"a".repeat(60)}`;

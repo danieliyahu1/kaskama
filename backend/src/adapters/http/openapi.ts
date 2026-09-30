@@ -43,10 +43,22 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     description:
       "Retry-safe writes: if the same key arrives again on the same path, the first response is replayed instead of acting twice. Keys are scoped to the calling wallet.",
   };
+  // `false` opts a public operation out of the root requirement; an array
+  // declares an override, such as `optionalAuth` for a call that works signed
+  // in or anonymous.
+  const securityField = (security?: boolean | Record<string, unknown>[]) =>
+    security === false
+      ? { security: [] }
+      : Array.isArray(security)
+        ? { security }
+        : {};
+  // Signed in or anonymous: the response is scoped to the wallet when one is
+  // presented, and still useful without one.
+  const optionalAuth = [{ bearerAuth: [] }, {}];
   const post = (
     summary: string,
     options: {
-      security?: boolean;
+      security?: boolean | Record<string, unknown>[];
       body?: Record<string, unknown>;
       response?: { status: string; schema: Record<string, unknown> | { $ref: string } };
       parameters?: Record<string, unknown>[];
@@ -54,7 +66,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
   ) => ({
     summary,
     parameters: [idempotencyHeader, ...(options.parameters ?? [])],
-    ...(options.security === false ? { security: [] } : {}),
+    ...securityField(options.security),
     ...(options.body
       ? { requestBody: { required: true, content: json(options.body) } }
       : {}),
@@ -74,7 +86,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
   const get = (
     summary: string,
     options: {
-      security?: boolean;
+      security?: boolean | Record<string, unknown>[];
       response: { status: string; schema: Record<string, unknown> | { $ref: string } };
       parameters?: Record<string, unknown>[];
       binary?: boolean;
@@ -82,7 +94,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
   ) => ({
     summary,
     ...(options.parameters ? { parameters: options.parameters } : {}),
-    ...(options.security === false ? { security: [] } : {}),
+    ...securityField(options.security),
     responses: {
       [options.response.status]: options.binary
         ? { description: "Success.", content: { "application/octet-stream": {} } }
@@ -150,6 +162,8 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       ].join(" "),
     },
     servers: [{ url: origin }],
+    // Every operation requires the bearer token unless it opts out.
+    security: [{ bearerAuth: [] }],
     externalDocs: {
       url: `${origin}${AGENT_GUIDE_PATH}`,
       description: "Headless access and the signing protocol.",
@@ -297,6 +311,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       },
       "/api/auth/session": {
         get: get("Current identity.", {
+          security: optionalAuth,
           response: { status: "200", schema: ref("CurrentSession") },
         }),
         post: post("Exchange a signed challenge for a session token.", {
@@ -326,6 +341,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       },
       "/api/auth/logout": {
         post: post("Revoke the session token.", {
+          security: optionalAuth,
           response: {
             status: "204",
             schema: { type: "object" },
@@ -374,12 +390,14 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       },
       "/api/creators/{address}": {
         get: get("Creator, posts, membership and unlocks.", {
+          security: optionalAuth,
           parameters: [pathParam("address", "Creator wallet address.")],
           response: { status: "200", schema: ref("Creator") },
         }),
       },
       "/api/posts/{id}": {
         get: get("Post metadata.", {
+          security: optionalAuth,
           parameters: [pathParam("id", "Post id.")],
           response: { status: "200", schema: ref("Post") },
         }),
