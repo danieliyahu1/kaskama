@@ -204,6 +204,38 @@ describe("authentication outcomes", () => {
       .expect(401);
   });
 
+  it("authenticates a headless client that sends no Origin header", async () => {
+    const app = appFor(new MemoryStore(), true);
+    const challenge = await request(app)
+      .post("/api/auth/challenge")
+      .send({ address })
+      .expect(201);
+
+    const session = await request(app)
+      .post("/api/auth/session")
+      .send({
+        challengeId: challenge.body.challengeId,
+        address,
+        publicKey: "a".repeat(64),
+        signature: "signature",
+      })
+      .expect(201);
+
+    await request(app)
+      .get("/api/profile")
+      .set("Authorization", `Bearer ${session.body.token}`)
+      .expect(200);
+  });
+
+  it("still rejects a browser that presents a foreign Origin", async () => {
+    const response = await request(appFor(new MemoryStore(), true))
+      .post("/api/auth/challenge")
+      .set("Origin", "https://not-kaskama.test")
+      .send({ address })
+      .expect(403);
+    expect(response.body.error).toBe("ORIGIN_MISMATCH");
+  });
+
   it("rejects an empty creator search at the HTTP boundary", async () => {
     await request(appFor(new MemoryStore(), true))
       .get("/api/creators/search?q=   ")

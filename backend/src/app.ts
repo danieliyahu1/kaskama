@@ -330,7 +330,7 @@ export function createApp(d: AppDependencies) {
         });
       }
       const b = z.object({ address: z.string().regex(addressPattern) }).parse(req.body);
-      trusted(req, d.publicOrigin);
+      assertSameOriginWhenPresent(req, d.publicOrigin);
       await sessions.pruneChallenges(now());
       const result = await sessions.issueChallenge({
         address: b.address,
@@ -349,7 +349,7 @@ export function createApp(d: AppDependencies) {
   app.post(
     "/api/auth/session",
     asyncHandler(async (req, res) => {
-      trusted(req, d.publicOrigin);
+      assertSameOriginWhenPresent(req, d.publicOrigin);
       await sessions.pruneSessions(now());
       const b = z
         .object({
@@ -1548,8 +1548,18 @@ function profileResponse(p: Profile | null, address: string) {
 function shorten(a: string) {
   return `${a.slice(0, 16)}...${a.slice(-8)}`;
 }
-function trusted(req: Request, origin: string) {
-  if (req.get("origin") !== origin) throw new HttpError(403, "ORIGIN_MISMATCH");
+/**
+ * A browser attaches the requesting origin to every cross-site request; a
+ * headless client (an agent, `curl`) usually does not. The wallet signature is
+ * the real credential, so a request presenting no Origin is allowed, and one
+ * presenting the public origin is allowed. Only a browser claiming a
+ * different origin is rejected, which keeps cross-site request forgery out
+ * without demanding that machines impersonate a browser.
+ */
+function assertSameOriginWhenPresent(req: Request, origin: string) {
+  const presented = req.get("origin");
+  if (presented !== undefined && presented !== origin)
+    throw new HttpError(403, "ORIGIN_MISMATCH");
 }
 function param(req: Request, n: string) {
   const v = req.params[n];
