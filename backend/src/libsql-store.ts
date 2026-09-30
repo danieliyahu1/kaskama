@@ -18,6 +18,7 @@ import type {
   Purchase,
   Session,
   TransactionEvidence,
+  IdempotencyRecord,
 } from "./domain/models.js";
 import type { DuplicateOutcome, Repositories } from "./application/ports.js";
 import { logger as defaultLogger, type Logger } from "./observability.js";
@@ -175,6 +176,28 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
           transactionId: text(r.rows[0].transaction_id),
           transaction: text(r.rows[0].transaction_json),
           acceptedAt: number(r.rows[0].accepted_at),
+        }
+      : null;
+  }
+  async saveIdempotency(v: IdempotencyRecord) {
+    await this.execute({
+      sql: `INSERT INTO idempotency_keys (key, method, path, status, body, created_at) VALUES (?,?,?,?,?,?) ON CONFLICT(key, method, path) DO NOTHING`,
+      args: [v.key, v.method, v.path, v.status, v.body, v.createdAt],
+    });
+  }
+  async getIdempotency(key: string, method: string, path: string) {
+    const r = await this.execute({
+      sql: `SELECT * FROM idempotency_keys WHERE key=? AND method=? AND path=?`,
+      args: [key, method, path],
+    });
+    return r.rows[0]
+      ? {
+          key: text(r.rows[0].key),
+          method: text(r.rows[0].method),
+          path: text(r.rows[0].path),
+          status: number(r.rows[0].status),
+          body: text(r.rows[0].body),
+          createdAt: number(r.rows[0].created_at),
         }
       : null;
   }

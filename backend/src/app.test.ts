@@ -1491,6 +1491,30 @@ describe("agent and browser clients are served alike", () => {
     expect(viaBearer.status).toBe(200);
     expect(viaBearer.body).toEqual(viaCookie.body);
   });
+
+  it("replays a write for a repeated idempotency key instead of acting twice", async () => {
+    const store = new MemoryStore();
+    await session(store);
+    const { app } = testApp(store);
+
+    const first = await request(app)
+      .put("/api/profile")
+      .set("Cookie", "kaskama_session=session-parity")
+      .set("Idempotency-Key", "key-1")
+      .send({ displayName: "Agent One" });
+    expect(first.status).toBe(200);
+    expect(first.body.displayName).toBe("Agent One");
+
+    const replay = await request(app)
+      .put("/api/profile")
+      .set("Cookie", "kaskama_session=session-parity")
+      .set("Idempotency-Key", "key-1")
+      .send({ displayName: "Different" });
+
+    expect(replay.status).toBe(200);
+    expect(replay.body.displayName).toBe("Agent One");
+    expect((await store.getProfile(first.body.address))?.displayName).toBe("Agent One");
+  });
 });
 
 describe("network configuration", () => {

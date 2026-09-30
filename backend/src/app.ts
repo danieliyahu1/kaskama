@@ -248,6 +248,36 @@ export function createApp(d: AppDependencies) {
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
+  // A retried write carrying the same idempotency key is answered with the
+  // original result, so an agent whose response was lost does not act twice.
+  // Humans click once; this keeps the two equivalent.
+  app.use(
+    asyncHandler(async (req, res, next) => {
+      if (req.method === "GET" || req.method === "HEAD") return next();
+      const key = req.get("idempotency-key");
+      if (!key) return next();
+      const prior = await d.store.getIdempotency(key, req.method, req.path);
+      if (prior) {
+        res.status(prior.status).json(JSON.parse(prior.body) as unknown);
+        return;
+      }
+      const sendJson = res.json.bind(res);
+      res.json = ((body: unknown) => {
+        void d.store
+          .saveIdempotency({
+            key,
+            method: req.method,
+            path: req.path,
+            status: res.statusCode,
+            body: JSON.stringify(body),
+            createdAt: now(),
+          })
+          .catch(() => undefined);
+        return sendJson(body);
+      }) as typeof res.json;
+      next();
+    }),
+  );
   app.get("/healthz", (_, res) => res.json({ status: "ok" }));
   app.get(
     "/readyz",

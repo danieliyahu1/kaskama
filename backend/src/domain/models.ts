@@ -53,6 +53,20 @@ export interface TransactionEvidence {
   acceptedAt: number;
 }
 
+/**
+ * A stored response to a write that a caller marked with an idempotency key, so
+ * a retried request is answered with the original result instead of acting
+ * twice. Agents retry; humans click once, so this keeps the two equivalent.
+ */
+export interface IdempotencyRecord {
+  key: string;
+  method: string;
+  path: string;
+  status: number;
+  body: string;
+  createdAt: number;
+}
+
 export interface PreparedPayment {
   transaction: string;
   fingerprint: string;

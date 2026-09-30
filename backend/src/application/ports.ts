@@ -17,6 +17,7 @@ import type {
   Purchase,
   Session,
   TransactionEvidence,
+  IdempotencyRecord,
 } from "../domain/models.js";
 
 export type DuplicateOutcome = "CREATED" | "DUPLICATE";
@@ -151,7 +152,8 @@ export interface Repositories
     PurchaseRepository,
     CovenantRepository,
     MembershipPurchaseRepository,
-    TransactionEvidenceStore {
+    TransactionEvidenceStore,
+    IdempotencyStore {
   initialize(): Promise<void>;
 }
 
@@ -162,6 +164,16 @@ export interface Repositories
 export interface TransactionEvidenceStore {
   saveTransactionEvidence(value: TransactionEvidence): Promise<void>;
   getTransactionEvidence(transactionId: string): Promise<TransactionEvidence | null>;
+}
+
+/** Stores write responses keyed by a caller-supplied idempotency key. */
+export interface IdempotencyStore {
+  saveIdempotency(value: IdempotencyRecord): Promise<void>;
+  getIdempotency(
+    key: string,
+    method: string,
+    path: string,
+  ): Promise<IdempotencyRecord | null>;
 }
 
 export interface PaymentGateway {

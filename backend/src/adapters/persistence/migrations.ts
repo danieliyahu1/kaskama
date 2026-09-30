@@ -295,6 +295,21 @@ export const migrations: Migration[] = [
       )`,
     ],
   },
+  {
+    version: 14,
+    name: "idempotency_keys",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS idempotency_keys (
+        key TEXT NOT NULL,
+        method TEXT NOT NULL,
+        path TEXT NOT NULL,
+        status INTEGER NOT NULL,
+        body TEXT NOT NULL,
+        created_at INTEGER NOT NULL CHECK (created_at > 0),
+        PRIMARY KEY (key, method, path)
+      )`,
+    ],
+  },
 ];
 
 export async function applyMigrations(client: Client): Promise<void> {
@@ -329,6 +344,7 @@ export async function applyMigrations(client: Client): Promise<void> {
 
 export async function resetDatabase(client: Client): Promise<void> {
   const tables = [
+    "idempotency_keys",
     "transaction_evidence",
     "feedback_outbox",
     "membership_workflows",
