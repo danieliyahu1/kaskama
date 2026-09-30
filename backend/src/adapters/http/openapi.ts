@@ -113,15 +113,13 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         "Kaskama's HTTP API is the product; the browser app is one client of it.",
         "Identity is wallet ownership: sign a server-issued challenge, then send the",
         "returned token as `Authorization: Bearer`. There is no agent-specific",
-        "account, token, or permission. See `docs/agent-access.md` for the signing",
-        "protocol.",
+        "account, token, or permission.",
       ].join(" "),
     },
     servers: [{ url: origin }],
     externalDocs: {
-      url: `${origin}/docs/api`,
-      description:
-        "Rendered reference. The signing protocol is documented in docs/agent-access.md.",
+      url: "https://github.com/danieliyahu1/kaskama/blob/master/docs/agent-access.md",
+      description: "Headless access and the signing protocol.",
     },
     components: {
       securitySchemes: {
