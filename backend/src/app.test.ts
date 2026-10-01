@@ -1514,6 +1514,29 @@ describe("API contract", () => {
     expect(schemaAt("409")).toContain("Error");
   });
 
+  it("splits the payment prepare from the membership prepare", async () => {
+    const { app } = testApp();
+
+    const spec = await request(app).get("/api/openapi.json");
+    const schemaAt = (path: string) =>
+      spec.body.paths[path].post.responses["201"].content["application/json"]
+        .schema.$ref;
+
+    expect(schemaAt("/api/posts/{id}/payments/prepare")).toContain(
+      "PreparedPayment",
+    );
+    expect(schemaAt("/api/membership/{creator}/prepare")).toContain(
+      "PreparedMembership",
+    );
+    // A post payment returns no signInputs; only a membership prepare does.
+    expect(
+      spec.body.components.schemas.PreparedPayment.properties.signInputs,
+    ).toBeUndefined();
+    expect(
+      spec.body.components.schemas.PreparedMembership.properties.signInputs,
+    ).toBeDefined();
+  });
+
   it("declares which calls need the bearer token", async () => {
     const { app } = testApp();
 

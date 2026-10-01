@@ -240,7 +240,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
             posts: { type: "array", items: ref("Post") },
           },
         },
-        PreparedTransaction: {
+        PreparedPayment: {
           type: "object",
           properties: {
             id: { type: "string" },
@@ -249,7 +249,22 @@ export function openApiDocument(origin: string): Record<string, unknown> {
               description: "An unsigned transaction JSON the client signs.",
             },
             amountSompi: { type: "string" },
-            signInputs: { type: "array", items: { type: "integer" } },
+          },
+        },
+        PreparedMembership: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            transaction: {
+              type: "string",
+              description: "An unsigned transaction JSON the client signs.",
+            },
+            signInputs: {
+              type: "array",
+              items: { type: "integer" },
+              description:
+                "Input indices the client must sign; the server already signed the covenant inputs.",
+            },
           },
         },
         SubmissionResult: {
@@ -458,7 +473,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       "/api/posts/{id}/payments/prepare": {
         post: post("Prepare a post purchase.", {
           parameters: [pathParam("id", "Post id.")],
-          response: { status: "201", schema: ref("PreparedTransaction") },
+          response: { status: "201", schema: ref("PreparedPayment") },
         }),
       },
       "/api/payments/{id}/finalize": {
@@ -470,7 +485,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       "/api/membership/{creator}/prepare": {
         post: post("Prepare a subscription.", {
           parameters: [pathParam("creator", "Creator wallet address.")],
-          response: { status: "201", schema: ref("PreparedTransaction") },
+          response: { status: "201", schema: ref("PreparedMembership") },
         }),
       },
       "/api/membership/offers/prepare": {
@@ -480,7 +495,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
             required: ["price"],
             properties: { price: { type: "string" } },
           },
-          response: { status: "201", schema: ref("PreparedTransaction") },
+          response: { status: "201", schema: ref("PreparedMembership") },
         }),
       },
       "/api/membership/price/prepare": {
@@ -490,12 +505,12 @@ export function openApiDocument(origin: string): Record<string, unknown> {
             required: ["price"],
             properties: { price: { type: "string" } },
           },
-          response: { status: "201", schema: ref("PreparedTransaction") },
+          response: { status: "201", schema: ref("PreparedMembership") },
         }),
       },
       "/api/membership/cancel/prepare": {
         post: post("Prepare a subscription cancellation.", {
-          response: { status: "201", schema: ref("PreparedTransaction") },
+          response: { status: "201", schema: ref("PreparedMembership") },
         }),
       },
       "/api/membership/offers/{id}/finalize": {
