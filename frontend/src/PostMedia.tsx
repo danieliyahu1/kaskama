@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { isAudioMedia, isVideoMedia, type PostResponse } from "@kaskama/shared";
-import { VideoPlayer } from "./VideoPlayer.js";
+import { MediaPlayer } from "./MediaPlayer.js";
 
 export function PostMedia({ post }: { post: PostResponse }) {
   const [mediaError, setMediaError] = useState(false);
@@ -23,7 +23,7 @@ export function PostMedia({ post }: { post: PostResponse }) {
   }
 
   return isVideo || isAudio ? (
-    <VideoPlayer src={mediaUrl} label={mediaLabel} onError={() => setMediaError(true)} />
+    <MediaPlayer src={mediaUrl} label={mediaLabel} onError={() => setMediaError(true)} />
   ) : (
     <img
       className="post-media"

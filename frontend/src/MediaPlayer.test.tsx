@@ -1,16 +1,16 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { VideoPlayer } from "./VideoPlayer.js";
+import { MediaPlayer } from "./MediaPlayer.js";
 
 const playMock = vi.fn();
 const pauseMock = vi.fn();
 let paused = true;
 
 function renderPlayer() {
-  return render(<VideoPlayer src="/media/clip" label="Clip" onError={() => {}} />);
+  return render(<MediaPlayer src="/media/clip" label="Clip" onError={() => {}} />);
 }
 
 function readyPlayer(currentTime = 30, duration = 120) {
-  const player = screen.getByRole("group", { name: "Clip video" });
+  const player = screen.getByRole("group", { name: "Clip" });
   const video = player.querySelector("video") as HTMLVideoElement;
   Object.defineProperty(video, "duration", { configurable: true, value: duration });
   Object.defineProperty(video, "currentTime", {
@@ -73,10 +73,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("VideoPlayer", () => {
+describe("MediaPlayer", () => {
   it("starts and stops on a single tap", () => {
     renderPlayer();
-    const player = screen.getByRole("group", { name: "Clip video" });
+    const player = screen.getByRole("group", { name: "Clip" });
 
     fireEvent.click(player);
     act(() => vi.advanceTimersByTime(300));
@@ -140,7 +140,7 @@ describe("VideoPlayer", () => {
 
   it("starts with the control bar hidden until the pointer moves", () => {
     renderPlayer();
-    const player = screen.getByRole("group", { name: "Clip video" });
+    const player = screen.getByRole("group", { name: "Clip" });
     const controls = player.querySelector(".video-controls") as HTMLElement;
     expect(controls.className).toContain("is-hidden");
 
@@ -280,7 +280,7 @@ describe("VideoPlayer", () => {
       value: requestFullscreen,
     });
     renderPlayer();
-    const player = screen.getByRole("group", { name: "Clip video" });
+    const player = screen.getByRole("group", { name: "Clip" });
 
     fireEvent.click(screen.getByRole("button", { name: "Fullscreen video" }));
 
@@ -295,7 +295,7 @@ describe("VideoPlayer", () => {
       value: exitFullscreen,
     });
     renderPlayer();
-    const player = screen.getByRole("group", { name: "Clip video" });
+    const player = screen.getByRole("group", { name: "Clip" });
     Object.defineProperty(document, "fullscreenElement", {
       configurable: true,
       get: () => player,

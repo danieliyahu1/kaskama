@@ -278,7 +278,7 @@ describe("CreatorPage subscription actions", () => {
     });
     renderCreator(null);
 
-    const player = await screen.findByRole("group", { name: "A free clip video" });
+    const player = await screen.findByRole("group", { name: "A free clip" });
     expect(player.querySelector("video")).toHaveAttribute(
       "src",
       "/api/posts/free-video/media",
@@ -297,7 +297,7 @@ describe("CreatorPage subscription actions", () => {
       "/post/locked-video",
     );
     expect(
-      screen.queryByRole("group", { name: "Locked clip video" }),
+      screen.queryByRole("group", { name: "Locked clip" }),
     ).not.toBeInTheDocument();
   });
 

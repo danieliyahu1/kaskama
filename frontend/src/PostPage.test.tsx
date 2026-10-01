@@ -43,7 +43,7 @@ describe("PostPage", () => {
     renderPost(videoPost);
 
     const player = await screen.findByRole("group", {
-      name: "A moment for the circle video",
+      name: "A moment for the circle",
     });
     const video = player.querySelector("video");
     expect(video).not.toBeNull();

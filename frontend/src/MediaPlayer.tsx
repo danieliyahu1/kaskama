@@ -15,7 +15,7 @@ const DEAD_ZONE_RATIO = 0.05;
 const VOLUME_STEP = 0.05;
 const CONTROLS_IDLE_MS = 3000;
 
-export function VideoPlayer({
+export function MediaPlayer({
   src,
   label,
   onError,
@@ -181,7 +181,7 @@ export function VideoPlayer({
       className="video-player"
       tabIndex={0}
       role="group"
-      aria-label={`${label} video`}
+      aria-label={label}
       onKeyDown={handleKeyDown}
       onClick={handleSurfaceClick}
       onMouseMove={handlePointerActivity}
