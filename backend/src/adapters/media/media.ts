@@ -10,6 +10,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { fileTypeFromFile } from "file-type";
 import sharp from "sharp";
 import {
+  MAX_AUDIO_BYTES,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
   MEDIA_TYPES,
@@ -24,6 +25,7 @@ const imageTypes = new Set<MediaType>([
   "image/webp",
 ]);
 const videoTypes = new Set<MediaType>(["video/mp4", "video/webm"]);
+const audioTypes = new Set<MediaType>(["audio/mpeg"]);
 
 export interface VerifiedMedia {
   digest: string;
@@ -35,6 +37,7 @@ type MediaErrorCategory =
   | "UNSUPPORTED_MEDIA"
   | "IMAGE_TOO_LARGE"
   | "VIDEO_TOO_LARGE"
+  | "AUDIO_TOO_LARGE"
   | "MALFORMED_MEDIA"
   | "STORAGE_FAILURE";
 
@@ -58,7 +61,11 @@ export async function verifyMediaFile(path: string): Promise<VerifiedMedia> {
   } else if (videoTypes.has(mediaType)) {
     if (size > MAX_VIDEO_BYTES)
       throw new MediaValidationError("VIDEO_TOO_LARGE");
-    await probeCompleteVideo(path);
+    await probeCompleteMedia(path);
+  } else if (audioTypes.has(mediaType)) {
+    if (size > MAX_AUDIO_BYTES)
+      throw new MediaValidationError("AUDIO_TOO_LARGE");
+    await probeCompleteMedia(path);
   }
 
   return { digest: await hashFile(path), mediaType, size };
@@ -77,7 +84,7 @@ async function decodeCompleteImage(path: string): Promise<void> {
   }
 }
 
-async function probeCompleteVideo(path: string): Promise<void> {
+async function probeCompleteMedia(path: string): Promise<void> {
   try {
     const { stdout } = await execFileAsync(
       ffprobePath,
@@ -101,7 +108,7 @@ async function probeCompleteVideo(path: string): Promise<void> {
       duration <= 0 ||
       !result.format?.format_name
     )
-      throw new Error("Invalid video probe");
+      throw new Error("Invalid media probe");
   } catch (error) {
     if (isExecutableFailure(error)) throw error;
     throw new MediaValidationError("MALFORMED_MEDIA");
