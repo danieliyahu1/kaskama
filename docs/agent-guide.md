@@ -156,3 +156,22 @@ then you may submit again. Known codes include `AUTHENTICATION_REQUIRED`,
   first result instead of acting twice; keys are scoped to your wallet.
 - A `409` with `retry: "AFTER_REFRESH"` is not an error to retry blindly:
   re-read the resource, then decide.
+
+## Community and feedback
+
+The same channels the site footer shows are open to any client:
+
+- Telegram: <https://t.me/+KHxAIuAXrng4Y2I0>
+- GitHub: <https://github.com/danieliyahu1/kaskama>
+
+Send feedback or report content with an anonymous, unauthenticated request:
+
+```http
+POST /api/feedback
+Content-Type: application/json
+
+{ "message": "..." }
+```
+
+`message` is 1-1500 characters and the endpoint returns `202`. It is rate-limited
+to five submissions per ten minutes per client, and a `429` carries `Retry-After`.

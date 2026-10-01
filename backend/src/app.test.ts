@@ -7,6 +7,7 @@ import {
   API_DOCS_PATH,
   LLMS_TXT_PATH,
   PUBLIC_PAGES,
+  SOCIAL_LINKS,
 } from "@kaskama/shared";
 import { createApp } from "./app.js";
 import { matchPublicRoute } from "./adapters/http/public-pages.js";
@@ -1837,6 +1838,20 @@ describe("Crawler discoverability", () => {
     expect(response.status).toBe(200);
     expect(response.headers["content-type"]).toContain("text/markdown");
     expect(response.text.startsWith("# Headless access")).toBe(true);
+  });
+
+  it("points llms.txt and the agent guide at the footer's community channels", async () => {
+    const { app } = testApp();
+
+    const llms = await request(app).get(LLMS_TXT_PATH);
+    expect(llms.text).toContain(SOCIAL_LINKS.telegram);
+    expect(llms.text).toContain(SOCIAL_LINKS.github);
+    expect(llms.text).toContain("/api/feedback");
+
+    const guide = await request(app).get(AGENT_GUIDE_PATH);
+    expect(guide.text).toContain(SOCIAL_LINKS.telegram);
+    expect(guide.text).toContain(SOCIAL_LINKS.github);
+    expect(guide.text).toContain("/api/feedback");
   });
 });
 

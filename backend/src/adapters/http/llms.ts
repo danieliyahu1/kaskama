@@ -1,3 +1,5 @@
+import { SOCIAL_LINKS } from "@kaskama/shared";
+
 /**
  * The agent entry point served at `/llms.txt`. It is a plain-text map of the
  * site for non-browser clients: what Kaskama is, where the contract lives, and
@@ -59,6 +61,14 @@ export function llmsTxt(origin: string): string {
     '"requestId": "...", "retry": "AFTER_REFRESH" }`. `error` is stable and',
     'machine-readable. `retry: "AFTER_REFRESH"` means the resource changed',
     "underneath you: refetch it, then submit again.",
+    "",
+    "## Community",
+    "",
+    "The same channels the site footer shows:",
+    "",
+    `- Telegram: ${SOCIAL_LINKS.telegram}`,
+    `- GitHub: ${SOCIAL_LINKS.github}`,
+    `- Feedback: \`POST ${link("/api/feedback")}\` with \`{ "message": "..." }\``,
     "",
     "## Optional",
     "",
