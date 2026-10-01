@@ -867,6 +867,9 @@ main:has(.home-page) {
   height: 100%;
   object-fit: contain;
 }
+.media-stage audio {
+  width: min(100%, 26rem);
+}
 .media-actions {
   display: flex;
   justify-content: flex-end;

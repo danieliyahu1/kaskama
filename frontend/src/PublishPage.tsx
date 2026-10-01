@@ -115,24 +115,16 @@ export function PublishPage({ address, signIn, signingIn }: WalletProps) {
                 ref={mediaInput}
                 id="media"
                 type="file"
-                aria-label="Choose image or video"
-                accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+                aria-label="Choose image, video, or audio"
+                accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,audio/mpeg"
                 onChange={selectFile}
                 disabled={busy}
               />
               {selectedFile && previewUrl ? (
-                selectedFile.type.startsWith("video/") ? (
-                  <video
-                    src={previewUrl}
-                    controls
-                    aria-label="Selected video preview"
-                  />
-                ) : (
-                  <img src={previewUrl} alt="Selected image preview" />
-                )
+                <SelectedMediaPreview file={selectedFile} url={previewUrl} />
               ) : (
                 <label className="media-prompt" htmlFor="media">
-                  <strong>Add a photo or video</strong>
+                  <strong>Add a photo, video, or audio</strong>
                 </label>
               )}
               {uploading && (
@@ -203,4 +195,13 @@ function publishActionLabel(signingIn: boolean, uploading: boolean): string {
   if (signingIn) return "Signing in...";
   if (uploading) return "Publishing...";
   return "Publish";
+}
+
+/** Renders the chosen file with the element that matches its kind. */
+function SelectedMediaPreview({ file, url }: { file: File; url: string }) {
+  if (file.type.startsWith("video/"))
+    return <video src={url} controls aria-label="Selected video preview" />;
+  if (file.type.startsWith("audio/"))
+    return <audio src={url} controls aria-label="Selected audio preview" />;
+  return <img src={url} alt="Selected image preview" />;
 }
