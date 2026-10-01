@@ -23,7 +23,12 @@ export function PostMedia({ post }: { post: PostResponse }) {
   }
 
   return isVideo || isAudio ? (
-    <MediaPlayer src={mediaUrl} label={mediaLabel} onError={() => setMediaError(true)} />
+    <MediaPlayer
+      src={mediaUrl}
+      label={mediaLabel}
+      kind={isVideo ? "video" : "audio"}
+      onError={() => setMediaError(true)}
+    />
   ) : (
     <img
       className="post-media"

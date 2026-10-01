@@ -15,15 +15,17 @@ function post(mediaType: PostResponse["mediaType"]): PostResponse {
 }
 
 describe("PostMedia", () => {
-  it("plays audio through the shared player", () => {
+  it("plays audio on its own quiet stage inside the shared player", () => {
     const { container } = render(<PostMedia post={post("audio/mpeg")} />);
     expect(container.querySelector("video")).toBeInTheDocument();
+    expect(container.querySelector(".audio-stage")).toBeInTheDocument();
     expect(container.querySelector("img")).toBeNull();
   });
 
-  it("plays video through the shared player", () => {
+  it("plays video through the shared player without the audio stage", () => {
     const { container } = render(<PostMedia post={post("video/mp4")} />);
     expect(container.querySelector("video")).toBeInTheDocument();
+    expect(container.querySelector(".audio-stage")).toBeNull();
   });
 
   it("renders an image post as an image", () => {

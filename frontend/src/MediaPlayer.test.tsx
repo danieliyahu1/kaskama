@@ -309,3 +309,46 @@ describe("MediaPlayer", () => {
       .toHaveAttribute("d", "M9 3v6H3M15 3v6h6M21 15h-6v6M9 21v-6H3");
   });
 });
+
+describe("MediaPlayer audio mark", () => {
+  it("shows a quiet stage for audio, leaving the title to the caller", () => {
+    const { container } = render(
+      <MediaPlayer
+        src="/media/song"
+        label="A quiet track"
+        kind="audio"
+        onError={() => {}}
+      />,
+    );
+    const stage = container.querySelector(".audio-stage");
+    expect(stage).toBeInTheDocument();
+    expect(stage).not.toHaveClass("is-playing");
+    expect(stage?.querySelector(".media-icon")).not.toBeNull();
+    expect(screen.queryByText("A quiet track")).toBeNull();
+  });
+
+  it("breathes only while the audio is playing", () => {
+    const { container } = render(
+      <MediaPlayer
+        src="/media/song"
+        label="A quiet track"
+        kind="audio"
+        onError={() => {}}
+      />,
+    );
+    const video = container.querySelector("video") as HTMLVideoElement;
+
+    fireEvent.play(video);
+    expect(container.querySelector(".audio-stage")).toHaveClass("is-playing");
+
+    fireEvent.pause(video);
+    expect(container.querySelector(".audio-stage")).not.toHaveClass("is-playing");
+  });
+
+  it("shows no audio stage for video", () => {
+    const { container } = render(
+      <MediaPlayer src="/media/clip" label="Clip" onError={() => {}} />,
+    );
+    expect(container.querySelector(".audio-stage")).toBeNull();
+  });
+});

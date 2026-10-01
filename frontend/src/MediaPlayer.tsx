@@ -6,7 +6,7 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { VideoIcon } from "./Icons.js";
+import { MediaIcon, VideoIcon } from "./Icons.js";
 import { formatTime } from "./format.js";
 
 const DOUBLE_TAP_MS = 250;
@@ -18,10 +18,12 @@ const CONTROLS_IDLE_MS = 3000;
 export function MediaPlayer({
   src,
   label,
+  kind = "video",
   onError,
 }: {
   src: string;
   label: string;
+  kind?: "video" | "audio";
   onError: () => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
@@ -36,6 +38,7 @@ export function MediaPlayer({
   const [fullscreen, setFullscreen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(false);
   const [flash, setFlash] = useState<"back" | "forward" | null>(null);
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     const sync = () => setFullscreen(document.fullscreenElement === player.current);
@@ -68,10 +71,12 @@ export function MediaPlayer({
   }
 
   function handlePlay() {
+    setPlaying(true);
     scheduleHide();
   }
 
   function handlePause() {
+    setPlaying(false);
     clearHideTimer();
     setControlsVisible(true);
   }
@@ -198,6 +203,11 @@ export function MediaPlayer({
         onPause={handlePause}
         onError={onError}
       />
+      {kind === "audio" && (
+        <div className={`audio-stage${playing ? " is-playing" : ""}`}>
+          <MediaIcon kind="audio" />
+        </div>
+      )}
       {flash && (
         <span className={`video-seek is-${flash}`} role="status">
           {flash === "back" ? `-${SEEK_STEP}s` : `+${SEEK_STEP}s`}
