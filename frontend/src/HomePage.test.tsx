@@ -40,7 +40,9 @@ describe("HomePage", () => {
       }),
     ).toBeVisible();
     expect(
-      screen.getByText("Publish a photo or a video. Set your price. You keep 99%."),
+      screen.getByText(
+        "Publish a photo, a video, or an audio track. Set your price. You keep 99%.",
+      ),
     ).toBeVisible();
     await screen.findByText("What your fans see");
   });
