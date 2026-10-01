@@ -67,6 +67,27 @@ describe("media preview", () => {
     expect(store.puts).toEqual(["previews/v8/creator/ab/digest.jpg"]);
   });
 
+  it("skips audio entirely, without reading or rendering", async () => {
+    let renders = 0;
+    const store = fakeStorage({});
+    const preview = createMediaPreview({
+      storage: store.storage,
+      logger: consoleLogger,
+      render: async (_source, _mediaType, output) => {
+        renders += 1;
+        await writeFile(output, new Uint8Array([1]));
+      },
+    });
+    const read = vi.spyOn(store.storage, "readRange");
+
+    await expect(
+      preview.ensure({ ...post, mediaType: "audio/mpeg" }),
+    ).resolves.toBeNull();
+    expect(renders).toBe(0);
+    expect(read).not.toHaveBeenCalled();
+    expect(store.puts).toEqual([]);
+  });
+
   it("returns null and stores nothing when rendering fails", async () => {
     const store = fakeStorage({ "media/creator/ab/digest": new Uint8Array([1]) });
     const preview = createMediaPreview({

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isVideoMedia, type MediaType } from "@kaskama/shared";
+import { isAudioMedia, isVideoMedia, type MediaType } from "@kaskama/shared";
 import sharp from "sharp";
 import type { ObjectStorage } from "../../application/ports.js";
 import {
@@ -74,6 +74,9 @@ export function createMediaPreview(dependencies: {
 
   return {
     async ensure(post) {
+      // Audio has no still frame to blur, so a locked post keeps its bare
+      // placeholder rather than paying for an ffmpeg run that cannot succeed.
+      if (isAudioMedia(post.mediaType)) return null;
       const key = previewKey(post.mediaKey);
       try {
         const cached = await dependencies.storage.readRange(key);
