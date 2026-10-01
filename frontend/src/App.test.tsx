@@ -4,6 +4,7 @@ import {
   API_DOCS_PATH,
   DEFAULT_NETWORK,
   PUBLIC_PAGES,
+  SOCIAL_LINKS,
   networkDefinition,
 } from "@kaskama/shared";
 import { App } from "./App.js";
@@ -324,5 +325,18 @@ describe("public documents", () => {
       "href",
       API_DOCS_PATH,
     );
+  });
+
+  it("links the footer to the same community channels the docs list", async () => {
+    mockApi();
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("link", { name: "Kaskama on Telegram" }),
+    ).toHaveAttribute("href", SOCIAL_LINKS.telegram);
+    expect(
+      screen.getByRole("link", { name: "Kaskama on GitHub" }),
+    ).toHaveAttribute("href", SOCIAL_LINKS.github);
   });
 });

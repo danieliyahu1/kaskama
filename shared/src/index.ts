@@ -2,6 +2,7 @@ import { MEDIA_COPY, type MediaType } from "./media.js";
 
 export * from "./public-pages.js";
 export * from "./media.js";
+export * from "./social-links.js";
 
 export type NetworkId = "mainnet" | "testnet-10";
 

@@ -1,7 +1,4 @@
-export const SOCIAL_LINKS = {
-  telegram: "https://t.me/+KHxAIuAXrng4Y2I0",
-  github: "https://github.com/danieliyahu1/kaskama",
-} as const;
+import { SOCIAL_LINKS } from "@kaskama/shared";
 
 export function SocialLinks() {
   return (
