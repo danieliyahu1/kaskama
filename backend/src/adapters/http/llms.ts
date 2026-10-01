@@ -30,7 +30,7 @@ export function llmsTxt(origin: string): string {
     "",
     "The only credential is a signature over a server-issued, single-use challenge.",
     "",
-    `1. \`POST ${link("/api/auth/challenge")}\` with \`{ "address": "kaspatest:..." }\`.`,
+    `1. \`POST ${link("/api/auth/challenge")}\` with \`{ "address": "kaspa:..." }\`.`,
     "2. Sign the returned `message` verbatim with the wallet's private key",
     "   (Schnorr, hex or base64; `publicKey` is the x-only key).",
     `3. \`POST ${link("/api/auth/session")}\` with \`{ challengeId, address,`,
