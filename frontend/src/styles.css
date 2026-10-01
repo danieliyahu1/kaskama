@@ -859,6 +859,12 @@ main:has(.home-page) {
   font-weight: 700;
   letter-spacing: -0.02em;
 }
+
+.media-prompt-note {
+  margin-top: 0.5rem;
+  color: var(--color-text-muted);
+  font-size: clamp(0.95rem, 2vw, 1.05rem);
+}
 .media-stage img,
 .media-stage video {
   position: absolute;

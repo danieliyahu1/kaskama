@@ -9,7 +9,7 @@ export const COPY = {
   signInCancelled: "Sign-in cancelled.",
   verificationFailed: "Kaskama could not verify this wallet. Try again.",
   serverDown: "Server is down. Try again shortly.",
-  uploadFailed: "Upload failed. Try again.",
+  uploadFailed: "Couldn't add it. Try again.",
   invalidPrice: "Enter a KAS price of zero or more, using up to 8 decimal places.",
   permanence:
     "You can't edit a post once it's published. You can delete it later, but fans who unlocked it may keep a copy.",

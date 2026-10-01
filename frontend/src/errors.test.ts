@@ -5,12 +5,12 @@ describe("errorText", () => {
   it("shows a short reference for server faults", () => {
     const error = new ApiError(
       "MEDIA_STORAGE_FAILED",
-      "Upload failed.",
+      "Couldn't add it.",
       502,
       "abcdef1234567890",
     );
 
-    expect(errorText(error, "fallback")).toBe("Upload failed. (ref: abcdef12)");
+    expect(errorText(error, "fallback")).toBe("Couldn't add it. (ref: abcdef12)");
   });
 
   it("does not reference user errors", () => {

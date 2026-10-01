@@ -129,7 +129,8 @@ export function PublishPage({ address, signIn, signingIn }: WalletProps) {
                 <SelectedMediaPreview file={selectedFile} url={previewUrl} />
               ) : (
                 <label className="media-prompt" htmlFor="media">
-                  <strong>Add a photo, video, audio, or document</strong>
+                  <strong>Add your work</strong>
+                  <span className="media-prompt-note">Photos, videos, audio, or documents.</span>
                 </label>
               )}
               {uploading && (
