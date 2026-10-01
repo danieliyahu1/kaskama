@@ -26,7 +26,9 @@ test("the preview is below the first screen and reachable", async ({ page }) => 
   await page.goto("/");
   await page.evaluate(() => document.fonts.ready);
 
-  const preview = page.getByRole("img", { name: /subscribed fan's view/i });
+  const preview = page.getByRole("img", {
+    name: /an example creator's page on kaskama as fans see it/i,
+  });
   await expect(preview).toBeAttached();
 
   await preview.scrollIntoViewIfNeeded();
