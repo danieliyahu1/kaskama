@@ -1,4 +1,9 @@
-import { SITE, publicPageByPath, type PublicPage } from "@kaskama/shared";
+import {
+  AGENT_GUIDE_PATH,
+  SITE,
+  publicPageByPath,
+  type PublicPage,
+} from "@kaskama/shared";
 
 export interface PublicRouteMatch {
   /** 200 for a real page, 404 for a route the client does not know. */
@@ -27,15 +32,29 @@ const FIND_BODY =
 
 const PUBLISH_BODY =
   '<div class="find-page"><header><h1>Publish your work.</h1></header>' +
-  '<p class="feedback inline">Connect your Kasware wallet to publish and sell your work on Kaskama.</p></div>';
+  '<p class="feedback inline">Connect your Kasware wallet to publish and sell your work on Kaskama.</p>' +
+  `<noscript><p>Publishing needs JavaScript. To publish from a script, see <a href="${AGENT_GUIDE_PATH}">${AGENT_GUIDE_PATH}</a>.</p></noscript>` +
+  "</div>";
 
-const CREATOR_BODY =
-  '<div class="find-page"><header><h1>Creator.</h1></header>' +
-  '<p class="feedback inline">Unlock this creator\u2019s work with Kaspa.</p></div>';
+const creatorBody = (address: string): string => {
+  const endpoint = `/api/creators/${address}`;
+  return (
+    '<div class="find-page"><header><h1>Creator.</h1></header>' +
+    '<p class="feedback inline">Unlock this creator\u2019s work with Kaspa.</p>' +
+    `<noscript><p>This profile needs JavaScript. The same data is available at <a href="${escapeHtml(endpoint)}">${escapeHtml(endpoint)}</a>.</p></noscript>` +
+    "</div>"
+  );
+};
 
-const POST_BODY =
-  '<div class="find-page"><header><h1>Post.</h1></header>' +
-  '<p class="feedback inline">Unlock this post with Kaspa to support the creator.</p></div>';
+const postBody = (id: string): string => {
+  const endpoint = `/api/posts/${id}`;
+  return (
+    '<div class="find-page"><header><h1>Post.</h1></header>' +
+    '<p class="feedback inline">Unlock this post with Kaspa to support the creator.</p>' +
+    `<noscript><p>This post needs JavaScript. The same data is available at <a href="${escapeHtml(endpoint)}">${escapeHtml(endpoint)}</a>.</p></noscript>` +
+    "</div>"
+  );
+};
 
 const NOT_FOUND_BODY =
   '<div class="message"><h1 class="message-title">Page not found.</h1></div>';
@@ -67,8 +86,8 @@ const APP_ROUTE_META: Record<string, RouteMeta> = {
   },
 };
 
-const CREATOR_PATH = /^\/creator\/[^/]+$/;
-const POST_PATH = /^\/post\/[^/]+$/;
+const CREATOR_PATH = /^\/creator\/([^/]+)$/;
+const POST_PATH = /^\/post\/([^/]+)$/;
 
 const NOT_FOUND: Omit<PublicRouteMatch, "status" | "canonicalPath"> = {
   title: "Page not found - Kaskama",
@@ -93,23 +112,25 @@ export function matchPublicRoute(pathname: string): PublicRouteMatch {
       body: documentBody(page),
     };
   }
-  if (CREATOR_PATH.test(path)) {
+  const creator = path.match(CREATOR_PATH);
+  if (creator) {
     return {
       status: 200,
       title: "Creator - Kaskama",
       description: "A creator on Kaskama. Unlock their work with Kaspa.",
       canonicalPath: path,
-      body: CREATOR_BODY,
+      body: creatorBody(creator[1]!),
     };
   }
-  if (POST_PATH.test(path)) {
+  const post = path.match(POST_PATH);
+  if (post) {
     return {
       status: 200,
       title: "Post - Kaskama",
       description:
         "A paid post on Kaskama. Unlock it with Kaspa to support the creator.",
       canonicalPath: path,
-      body: POST_BODY,
+      body: postBody(post[1]!),
     };
   }
   return { status: 404, ...NOT_FOUND, canonicalPath: path };

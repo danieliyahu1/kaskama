@@ -9,6 +9,7 @@ import {
   PUBLIC_PAGES,
 } from "@kaskama/shared";
 import { createApp } from "./app.js";
+import { matchPublicRoute } from "./adapters/http/public-pages.js";
 import { createMetrics, type Metrics } from "./metrics.js";
 import { MemoryStore } from "./memory-store.js";
 import type { EventLogger, Logger } from "./observability.js";
@@ -1892,6 +1893,28 @@ describe("Server-rendered public pages", () => {
     expect(response.text).toContain(
       'Search needs JavaScript. The same creators are available as data at <a href="/api/creators/public">',
     );
+  });
+
+  it("points agents at the creator and post data on their pages", async () => {
+    const creator = await request(app).get("/creator/kaspatest:abc");
+    const post = await request(app).get("/post/abc");
+
+    expect(creator.text).toContain('href="/api/creators/kaspatest:abc"');
+    expect(post.text).toContain('href="/api/posts/abc"');
+  });
+
+  it("escapes a crafted creator address in the fallback", () => {
+    const match = matchPublicRoute("/creator/<x>");
+
+    expect(match.body).toContain("&lt;x&gt;");
+    expect(match.body).not.toContain("<x>");
+  });
+
+  it("points agents at the guide on the publish page", async () => {
+    const response = await request(app).get("/publish");
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain(AGENT_GUIDE_PATH);
   });
 
   it.each(PUBLIC_PAGES)(
