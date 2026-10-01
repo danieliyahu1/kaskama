@@ -44,10 +44,7 @@ describe("delete post use case", () => {
 
     expect(result).toEqual({ kind: "DELETED", post: existingPost() });
     expect(deletedPosts).toEqual(["post-1"]);
-    expect(removedMedia).toEqual([
-      "media/creator/ab/digest",
-      "previews/v8/creator/ab/digest.jpg",
-    ]);
+    expect(removedMedia).toEqual(["media/creator/ab/digest"]);
   });
 
   it("refuses to delete another creator's post", async () => {

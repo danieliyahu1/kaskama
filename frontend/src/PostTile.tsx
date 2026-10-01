@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { MediaType } from "@kaskama/shared";
 import { MediaTypeBadge } from "./MediaTypeBadge.js";
-import { PreviewImage } from "./PreviewImage.js";
 
 export function PostTile({
   media,
@@ -40,31 +39,8 @@ export function PostTile({
   );
 }
 
-export function PostTileMedia({
-  thumbnail,
-  to,
-  children,
-}: {
-  thumbnail?: string | undefined;
-  to?: string | undefined;
-  children?: ReactNode;
-}) {
-  const image = thumbnail ? (
-    <PreviewImage className="post-tile-thumb" src={thumbnail} />
-  ) : null;
-
-  return (
-    <div className="post-tile-media">
-      {to ? (
-        <Link className="post-tile-media-link" to={to} aria-label="Open post">
-          {image}
-        </Link>
-      ) : (
-        image
-      )}
-      {children}
-    </div>
-  );
+export function PostTileMedia({ children }: { children?: ReactNode }) {
+  return <div className="post-tile-media">{children}</div>;
 }
 
 export function PostTileAction({ children }: { children: ReactNode }) {

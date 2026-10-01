@@ -12,8 +12,6 @@ import { errorText, isNetworkRequired } from "./errors.js";
 import { presentError } from "./error-toast.js";
 import { formatKas, relativeTime } from "./format.js";
 import { PostMedia } from "./PostMedia.js";
-import { PreviewImage } from "./PreviewImage.js";
-import { previewUrl } from "./preview-url.js";
 import type { WalletProps } from "./wallet.js";
 import { creatorPath } from "./creator-url.js";
 
@@ -121,10 +119,6 @@ export function PostPage({ address, signIn, signingIn }: WalletProps) {
             <PostMedia key={currentPost.id} post={currentPost} />
           ) : (
             <div className="post-locked">
-              <PreviewImage
-                className="post-locked-preview"
-                src={previewUrl(currentPost.id)}
-              />
               <div className="post-locked-content">
                 <LockIcon open={false} />
                 <button

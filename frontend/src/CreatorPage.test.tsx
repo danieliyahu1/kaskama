@@ -225,7 +225,7 @@ describe("CreatorPage subscription actions", () => {
     );
   });
 
-  it("shows unlocked media inline and links only locked media to the post page", async () => {
+  it("shows unlocked media inline without wrapping it in a link", async () => {
     vi.mocked(api).mockResolvedValueOnce({
       ...creator(false, true),
       posts: [
@@ -235,14 +235,13 @@ describe("CreatorPage subscription actions", () => {
     });
     renderCreator(null);
 
-    const mediaLinks = await screen.findAllByRole("link", { name: "Open post" });
-    expect(mediaLinks.map((link) => link.getAttribute("href"))).toEqual([
-      "/post/locked-post",
-    ]);
-    expect(screen.getByRole("img", { name: "Open one" })).toHaveAttribute(
+    expect(await screen.findByRole("img", { name: "Open one" })).toHaveAttribute(
       "src",
       "/api/posts/open-post/media",
     );
+    expect(
+      screen.queryByRole("link", { name: "Open post" }),
+    ).not.toBeInTheDocument();
   });
 
   it("marks each post with its media type", async () => {
@@ -292,27 +291,21 @@ describe("CreatorPage subscription actions", () => {
     });
     renderCreator(null);
 
-    expect(await screen.findByRole("link", { name: "Open post" })).toHaveAttribute(
-      "href",
-      "/post/locked-video",
-    );
+    expect(await screen.findByRole("button", { name: /unlock/i })).toBeVisible();
     expect(
       screen.queryByRole("group", { name: "Locked clip" }),
     ).not.toBeInTheDocument();
   });
 
-  it("shows the blurred preview behind the lock on a locked post card", async () => {
+  it("keeps a locked post card to the lock, with no thumbnail", async () => {
     vi.mocked(api).mockResolvedValueOnce({
       ...creator(false, true),
       posts: [post("locked-post", "Locked one", false)],
     });
     renderCreator(null);
 
-    const link = await screen.findByRole("link", { name: "Open post" });
-    expect(link.querySelector("img")).toHaveAttribute(
-      "src",
-      "/api/posts/locked-post/preview?v=8",
-    );
+    await screen.findByRole("button", { name: /unlock/i });
+    expect(document.querySelector(".post-tile-media img")).toBeNull();
   });
 
   it("buys a locked post directly from the profile card", async () => {

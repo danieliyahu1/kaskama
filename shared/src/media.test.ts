@@ -6,7 +6,6 @@ import {
   MEDIA_COPY,
   MEDIA_DEFINITIONS,
   MEDIA_TYPES,
-  hasPreview,
   isAudioMedia,
   isDocumentMedia,
   isMediaType,
@@ -37,13 +36,6 @@ describe("media registry", () => {
     expect(isAudioMedia("video/mp4")).toBe(false);
     expect(isDocumentMedia("application/pdf")).toBe(true);
     expect(isDocumentMedia("image/png")).toBe(false);
-  });
-
-  it("knows which types can carry a blurred preview", () => {
-    expect(hasPreview("image/jpeg")).toBe(true);
-    expect(hasPreview("video/mp4")).toBe(true);
-    expect(hasPreview("audio/mpeg")).toBe(false);
-    expect(hasPreview("application/pdf")).toBe(false);
   });
 
   it("resolves browser MIME aliases onto the canonical type", () => {

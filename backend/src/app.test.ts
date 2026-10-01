@@ -871,41 +871,6 @@ describe("media stream diagnostics", () => {
   });
 });
 
-describe("locked media previews", () => {
-  const onePixelPng = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
-    "base64",
-  );
-
-  it("serves a blurred preview for a locked post without exposing its media", async () => {
-    const store = new MemoryStore();
-    await store.publishPost(post("preview-post"));
-    const storage = new TestStorage();
-    storage.objects.set("media/preview-post", {
-      bytes: new Uint8Array(onePixelPng),
-      contentType: "image/jpeg",
-    });
-    const { app } = testApp(store, undefined, undefined, storage);
-
-    const media = await request(app).get("/api/posts/preview-post/media");
-    expect(media.status).toBe(401);
-
-    const preview = await request(app).get("/api/posts/preview-post/preview");
-    expect(preview.status).toBe(200);
-    expect(preview.headers["content-type"]).toContain("image/jpeg");
-    expect(storage.objects.has("previews/v8/preview-post.jpg")).toBe(true);
-  });
-
-  it("keeps a served preview out of the way when the post is missing", async () => {
-    const { app } = testApp();
-
-    const response = await request(app).get("/api/posts/missing-post/preview");
-
-    expect(response.status).toBe(404);
-    expect(response.body.error).toBe("POST_NOT_FOUND");
-  });
-});
-
 describe("document publishing", () => {
   const creator = `kaspatest:${"c".repeat(60)}`;
   const pdf = Buffer.from(
@@ -943,17 +908,13 @@ describe("document publishing", () => {
     expect(created?.mediaType).toBe("application/pdf");
   });
 
-  it("serves the stored PDF with its own content type and no preview", async () => {
+  it("serves the stored PDF with its own content type", async () => {
     const { app, response } = await publishPdf();
     const id = response.body.id as string;
 
     const media = await request(app).get(`/api/posts/${id}/media`);
     expect(media.status).toBe(200);
     expect(media.headers["content-type"]).toContain("application/pdf");
-
-    const preview = await request(app).get(`/api/posts/${id}/preview`);
-    expect(preview.status).toBe(404);
-    expect(preview.body.error).toBe("PREVIEW_UNAVAILABLE");
   });
 });
 
@@ -1027,10 +988,7 @@ describe("post deletion", () => {
     expect(response.status).toBe(204);
     expect(await store.getPost("paid-post")).toBeNull();
     expect(await store.getPurchase("paid-post", other)).toBeNull();
-    expect(removedMedia).toEqual([
-      "media/creator/ab/digest",
-      "previews/v8/creator/ab/digest.jpg",
-    ]);
+    expect(removedMedia).toEqual(["media/creator/ab/digest"]);
   });
 });
 

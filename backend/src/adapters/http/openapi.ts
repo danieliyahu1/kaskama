@@ -434,19 +434,6 @@ export function openApiDocument(origin: string): Record<string, unknown> {
           },
         },
       },
-      "/api/posts/{id}/preview": {
-        get: get(
-          "Blurred preview image for a locked post. Images and videos have one; audio and documents do not (404).",
-          {
-            security: false,
-            parameters: [pathParam("id", "Post id.")],
-            response: {
-              status: "200",
-              schema: { type: "string", format: "binary" },
-            },
-          },
-        ),
-      },
       "/api/posts/{id}/media": {
         get: get("Full media (paid); returns the post's content type and supports Range.", {
           parameters: [pathParam("id", "Post id.")],

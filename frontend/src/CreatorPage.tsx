@@ -18,7 +18,6 @@ import {
 } from "./purchase.js";
 import { Icon, LockIcon } from "./Icons.js";
 import { PostTile, PostTileAction, PostTileMedia } from "./PostTile.js";
-import { previewUrl } from "./preview-url.js";
 import { PostMedia } from "./PostMedia.js";
 import { Spinner } from "./Spinner.js";
 import { useToast } from "./Toast.js";
@@ -569,7 +568,7 @@ function PostCard({
             <PostMedia post={post} />
           </PostTileMedia>
         ) : (
-          <PostTileMedia thumbnail={previewUrl(post.id)} to={postPath}>
+          <PostTileMedia>
             <div className="post-tile-locked">
               <LockIcon open={false} />
               <button

@@ -1,7 +1,7 @@
 /**
  * The single source of truth for the media Kaskama accepts. Every layer reads
  * one of these definitions instead of re-listing the types: the client's
- * pre-upload hint, the server's validation, preview generation, and the docs.
+ * pre-upload hint, the server's validation, and the docs.
  * Adding a format is one row here, not a new branch in each layer.
  */
 
@@ -22,13 +22,13 @@ export const MAX_AUDIO_BYTES = CATEGORY_LIMITS.audio;
 export const MAX_DOCUMENT_BYTES = CATEGORY_LIMITS.document;
 
 const SUPPORTED_MEDIA = [
-  { mime: "image/jpeg", category: "image", label: "JPEG", preview: true },
-  { mime: "image/png", category: "image", label: "PNG", preview: true },
-  { mime: "image/webp", category: "image", label: "WebP", preview: true },
-  { mime: "video/mp4", category: "video", label: "MP4", preview: true },
-  { mime: "video/webm", category: "video", label: "WebM", preview: true },
-  { mime: "audio/mpeg", category: "audio", label: "MP3", preview: false },
-  { mime: "application/pdf", category: "document", label: "PDF", preview: false },
+  { mime: "image/jpeg", category: "image", label: "JPEG" },
+  { mime: "image/png", category: "image", label: "PNG" },
+  { mime: "image/webp", category: "image", label: "WebP" },
+  { mime: "video/mp4", category: "video", label: "MP4" },
+  { mime: "video/webm", category: "video", label: "WebM" },
+  { mime: "audio/mpeg", category: "audio", label: "MP3" },
+  { mime: "application/pdf", category: "document", label: "PDF" },
 ] as const;
 
 export type MediaType = (typeof SUPPORTED_MEDIA)[number]["mime"];
@@ -43,8 +43,6 @@ export interface MediaDefinition {
   category: MediaCategory;
   /** Short name used when listing the accepted types. */
   label: string;
-  /** Whether the server can render a blurred still for a locked post. */
-  preview: boolean;
   maxBytes: number;
 }
 
@@ -100,10 +98,6 @@ export function isAudioMedia(mediaType: MediaType): boolean {
 
 export function isDocumentMedia(mediaType: MediaType): boolean {
   return mediaCategory(mediaType) === "document";
-}
-
-export function hasPreview(mediaType: MediaType): boolean {
-  return mediaDefinition(mediaType)?.preview ?? false;
 }
 
 const megabytes = (bytes: number) => `${bytes / 1_000_000} MB`;
