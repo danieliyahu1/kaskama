@@ -442,6 +442,8 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       "/api/posts/publish": {
         post: {
           summary: "Publish a post (multipart: caption, price, media).",
+          description:
+            "Publishing is free. `price` is what a buyer pays to unlock the post, in KAS with up to 8 decimals; `0` publishes it free for everyone.",
           requestBody: {
             required: true,
             content: {
@@ -451,7 +453,11 @@ export function openApiDocument(origin: string): Record<string, unknown> {
                   required: ["caption", "price", "media"],
                   properties: {
                     caption: { type: "string" },
-                    price: { type: "string" },
+                    price: {
+                      type: "string",
+                      description:
+                        "What a buyer pays to unlock the post, in KAS with up to 8 decimals; `0` means free.",
+                    },
                     media: { type: "string", format: "binary" },
                   },
                 },

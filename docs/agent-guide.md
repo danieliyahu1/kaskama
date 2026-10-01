@@ -119,15 +119,17 @@ schemas cannot: signing, the two-step payment, and retry safety.
 
 ## Publishing
 
-`POST /api/posts/publish` is a normal multipart form:
+Publishing is free. `POST /api/posts/publish` is a normal multipart form, and
+`price` is what a buyer pays to unlock the post:
 
 - `caption`: text, 1-280 characters.
-- `price`: decimal KAS, up to 8 decimal places (`0` is a free post).
+- `price`: decimal KAS, up to 8 decimal places; `0` publishes it free for
+  everyone.
 - `media`: one JPEG, PNG, WebP, MP4, or WebM file (images up to 25 MB, videos up
   to 100 MB).
 
 Publishing the same bytes twice returns `409` with the existing `id`, so a retry
-is safe. Publishing is free; the post's price is paid by buyers.
+is safe.
 
 ## Errors
 
