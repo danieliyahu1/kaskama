@@ -125,8 +125,8 @@ Publishing is free. `POST /api/posts/publish` is a normal multipart form, and
 - `caption`: text, 1-280 characters.
 - `price`: decimal KAS, up to 8 decimal places; `0` publishes it free for
   everyone.
-- `media`: one JPEG, PNG, WebP, MP4, WebM, or MP3 file (images up to 25 MB,
-  videos up to 100 MB, audio up to 25 MB).
+- `media`: one JPEG, PNG, WebP, MP4, WebM, MP3, or PDF file (images up to
+  25 MB, videos up to 100 MB, audio and documents up to 25 MB).
 
 Publishing the same bytes twice returns `409` with the existing `id`, so a retry
 is safe.
@@ -145,7 +145,8 @@ then you may submit again. Known codes include `AUTHENTICATION_REQUIRED`,
 `INVALID_ADDRESS`, `POST_NOT_FOUND`, `ALREADY_UNLOCKED`, `INSUFFICIENT_FUNDS`,
 `PAYMENT_NOT_FOUND`, `INVALID_REQUEST`, `RATE_LIMITED`, and the media codes
 `INVALID_MEDIA`, `UNSUPPORTED_MEDIA`, `IMAGE_TOO_LARGE`, `VIDEO_TOO_LARGE`,
-`AUDIO_TOO_LARGE`, `MEDIA_ALREADY_PUBLISHED`, and `MEDIA_FORBIDDEN`.
+`AUDIO_TOO_LARGE`, `DOCUMENT_TOO_LARGE`, `MEDIA_ALREADY_PUBLISHED`, and
+`MEDIA_FORBIDDEN`.
 
 ## Concurrency
 

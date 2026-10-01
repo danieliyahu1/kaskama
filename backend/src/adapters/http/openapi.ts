@@ -436,7 +436,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       },
       "/api/posts/{id}/preview": {
         get: get(
-          "Blurred preview image for a locked post. Images and videos have one; audio does not (404).",
+          "Blurred preview image for a locked post. Images and videos have one; audio and documents do not (404).",
           {
             security: false,
             parameters: [pathParam("id", "Post id.")],
@@ -476,7 +476,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
                     media: {
                       type: "string",
                       format: "binary",
-                      description: `The media file: one of ${MEDIA_TYPES.join(", ")}. Images up to 25 MB, videos up to 100 MB, audio up to 25 MB.`,
+                      description: `The media file: one of ${MEDIA_TYPES.join(", ")}. Images up to 25 MB, videos up to 100 MB, audio and documents up to 25 MB.`,
                     },
                   },
                 },

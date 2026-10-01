@@ -870,6 +870,22 @@ main:has(.home-page) {
 .media-stage audio {
   width: min(100%, 26rem);
 }
+/* A document has no inline preview, so the composer names the chosen file. */
+.selected-document {
+  display: grid;
+  place-items: center;
+  gap: 0.75rem;
+  padding: 2rem;
+}
+.selected-document .media-icon {
+  width: 3rem;
+  height: 3rem;
+  color: var(--muted);
+}
+.selected-document span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
 .media-actions {
   display: flex;
   justify-content: flex-end;
@@ -1468,6 +1484,7 @@ a.media-type-badge:focus-visible {
   object-fit: contain;
 }
 .post-tile-media .post-media,
+.post-tile-media .pdf-reader,
 .post-tile-media .video-player {
   position: absolute;
   inset: 0;
@@ -1644,11 +1661,100 @@ main:has(.single-post) {
 .single-post .video-player {
   border: 0;
 }
+.single-post .pdf-reader {
+  border: 0;
+}
 .single-post .post-stage .feedback {
   margin: 1.5rem;
 }
 .post-media {
   display: block;
+}
+/* The reader we own: pages stacked and fit to width, scrollable, fullscreenable.
+   pdf.js draws the pages, so no browser viewer chrome leaks in. */
+.pdf-reader {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #2b2f30;
+  overflow: hidden;
+}
+.pdf-scroll {
+  flex: 1 1 auto;
+  max-height: 100%;
+  overflow: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+.pdf-page {
+  display: block;
+  max-width: 100%;
+  background: #fff;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+}
+.pdf-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+.document-fullscreen {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: rgba(5, 8, 7, 0.72);
+  color: var(--paper);
+  cursor: pointer;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease;
+}
+/* Touch devices have no hover, so there the control is always visible. On
+   pointer devices it is revealed by movement and hidden again once idle. */
+@media (hover: hover) {
+  .document-fullscreen.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+/* A keyboard user must still be able to see and reach it. */
+.pdf-reader:focus-within .document-fullscreen {
+  opacity: 1;
+  pointer-events: auto;
+}
+.document-fullscreen:hover,
+.document-fullscreen:focus-visible {
+  color: var(--acid);
+}
+.document-fullscreen .video-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.pdf-reader:fullscreen,
+.pdf-reader:-webkit-full-screen {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.pdf-reader::backdrop {
+  background: #050807;
 }
 .video-player {
   position: relative;

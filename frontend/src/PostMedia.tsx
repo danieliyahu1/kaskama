@@ -1,13 +1,25 @@
-import { useEffect, useState } from "react";
-import { isAudioMedia, isVideoMedia, type PostResponse } from "@kaskama/shared";
+import { lazy, Suspense, useEffect, useState } from "react";
+import {
+  MEDIA_CATEGORY_LABELS,
+  mediaCategory,
+  type PostResponse,
+} from "@kaskama/shared";
 import { MediaPlayer } from "./MediaPlayer.js";
+import { Spinner } from "./Spinner.js";
+
+/**
+ * The PDF renderer is large and most posts are not documents, so it loads only
+ * when a document is actually opened.
+ */
+const PdfViewer = lazy(() =>
+  import("./PdfViewer.js").then((module) => ({ default: module.PdfViewer })),
+);
 
 export function PostMedia({ post }: { post: PostResponse }) {
   const [mediaError, setMediaError] = useState(false);
-  const isVideo = isVideoMedia(post.mediaType);
-  const isAudio = isAudioMedia(post.mediaType);
+  const category = mediaCategory(post.mediaType);
   const mediaLabel =
-    post.caption || (isVideo ? "Video" : isAudio ? "Audio" : "Photo");
+    post.caption || (category ? MEDIA_CATEGORY_LABELS[category] : "Media");
   const mediaUrl = `/api/posts/${encodeURIComponent(post.id)}/media`;
 
   useEffect(() => {
@@ -22,19 +34,39 @@ export function PostMedia({ post }: { post: PostResponse }) {
     );
   }
 
-  return isVideo || isAudio ? (
-    <MediaPlayer
-      src={mediaUrl}
-      label={mediaLabel}
-      kind={isVideo ? "video" : "audio"}
-      onError={() => setMediaError(true)}
-    />
-  ) : (
-    <img
-      className="post-media"
-      src={mediaUrl}
-      alt={mediaLabel}
-      onError={() => setMediaError(true)}
-    />
-  );
+  switch (category) {
+    case "video":
+    case "audio":
+      return (
+        <MediaPlayer
+          src={mediaUrl}
+          label={mediaLabel}
+          kind={category}
+          onError={() => setMediaError(true)}
+        />
+      );
+    case "document":
+      return (
+        <Suspense
+          fallback={
+            <div className="pdf-reader">
+              <p className="pdf-status" role="status">
+                <Spinner />
+              </p>
+            </div>
+          }
+        >
+          <PdfViewer src={mediaUrl} title={mediaLabel} />
+        </Suspense>
+      );
+    default:
+      return (
+        <img
+          className="post-media"
+          src={mediaUrl}
+          alt={mediaLabel}
+          onError={() => setMediaError(true)}
+        />
+      );
+  }
 }

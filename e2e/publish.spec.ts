@@ -28,7 +28,7 @@ await expect(
     page.locator(".media-stage img, .media-stage video"),
   ).toHaveCount(0);
 
-  await page.getByLabel(/choose image, video, or audio/i).setInputFiles({
+  await page.getByLabel(/choose image, video, audio, or document/i).setInputFiles({
     name: "moment.png",
     mimeType: "image/png",
     buffer: Buffer.from("preview"),

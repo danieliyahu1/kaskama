@@ -5,14 +5,9 @@ import {
   membershipPriceProblem,
   parseMembershipPrice,
   MEDIA_COPY,
-  MAX_AUDIO_BYTES,
-  MAX_IMAGE_BYTES,
   isAddressForNetwork,
-  isAudioMedia,
   isFreePost,
   isKaspaTestnetAddress,
-  isVideoMedia,
-  mediaHintError,
   networkDefinition,
   parseKasToSompi,
   parsePostPrice,
@@ -93,18 +88,6 @@ describe("post validation", () => {
     expect(isFreePost("1")).toBe(false);
   });
 
-  it("flags video media types", () => {
-    expect(isVideoMedia("video/mp4")).toBe(true);
-    expect(isVideoMedia("video/webm")).toBe(true);
-    expect(isVideoMedia("image/png")).toBe(false);
-  });
-
-  it("flags audio media types", () => {
-    expect(isAudioMedia("audio/mpeg")).toBe(true);
-    expect(isAudioMedia("video/mp4")).toBe(false);
-    expect(isAudioMedia("image/png")).toBe(false);
-  });
-
   it("normalizes text and enforces visible character limits", () => {
     expect(validatePost(" caption ", "2")).toEqual([]);
     expect(validatePost(" caption ", "0")).toEqual([]);
@@ -153,27 +136,5 @@ describe("network definitions", () => {
     expect(networkDefinition("testnet-10").defaultNodeUrl).toBe(
       "https://api-tn10.kaspa.org",
     );
-  });
-});
-
-describe("media hint validation", () => {
-  it("rejects unsupported and oversized media before upload", () => {
-    expect(mediaHintError("text/plain", 1)).toBe(MEDIA_COPY.unsupportedMedia);
-    expect(mediaHintError("image/png", MAX_IMAGE_BYTES + 1)).toBe(
-      MEDIA_COPY.imageTooLarge,
-    );
-    expect(mediaHintError("image/png", MAX_IMAGE_BYTES)).toBeNull();
-  });
-
-  it("measures audio against its own limit", () => {
-    expect(mediaHintError("audio/mpeg", MAX_AUDIO_BYTES + 1)).toBe(
-      MEDIA_COPY.audioTooLarge,
-    );
-    expect(mediaHintError("audio/mpeg", MAX_AUDIO_BYTES)).toBeNull();
-  });
-
-  it("folds browser MP3 aliases onto the canonical type", () => {
-    expect(mediaHintError("audio/mp3", 1)).toBeNull();
-    expect(mediaHintError("AUDIO/X-MP3", 1)).toBeNull();
   });
 });

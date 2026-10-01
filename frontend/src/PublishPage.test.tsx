@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
+import { MEDIA_COPY } from "@kaskama/shared";
 import { trackPublishClick } from "./analytics.js";
 import { COPY } from "./copy.js";
 import { PublishPage } from "./PublishPage.js";
@@ -95,7 +96,7 @@ describe("creator publish experience", () => {
     renderPage({ currentAddress: null, signIn });
 
     await user.upload(
-      screen.getByLabelText(/choose image, video, or audio/i),
+      screen.getByLabelText(/choose image, video, audio, or document/i),
       new File(["image"], "release.png", { type: "image/png" }),
     );
 
@@ -115,7 +116,7 @@ describe("creator publish experience", () => {
     const user = userEvent.setup();
     renderPage();
     await user.upload(
-      screen.getByLabelText(/choose image, video, or audio/i),
+      screen.getByLabelText(/choose image, video, audio, or document/i),
       new File(["video"], "release.mp4", { type: "video/mp4" }),
     );
     await user.clear(screen.getByLabelText(/Caption/));
@@ -136,7 +137,7 @@ describe("creator publish experience", () => {
     const user = userEvent.setup();
     renderPage();
     await user.upload(
-      screen.getByLabelText(/choose image, video, or audio/i),
+      screen.getByLabelText(/choose image, video, audio, or document/i),
       new File(["video"], "release.mp4", { type: "video/mp4" }),
     );
 
@@ -158,7 +159,7 @@ describe("creator publish experience", () => {
     const user = userEvent.setup();
     renderPage();
     await user.upload(
-      screen.getByLabelText(/choose image, video, or audio/i),
+      screen.getByLabelText(/choose image, video, audio, or document/i),
       new File(["video"], "release.mp4", { type: "video/mp4" }),
     );
     const price = screen.getByLabelText(/Price/);
@@ -181,7 +182,7 @@ describe("creator publish experience", () => {
     expect(screen.getByText("Publishing is free.")).toBeVisible();
 
     await user.upload(
-      screen.getByLabelText(/choose image, video, or audio/i),
+      screen.getByLabelText(/choose image, video, audio, or document/i),
       new File(["video"], "release.mp4", { type: "video/mp4" }),
     );
 
@@ -195,7 +196,7 @@ describe("creator publish experience", () => {
     const user = userEvent.setup();
     renderPage({ currentAddress: null, signIn });
     await user.upload(
-      screen.getByLabelText(/choose image, video, or audio/i),
+      screen.getByLabelText(/choose image, video, audio, or document/i),
       new File(["image"], "release.png", { type: "image/png" }),
     );
     await user.click(screen.getByRole("button", { name: /^publish/i }));
@@ -214,7 +215,7 @@ describe("creator publish experience", () => {
     const user = userEvent.setup();
     renderPublishWithNavigation();
     await user.upload(
-      screen.getByLabelText(/choose image, video, or audio/i),
+      screen.getByLabelText(/choose image, video, audio, or document/i),
       new File(["image"], "duplicate.png", { type: "image/png" }),
     );
     await user.click(screen.getByRole("button", { name: /^publish/i }));
@@ -230,7 +231,7 @@ describe("creator publish experience", () => {
     const user = userEvent.setup();
     renderPage({ currentAddress: null, signIn });
     await user.upload(
-      screen.getByLabelText(/choose image, video, or audio/i),
+      screen.getByLabelText(/choose image, video, audio, or document/i),
       new File(["image"], "release.png", { type: "image/png" }),
     );
     await user.click(screen.getByRole("button", { name: /^publish/i }));
@@ -249,7 +250,7 @@ describe("creator publish experience", () => {
     const user = userEvent.setup();
     renderPage();
     await user.upload(
-      screen.getByLabelText(/choose image, video, or audio/i),
+      screen.getByLabelText(/choose image, video, audio, or document/i),
       new File(["image"], "duplicate.png", { type: "image/png" }),
     );
     await user.click(screen.getByRole("button", { name: /^publish/i }));
@@ -264,10 +265,10 @@ describe("creator publish experience", () => {
     const oversized = new File(["image"], "huge.png", { type: "image/png" });
     Object.defineProperty(oversized, "size", { value: 25_000_001 });
     await user.upload(
-      screen.getByLabelText(/choose image, video, or audio/i),
+      screen.getByLabelText(/choose image, video, audio, or document/i),
       oversized,
     );
-    expect(screen.getByText(COPY.imageTooLarge)).toBeVisible();
+    expect(screen.getByText(MEDIA_COPY.tooLarge.image)).toBeVisible();
     expect(screen.getByRole("button", { name: /^publish/i })).toBeDisabled();
   });
 
@@ -276,11 +277,25 @@ describe("creator publish experience", () => {
     const user = userEvent.setup();
     renderPage();
     await user.upload(
-      screen.getByLabelText(/choose image, video, or audio/i),
+      screen.getByLabelText(/choose image, video, audio, or document/i),
       new File(["audio"], "episode.mp3", { type: "audio/mpeg" }),
     );
 
     expect(screen.getByLabelText(/selected audio preview/i)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /^publish/i }));
+    expect(uploadMedia).toHaveBeenCalledOnce();
+  });
+
+  it("accepts a PDF and shows it as a document", async () => {
+    prepareSuccessfulPublish();
+    const user = userEvent.setup();
+    renderPage();
+    await user.upload(
+      screen.getByLabelText(/choose image, video, audio, or document/i),
+      new File(["%PDF-1.7"], "paper.pdf", { type: "application/pdf" }),
+    );
+
+    expect(screen.getByLabelText(/selected document preview/i)).toBeVisible();
     await user.click(screen.getByRole("button", { name: /^publish/i }));
     expect(uploadMedia).toHaveBeenCalledOnce();
   });

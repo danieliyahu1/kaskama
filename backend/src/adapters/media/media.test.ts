@@ -1,7 +1,7 @@
 import { mkdtemp, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MAX_AUDIO_BYTES } from "@kaskama/shared";
+import { MAX_AUDIO_BYTES, MAX_DOCUMENT_BYTES } from "@kaskama/shared";
 import { MediaValidationError, verifyMediaFile } from "./media.js";
 
 async function withTempFile(
@@ -24,6 +24,10 @@ async function categoryOf(path: string): Promise<string> {
   if (!(error instanceof MediaValidationError)) throw error;
   return error.category;
 }
+
+const completePdf = Buffer.from(
+  "%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n",
+);
 
 describe("verifyMediaFile", () => {
   it("rejects a file whose bytes are not a supported media type", async () => {
@@ -49,6 +53,42 @@ describe("verifyMediaFile", () => {
       },
       async (path) => {
         expect(await categoryOf(path)).toBe("AUDIO_TOO_LARGE");
+      },
+    );
+  });
+
+  it("accepts a complete PDF as a document", async () => {
+    await withTempFile(
+      "paper.pdf",
+      (path) => writeFile(path, completePdf),
+      async (path) => {
+        const media = await verifyMediaFile(path);
+        expect(media.mediaType).toBe("application/pdf");
+        expect(media.size).toBe(completePdf.byteLength);
+        expect(media.digest).toMatch(/^[0-9a-f]{64}$/);
+      },
+    );
+  });
+
+  it("rejects a PDF that stops before its end-of-file marker", async () => {
+    await withTempFile(
+      "truncated.pdf",
+      (path) => writeFile(path, completePdf.subarray(0, completePdf.length - 6)),
+      async (path) => {
+        expect(await categoryOf(path)).toBe("MALFORMED_MEDIA");
+      },
+    );
+  });
+
+  it("rejects a PDF that exceeds the document limit", async () => {
+    await withTempFile(
+      "huge.pdf",
+      async (path) => {
+        await writeFile(path, completePdf);
+        await truncate(path, MAX_DOCUMENT_BYTES + 1);
+      },
+      async (path) => {
+        expect(await categoryOf(path)).toBe("DOCUMENT_TOO_LARGE");
       },
     );
   });

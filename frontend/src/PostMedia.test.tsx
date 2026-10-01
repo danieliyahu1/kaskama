@@ -1,6 +1,14 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import type { PostResponse } from "@kaskama/shared";
 import { PostMedia } from "./PostMedia.js";
+
+vi.mock("pdfjs-dist", () => ({
+  GlobalWorkerOptions: { workerSrc: "" },
+  getDocument: () => ({
+    promise: new Promise(() => {}),
+    destroy: () => Promise.resolve(),
+  }),
+}));
 
 function post(mediaType: PostResponse["mediaType"]): PostResponse {
   return {
@@ -32,5 +40,16 @@ describe("PostMedia", () => {
     const { container } = render(<PostMedia post={post("image/png")} />);
     expect(container.querySelector("img.post-media")).toBeInTheDocument();
     expect(container.querySelector("video")).toBeNull();
+  });
+
+  it("renders a PDF in our own reader with a fullscreen control", async () => {
+    const { container } = render(<PostMedia post={post("application/pdf")} />);
+    expect(
+      await screen.findByRole("button", { name: "Fullscreen" }),
+    ).toBeInTheDocument();
+    expect(container.querySelector(".pdf-reader")).toBeInTheDocument();
+    expect(container.querySelector(".pdf-scroll")).toBeInTheDocument();
+    expect(container.querySelector("video")).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
   });
 });

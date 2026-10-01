@@ -906,6 +906,57 @@ describe("locked media previews", () => {
   });
 });
 
+describe("document publishing", () => {
+  const creator = `kaspatest:${"c".repeat(60)}`;
+  const pdf = Buffer.from(
+    "%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n",
+  );
+
+  async function publishPdf() {
+    const store = new MemoryStore();
+    await store.createSession({
+      id: "pdf-session",
+      address: creator,
+      expiresAt: Date.now() + 60_000,
+    });
+    const storage = new TestStorage();
+    const { app } = testApp(store, undefined, undefined, storage);
+
+    const response = await request(app)
+      .post("/api/posts/publish")
+      .set("Cookie", "kaskama_session=pdf-session")
+      .field("caption", "A paper")
+      .field("price", "0")
+      .attach("media", pdf, {
+        filename: "paper.pdf",
+        contentType: "application/pdf",
+      });
+
+    return { app, response, store, storage };
+  }
+
+  it("publishes a PDF through the real verifier", async () => {
+    const { response, store } = await publishPdf();
+
+    expect(response.status).toBe(201);
+    const created = await store.getPost(response.body.id);
+    expect(created?.mediaType).toBe("application/pdf");
+  });
+
+  it("serves the stored PDF with its own content type and no preview", async () => {
+    const { app, response } = await publishPdf();
+    const id = response.body.id as string;
+
+    const media = await request(app).get(`/api/posts/${id}/media`);
+    expect(media.status).toBe(200);
+    expect(media.headers["content-type"]).toContain("application/pdf");
+
+    const preview = await request(app).get(`/api/posts/${id}/preview`);
+    expect(preview.status).toBe(404);
+    expect(preview.body.error).toBe("PREVIEW_UNAVAILABLE");
+  });
+});
+
 describe("post deletion", () => {
   const creator = `kaspatest:${"c".repeat(60)}`;
   const other = `kaspatest:${"o".repeat(60)}`;

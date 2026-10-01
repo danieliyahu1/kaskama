@@ -1,4 +1,7 @@
+import { MEDIA_COPY, type MediaType } from "./media.js";
+
 export * from "./public-pages.js";
+export * from "./media.js";
 
 export type NetworkId = "mainnet" | "testnet-10";
 
@@ -58,18 +61,6 @@ export interface NetworkConfigResponse {
   addressPrefix: string;
 }
 
-export const MAX_IMAGE_BYTES = 25_000_000;
-export const MAX_VIDEO_BYTES = 100_000_000;
-export const MAX_AUDIO_BYTES = 25_000_000;
-
-export const MEDIA_COPY = {
-  unsupportedMedia: "Choose a JPEG, PNG, WebP, MP4, WebM, or MP3 file.",
-  imageTooLarge: "Images can be up to 25 MB.",
-  videoTooLarge: "Videos can be up to 100 MB.",
-  audioTooLarge: "Audio can be up to 25 MB.",
-  invalidPrice: "Enter a KAS price of zero or more, using up to 8 decimal places.",
-} as const;
-
 export const FEEDBACK_MAX_MESSAGE = 1500;
 export const MIN_MEMBERSHIP_PRICE_SOMPI = 100_000_000n;
 export const MAX_MEMBERSHIP_PRICE_SOMPI = 100_000_000_000_000n;
@@ -84,15 +75,6 @@ export const MEMBERSHIP_DURATION_DAA = 25_920_000n;
 export const RETRY_AFTER_REFRESH = "AFTER_REFRESH" as const;
 export type ApiRetry = typeof RETRY_AFTER_REFRESH;
 
-export const MEDIA_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "video/mp4",
-  "video/webm",
-  "audio/mpeg",
-] as const;
-export type MediaType = (typeof MEDIA_TYPES)[number];
 export interface PostResponse {
   id: string;
   creator: string;
@@ -225,14 +207,6 @@ export function isFreePost(priceSompi: string): boolean {
   return priceSompi === "0";
 }
 
-export function isVideoMedia(mediaType: MediaType): boolean {
-  return mediaType.startsWith("video/");
-}
-
-export function isAudioMedia(mediaType: MediaType): boolean {
-  return mediaType.startsWith("audio/");
-}
-
 export function validatePost(caption: string, price: string): string[] {
   const errors: string[] = [];
   const normalizedCaption = normalizePostText(caption);
@@ -243,31 +217,4 @@ export function validatePost(caption: string, price: string): string[] {
     errors.push("Caption must be between 1 and 280 characters.");
   if (parsePostPrice(price) === null) errors.push(MEDIA_COPY.invalidPrice);
   return errors;
-}
-
-export function mediaHintError(type: string, size: number): string | null {
-  const mediaType = normalizeMediaType(type);
-  if (!MEDIA_TYPES.includes(mediaType as MediaType)) return MEDIA_COPY.unsupportedMedia;
-  if (mediaType.startsWith("image/") && size > MAX_IMAGE_BYTES)
-    return MEDIA_COPY.imageTooLarge;
-  if (mediaType.startsWith("video/") && size > MAX_VIDEO_BYTES)
-    return MEDIA_COPY.videoTooLarge;
-  if (mediaType.startsWith("audio/") && size > MAX_AUDIO_BYTES)
-    return MEDIA_COPY.audioTooLarge;
-  return null;
-}
-
-/**
- * Browsers disagree on the MIME type of the same bytes: an MP3 may arrive as
- * `audio/mp3` or `audio/x-mp3`, which the server later detects as `audio/mpeg`.
- * Fold the known aliases so a client hint never rejects a file the server takes.
- */
-const MEDIA_TYPE_ALIASES: Record<string, MediaType> = {
-  "audio/mp3": "audio/mpeg",
-  "audio/x-mp3": "audio/mpeg",
-};
-
-function normalizeMediaType(type: string): string {
-  const normalized = type.toLowerCase();
-  return MEDIA_TYPE_ALIASES[normalized] ?? normalized;
 }

@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { open, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { execFile } from "node:child_process";
 import { Writable } from "node:stream";
@@ -9,23 +9,10 @@ import { blake3 } from "@noble/hashes/blake3.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { fileTypeFromFile } from "file-type";
 import sharp from "sharp";
-import {
-  MAX_AUDIO_BYTES,
-  MAX_IMAGE_BYTES,
-  MAX_VIDEO_BYTES,
-  MEDIA_TYPES,
-  type MediaType,
-} from "@kaskama/shared";
+import { mediaDefinition, type MediaCategory, type MediaType } from "@kaskama/shared";
 
 const execFileAsync = promisify(execFile);
 const ffprobePath = process.env.FFPROBE_PATH ?? bundledFfprobePath();
-const imageTypes = new Set<MediaType>([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
-const videoTypes = new Set<MediaType>(["video/mp4", "video/webm"]);
-const audioTypes = new Set<MediaType>(["audio/mpeg"]);
 
 export interface VerifiedMedia {
   digest: string;
@@ -38,6 +25,7 @@ type MediaErrorCategory =
   | "IMAGE_TOO_LARGE"
   | "VIDEO_TOO_LARGE"
   | "AUDIO_TOO_LARGE"
+  | "DOCUMENT_TOO_LARGE"
   | "MALFORMED_MEDIA"
   | "STORAGE_FAILURE";
 
@@ -47,28 +35,38 @@ export class MediaValidationError extends Error {
   }
 }
 
+/** The size error a category raises, mirroring the shared media registry. */
+const TOO_LARGE_ERROR: Record<MediaCategory, MediaErrorCategory> = {
+  image: "IMAGE_TOO_LARGE",
+  video: "VIDEO_TOO_LARGE",
+  audio: "AUDIO_TOO_LARGE",
+  document: "DOCUMENT_TOO_LARGE",
+};
+
+/**
+ * How each category proves a file is usable. Keying on the category rather than
+ * the MIME type is what keeps `verifyMediaFile` closed to new formats: a new
+ * file type only needs a validator when its category is new.
+ */
+const VERIFIERS: Record<MediaCategory, (path: string) => Promise<void>> = {
+  image: decodeCompleteImage,
+  video: probeCompleteMedia,
+  audio: probeCompleteMedia,
+  document: validateCompletePdf,
+};
+
 export async function verifyMediaFile(path: string): Promise<VerifiedMedia> {
   const size = (await stat(path)).size;
   const detected = await fileTypeFromFile(path);
-  const mediaType = detected?.mime as MediaType | undefined;
-  if (!mediaType || !MEDIA_TYPES.includes(mediaType))
-    throw new MediaValidationError("UNSUPPORTED_MEDIA");
+  const definition = mediaDefinition(detected?.mime ?? "");
+  if (!definition) throw new MediaValidationError("UNSUPPORTED_MEDIA");
 
-  if (imageTypes.has(mediaType)) {
-    if (size > MAX_IMAGE_BYTES)
-      throw new MediaValidationError("IMAGE_TOO_LARGE");
-    await decodeCompleteImage(path);
-  } else if (videoTypes.has(mediaType)) {
-    if (size > MAX_VIDEO_BYTES)
-      throw new MediaValidationError("VIDEO_TOO_LARGE");
-    await probeCompleteMedia(path);
-  } else if (audioTypes.has(mediaType)) {
-    if (size > MAX_AUDIO_BYTES)
-      throw new MediaValidationError("AUDIO_TOO_LARGE");
-    await probeCompleteMedia(path);
-  }
+  if (size > definition.maxBytes)
+    throw new MediaValidationError(TOO_LARGE_ERROR[definition.category]);
 
-  return { digest: await hashFile(path), mediaType, size };
+  await VERIFIERS[definition.category](path);
+
+  return { digest: await hashFile(path), mediaType: definition.mime, size };
 }
 
 async function decodeCompleteImage(path: string): Promise<void> {
@@ -81,6 +79,33 @@ async function decodeCompleteImage(path: string): Promise<void> {
     await pipeline(sharp(path, { failOn: "error" }).raw(), discard);
   } catch {
     throw new MediaValidationError("MALFORMED_MEDIA");
+  }
+}
+
+const PDF_HEADER = "%PDF-";
+const PDF_TRAILER = "%%EOF";
+const PDF_TAIL_BYTES = 1024;
+
+/**
+ * A PDF is complete when it carries the header at the start and the end-of-file
+ * marker the format requires in its tail. file-type has already matched the
+ * magic; this proves the bytes did not stop mid-transfer.
+ */
+async function validateCompletePdf(path: string): Promise<void> {
+  const handle = await open(path, "r");
+  try {
+    const { size } = await handle.stat();
+    const head = Buffer.alloc(Math.min(PDF_HEADER.length, size));
+    await handle.read(head, 0, head.length, 0);
+    const tail = Buffer.alloc(Math.min(PDF_TAIL_BYTES, size));
+    await handle.read(tail, 0, tail.length, size - tail.length);
+    if (
+      !head.toString("latin1").startsWith(PDF_HEADER) ||
+      !tail.toString("latin1").includes(PDF_TRAILER)
+    )
+      throw new MediaValidationError("MALFORMED_MEDIA");
+  } finally {
+    await handle.close();
   }
 }
 
@@ -103,11 +128,7 @@ async function probeCompleteMedia(path: string): Promise<void> {
       format?: { duration?: string; format_name?: string };
     };
     const duration = Number(result.format?.duration);
-    if (
-      !Number.isFinite(duration) ||
-      duration <= 0 ||
-      !result.format?.format_name
-    )
+    if (!Number.isFinite(duration) || duration <= 0 || !result.format?.format_name)
       throw new Error("Invalid media probe");
   } catch (error) {
     if (isExecutableFailure(error)) throw error;
@@ -117,9 +138,7 @@ async function probeCompleteMedia(path: string): Promise<void> {
 
 function bundledFfprobePath(): string {
   try {
-    return (
-      createRequire(import.meta.url)("ffprobe-static") as { path: string }
-    ).path;
+    return (createRequire(import.meta.url)("ffprobe-static") as { path: string }).path;
   } catch {
     return "ffprobe";
   }
@@ -132,7 +151,6 @@ function isExecutableFailure(error: unknown): boolean {
 
 async function hashFile(path: string): Promise<string> {
   const hash = blake3.create();
-  for await (const chunk of createReadStream(path))
-    hash.update(chunk as Buffer);
+  for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer);
   return bytesToHex(hash.digest());
 }

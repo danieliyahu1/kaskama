@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { mediaHintError, validatePost } from "@kaskama/shared";
+import {
+  mediaHintError,
+  MEDIA_TYPES,
+  mediaCategory,
+  validatePost,
+} from "@kaskama/shared";
 import { trackPublishClick } from "./analytics.js";
 import { COPY } from "./copy.js";
 import { uploadMedia, type UploadResult } from "./upload.js";
-import { Icon } from "./Icons.js";
+import { Icon, MediaIcon } from "./Icons.js";
 import { Spinner } from "./Spinner.js";
 import { errorText } from "./errors.js";
 import { dismissToastIf, useToast } from "./Toast.js";
@@ -115,8 +120,8 @@ export function PublishPage({ address, signIn, signingIn }: WalletProps) {
                 ref={mediaInput}
                 id="media"
                 type="file"
-                aria-label="Choose image, video, or audio"
-                accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,audio/mpeg"
+                aria-label="Choose image, video, audio, or document"
+                accept={MEDIA_TYPES.join(",")}
                 onChange={selectFile}
                 disabled={busy}
               />
@@ -124,7 +129,7 @@ export function PublishPage({ address, signIn, signingIn }: WalletProps) {
                 <SelectedMediaPreview file={selectedFile} url={previewUrl} />
               ) : (
                 <label className="media-prompt" htmlFor="media">
-                  <strong>Add a photo, video, or audio</strong>
+                  <strong>Add a photo, video, audio, or document</strong>
                 </label>
               )}
               {uploading && (
@@ -197,11 +202,21 @@ function publishActionLabel(signingIn: boolean, uploading: boolean): string {
   return "Publish";
 }
 
-/** Renders the chosen file with the element that matches its kind. */
+/** Renders the chosen file with the element that matches its category. */
 function SelectedMediaPreview({ file, url }: { file: File; url: string }) {
-  if (file.type.startsWith("video/"))
-    return <video src={url} controls aria-label="Selected video preview" />;
-  if (file.type.startsWith("audio/"))
-    return <audio src={url} controls aria-label="Selected audio preview" />;
-  return <img src={url} alt="Selected image preview" />;
+  switch (mediaCategory(file.type)) {
+    case "video":
+      return <video src={url} controls aria-label="Selected video preview" />;
+    case "audio":
+      return <audio src={url} controls aria-label="Selected audio preview" />;
+    case "document":
+      return (
+        <div className="selected-document" aria-label="Selected document preview">
+          <MediaIcon kind="document" />
+          <span>{file.name}</span>
+        </div>
+      );
+    default:
+      return <img src={url} alt="Selected image preview" />;
+  }
 }
