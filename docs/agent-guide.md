@@ -143,8 +143,9 @@ Every failure uses one envelope:
 `retry: "AFTER_REFRESH"` means the resource changed underneath you: refetch it,
 then you may submit again. Known codes include `AUTHENTICATION_REQUIRED`,
 `INVALID_ADDRESS`, `POST_NOT_FOUND`, `ALREADY_UNLOCKED`, `INSUFFICIENT_FUNDS`,
-`PAYMENT_NOT_FOUND`, `MEDIA_ALREADY_PUBLISHED`, `INVALID_REQUEST`, and
-`RATE_LIMITED`.
+`PAYMENT_NOT_FOUND`, `INVALID_REQUEST`, `RATE_LIMITED`, and the media codes
+`INVALID_MEDIA`, `UNSUPPORTED_MEDIA`, `IMAGE_TOO_LARGE`, `VIDEO_TOO_LARGE`,
+`AUDIO_TOO_LARGE`, `MEDIA_ALREADY_PUBLISHED`, and `MEDIA_FORBIDDEN`.
 
 ## Concurrency
 
