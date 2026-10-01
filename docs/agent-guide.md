@@ -95,13 +95,10 @@ Money moves in two steps so a client never holds state between them:
 ```ts
 const prepared = await post(`/api/posts/${postId}/payments/prepare`);
 
-// Sign only the inputs the server left unsigned, with SIGHASH_ALL. Any
-// Kaspa wallet can do this; Kasware exposes it as signPskt.
+// The wallet signs the inputs it owns with SIGHASH_ALL and leaves the inputs
+// the server already signed untouched; every other field is preserved exactly.
 const signedTransaction = await wallet.signPskt({
   txJsonString: prepared.transaction,
-  options: {
-    signInputs: prepared.signInputs.map((index) => ({ index, sighashType: 1 })),
-  },
 });
 
 const result = await post(`/api/payments/${prepared.id}/finalize`, {
@@ -126,7 +123,9 @@ if (result.state === "PENDING") {
 The client signs only the inputs the server left unsigned — the empty
 `signatureScript`s. Covenant inputs the server already signed must be copied
 through unchanged, and every other field of the transaction preserved exactly;
-the server rejects a transaction that differs from the prepared template.
+the server rejects a transaction that differs from the prepared template. A
+subscription prepare also returns a `signInputs` list; pass it as
+`options.signInputs` so only your inputs are signed.
 
 ## Endpoints
 
