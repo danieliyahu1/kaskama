@@ -71,7 +71,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
           "Original or licensed content you have the rights to publish - art, photography, fitness, music, education, commentary, and more.",
           "Lawful, consensual adult material. If you publish it, set your profile to Private.",
           "AI-generated and synthetic media.",
-          "Photos and videos that respect the privacy and rights of everyone shown.",
+          "Photos, videos, and audio that respect the privacy and rights of everyone shown.",
           "The creators directory is suitable for a general audience. Private profiles are not shown there, but anyone with your link or address can still find you and subscribe.",
         ],
       },
