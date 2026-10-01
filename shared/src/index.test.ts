@@ -5,8 +5,10 @@ import {
   membershipPriceProblem,
   parseMembershipPrice,
   MEDIA_COPY,
+  MAX_AUDIO_BYTES,
   MAX_IMAGE_BYTES,
   isAddressForNetwork,
+  isAudioMedia,
   isFreePost,
   isKaspaTestnetAddress,
   isVideoMedia,
@@ -97,6 +99,12 @@ describe("post validation", () => {
     expect(isVideoMedia("image/png")).toBe(false);
   });
 
+  it("flags audio media types", () => {
+    expect(isAudioMedia("audio/mpeg")).toBe(true);
+    expect(isAudioMedia("video/mp4")).toBe(false);
+    expect(isAudioMedia("image/png")).toBe(false);
+  });
+
   it("normalizes text and enforces visible character limits", () => {
     expect(validatePost(" caption ", "2")).toEqual([]);
     expect(validatePost(" caption ", "0")).toEqual([]);
@@ -155,5 +163,17 @@ describe("media hint validation", () => {
       MEDIA_COPY.imageTooLarge,
     );
     expect(mediaHintError("image/png", MAX_IMAGE_BYTES)).toBeNull();
+  });
+
+  it("measures audio against its own limit", () => {
+    expect(mediaHintError("audio/mpeg", MAX_AUDIO_BYTES + 1)).toBe(
+      MEDIA_COPY.audioTooLarge,
+    );
+    expect(mediaHintError("audio/mpeg", MAX_AUDIO_BYTES)).toBeNull();
+  });
+
+  it("folds browser MP3 aliases onto the canonical type", () => {
+    expect(mediaHintError("audio/mp3", 1)).toBeNull();
+    expect(mediaHintError("AUDIO/X-MP3", 1)).toBeNull();
   });
 });

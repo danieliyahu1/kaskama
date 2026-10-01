@@ -60,11 +60,13 @@ export interface NetworkConfigResponse {
 
 export const MAX_IMAGE_BYTES = 25_000_000;
 export const MAX_VIDEO_BYTES = 100_000_000;
+export const MAX_AUDIO_BYTES = 25_000_000;
 
 export const MEDIA_COPY = {
-  unsupportedMedia: "Choose a JPEG, PNG, WebP, MP4, or WebM file.",
+  unsupportedMedia: "Choose a JPEG, PNG, WebP, MP4, WebM, or MP3 file.",
   imageTooLarge: "Images can be up to 25 MB.",
   videoTooLarge: "Videos can be up to 100 MB.",
+  audioTooLarge: "Audio can be up to 25 MB.",
   invalidPrice: "Enter a KAS price of zero or more, using up to 8 decimal places.",
 } as const;
 
@@ -88,6 +90,7 @@ export const MEDIA_TYPES = [
   "image/webp",
   "video/mp4",
   "video/webm",
+  "audio/mpeg",
 ] as const;
 export type MediaType = (typeof MEDIA_TYPES)[number];
 export interface PostResponse {
@@ -226,6 +229,10 @@ export function isVideoMedia(mediaType: MediaType): boolean {
   return mediaType.startsWith("video/");
 }
 
+export function isAudioMedia(mediaType: MediaType): boolean {
+  return mediaType.startsWith("audio/");
+}
+
 export function validatePost(caption: string, price: string): string[] {
   const errors: string[] = [];
   const normalizedCaption = normalizePostText(caption);
@@ -239,10 +246,28 @@ export function validatePost(caption: string, price: string): string[] {
 }
 
 export function mediaHintError(type: string, size: number): string | null {
-  if (!MEDIA_TYPES.includes(type as MediaType)) return MEDIA_COPY.unsupportedMedia;
-  if (type.startsWith("image/") && size > MAX_IMAGE_BYTES)
+  const mediaType = normalizeMediaType(type);
+  if (!MEDIA_TYPES.includes(mediaType as MediaType)) return MEDIA_COPY.unsupportedMedia;
+  if (mediaType.startsWith("image/") && size > MAX_IMAGE_BYTES)
     return MEDIA_COPY.imageTooLarge;
-  if (type.startsWith("video/") && size > MAX_VIDEO_BYTES)
+  if (mediaType.startsWith("video/") && size > MAX_VIDEO_BYTES)
     return MEDIA_COPY.videoTooLarge;
+  if (mediaType.startsWith("audio/") && size > MAX_AUDIO_BYTES)
+    return MEDIA_COPY.audioTooLarge;
   return null;
+}
+
+/**
+ * Browsers disagree on the MIME type of the same bytes: an MP3 may arrive as
+ * `audio/mp3` or `audio/x-mp3`, which the server later detects as `audio/mpeg`.
+ * Fold the known aliases so a client hint never rejects a file the server takes.
+ */
+const MEDIA_TYPE_ALIASES: Record<string, MediaType> = {
+  "audio/mp3": "audio/mpeg",
+  "audio/x-mp3": "audio/mpeg",
+};
+
+function normalizeMediaType(type: string): string {
+  const normalized = type.toLowerCase();
+  return MEDIA_TYPE_ALIASES[normalized] ?? normalized;
 }
