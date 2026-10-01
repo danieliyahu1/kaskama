@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node ../scripts/clean-dist.mjs dist && tsc -p tsconfig.build.json",
     "dev": "tsx watch --env-file=../.env src/server.ts",
     "start": "node dist/server.js",
     "db:reset": "tsx src/reset-db.ts",

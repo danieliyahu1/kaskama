@@ -13,7 +13,7 @@
   "types": "./dist/index.d.ts",
   "main": "./dist/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node ../scripts/clean-dist.mjs dist && tsc -p tsconfig.build.json",
     "test": "vitest run --globals",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
