@@ -1,12 +1,13 @@
 # Headless access
 
-Kaskama's HTTP API is the product; the browser app is one client of it. Any
-program that controls a Kaspa wallet can do everything a person can do in the
-app, without a browser. Identity is wallet ownership: you prove it by signing a
-server-issued challenge, and every request is scoped to that wallet.
+Kaskama is a subscription platform where creators sell access to their work,
+and its HTTP API is the product. An agent that holds a Kaspa key can do
+everything the app does, with no browser. Identity is wallet ownership: you
+prove it by signing a server-issued challenge, and every request is scoped to
+that wallet.
 
-There is no agent-specific account, token, or permission. If a person can do it,
-a machine can do it, the same way.
+There is no agent-specific account, token, or permission — identity is the
+wallet, and the same API serves every client.
 
 ## Prerequisites
 
@@ -77,9 +78,8 @@ Content-Type: application/json
 Authorization: Bearer <token>
 ```
 
-The same token is also set as an `HttpOnly` cookie for browsers; a bearer header
-wins when both are present. `GET /api/auth/session` returns the current identity,
-and `POST /api/auth/logout` revokes the token.
+`GET /api/auth/session` returns the current identity, and
+`POST /api/auth/logout` revokes the token.
 
 The signature is a standard Kaspa message signature (Schnorr) over `message`,
 encoded as hex or base64; `publicKey` is the wallet's x-only public key.
@@ -131,9 +131,8 @@ subscription prepare also returns a `signInputs` list; pass it as
 
 The endpoints, their request and response schemas, and which of them need the
 bearer token live in one place: the OpenAPI document at
-[`/api/openapi.json`](/api/openapi.json), rendered at [`/docs/api`](/docs/api).
-This guide covers the flow those schemas cannot: signing, the two-step payment,
-and retry safety.
+[`/api/openapi.json`](/api/openapi.json). This guide covers the flow those
+schemas cannot: signing, the two-step payment, and retry safety.
 
 ## Publishing
 
