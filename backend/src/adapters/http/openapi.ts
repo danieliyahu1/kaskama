@@ -1,4 +1,4 @@
-import { AGENT_GUIDE_PATH } from "@kaskama/shared";
+import { AGENT_GUIDE_PATH, API_DOCS_PATH, OPENAPI_PATH } from "@kaskama/shared";
 
 /**
  * The public HTTP contract. This is the product surface: the browser app, an
@@ -592,7 +592,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
 
 /** A minimal page that renders the contract from `/api/openapi.json`. */
 export function apiDocsHtml(origin: string): string {
-  const canonical = new URL("/docs/api", origin).toString();
+  const canonical = new URL(API_DOCS_PATH, origin).toString();
   return [
     "<!doctype html>",
     '<html lang="en"><head><meta charset="utf-8">',
@@ -603,7 +603,8 @@ export function apiDocsHtml(origin: string): string {
     '<meta property="og:title" content="Kaskama API">',
     `<meta property="og:url" content="${canonical}">`,
     "</head><body>",
-    '<redoc spec-url="/api/openapi.json"></redoc>',
+    `<noscript><p>This page needs JavaScript to render. The same contract is available as data at <a href="${OPENAPI_PATH}">${OPENAPI_PATH}</a> and as a guide at <a href="${AGENT_GUIDE_PATH}">${AGENT_GUIDE_PATH}</a>.</p></noscript>`,
+    `<redoc spec-url="${OPENAPI_PATH}"></redoc>`,
     '<script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>',
     "</body></html>",
   ].join("\n");

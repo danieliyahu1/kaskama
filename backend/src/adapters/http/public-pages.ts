@@ -15,7 +15,9 @@ export interface PublicRouteMatch {
 
 const CREATORS_BODY =
   '<div class="find-page"><header><h1>Creators.</h1></header>' +
-  '<p class="feedback inline">Browse creators selling access to their work on Kaskama.</p></div>';
+  '<p class="feedback inline">Browse creators selling access to their work on Kaskama.</p>' +
+  '<noscript><p>This list needs JavaScript. The same creators are available as data at <a href="/api/creators/public">/api/creators/public</a>.</p></noscript>' +
+  "</div>";
 
 const FIND_BODY =
   '<div class="find-page"><header><h1>Find a creator.</h1></header>' +

@@ -1468,6 +1468,8 @@ describe("API contract", () => {
     expect(response.status).toBe(200);
     expect(response.headers["content-type"]).toContain("html");
     expect(response.text).toContain("/api/openapi.json");
+    expect(response.text).toContain("<noscript>");
+    expect(response.text).toContain(AGENT_GUIDE_PATH);
   });
 
   it("publishes the same document at the well-known addresses", async () => {
@@ -1875,6 +1877,9 @@ describe("Server-rendered public pages", () => {
     expect(response.text).toContain("<title>Creators - Kaskama</title>");
     expect(response.text).toContain(`href="${origin}/creators"`);
     expect(response.text).toContain("Browse creators selling access");
+    expect(response.text).toContain(
+      'The same creators are available as data at <a href="/api/creators/public">',
+    );
     expect(response.text).not.toContain(
       '<link rel="canonical" href="https://kaskama.com/"',
     );
