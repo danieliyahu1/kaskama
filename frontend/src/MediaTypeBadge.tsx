@@ -1,15 +1,17 @@
 import { Link } from "react-router-dom";
-import { isVideoMedia, type MediaType } from "@kaskama/shared";
+import { isAudioMedia, isVideoMedia, type MediaType } from "@kaskama/shared";
 import { MediaIcon, type MediaIconKind } from "./Icons.js";
 
 const LABELS: Record<MediaIconKind, string> = {
   image: "Image",
   video: "Video",
+  audio: "Audio",
   media: "Media",
 };
 
 export function mediaIconKind(mediaType: MediaType): MediaIconKind {
   if (isVideoMedia(mediaType)) return "video";
+  if (isAudioMedia(mediaType)) return "audio";
   if (mediaType.startsWith("image/")) return "image";
   return "media";
 }

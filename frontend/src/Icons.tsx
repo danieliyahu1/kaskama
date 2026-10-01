@@ -59,7 +59,7 @@ export function LockIcon({ open }: { open: boolean }) {
   );
 }
 
-export type MediaIconKind = "image" | "video" | "media";
+export type MediaIconKind = "image" | "video" | "audio" | "media";
 
 const mediaPaths: Record<MediaIconKind, ReactNode> = {
   image: (
@@ -73,6 +73,13 @@ const mediaPaths: Record<MediaIconKind, ReactNode> = {
     <>
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="m10.5 9.5 5 2.5-5 2.5v-5Z" fill="currentColor" stroke="none" />
+    </>
+  ),
+  audio: (
+    <>
+      <path d="M9 17V6l9-2v11" />
+      <circle cx="6.5" cy="17" r="2.5" />
+      <circle cx="15.5" cy="15" r="2.5" />
     </>
   ),
   media: <rect x="3" y="5" width="18" height="14" rx="2" />,

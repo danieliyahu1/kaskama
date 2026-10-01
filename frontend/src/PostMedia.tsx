@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { isVideoMedia, type PostResponse } from "@kaskama/shared";
+import { isAudioMedia, isVideoMedia, type PostResponse } from "@kaskama/shared";
 import { VideoPlayer } from "./VideoPlayer.js";
 
 export function PostMedia({ post }: { post: PostResponse }) {
   const [mediaError, setMediaError] = useState(false);
   const isVideo = isVideoMedia(post.mediaType);
-  const mediaLabel = post.caption || (isVideo ? "Video" : "Photo");
+  const isAudio = isAudioMedia(post.mediaType);
+  const mediaLabel =
+    post.caption || (isVideo ? "Video" : isAudio ? "Audio" : "Photo");
   const mediaUrl = `/api/posts/${encodeURIComponent(post.id)}/media`;
 
   useEffect(() => {
@@ -20,7 +22,7 @@ export function PostMedia({ post }: { post: PostResponse }) {
     );
   }
 
-  return isVideo ? (
+  return isVideo || isAudio ? (
     <VideoPlayer src={mediaUrl} label={mediaLabel} onError={() => setMediaError(true)} />
   ) : (
     <img
