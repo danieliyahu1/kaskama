@@ -4,6 +4,7 @@ import {
   MEDIA_TYPES,
   OPENAPI_PATH,
 } from "@kaskama/shared";
+import { MEDIA_ERROR_CATEGORIES } from "../media/media.js";
 
 /**
  * The public HTTP contract. This is the product surface: the browser app, an
@@ -479,6 +480,12 @@ export function openApiDocument(origin: string): Record<string, unknown> {
               }),
             },
             ...errorResponses,
+            // A rejected upload names why. The codes come from the media
+            // adapter, so this list cannot drift from what it returns.
+            422: {
+              description: `Rejected media. The code is one of ${MEDIA_ERROR_CATEGORIES.join(", ")}.`,
+              content: json(ref("Error")),
+            },
           },
         },
       },

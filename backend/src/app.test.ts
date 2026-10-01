@@ -16,7 +16,7 @@ import type { EventLogger, Logger } from "./observability.js";
 import type { MembershipCheck, Post } from "./domain/models.js";
 import { StorageError } from "./r2-storage.js";
 import { TestStorage } from "./test-storage.js";
-import type { VerifiedMedia } from "./adapters/media/media.js";
+import { MEDIA_ERROR_CATEGORIES, type VerifiedMedia } from "./adapters/media/media.js";
 import {
   MembershipStateChangedError,
   type MembershipGateway,
@@ -1469,6 +1469,16 @@ describe("API contract", () => {
       type: "http",
       scheme: "bearer",
     });
+  });
+
+  it("names every media upload error code in the contract", async () => {
+    const { app } = testApp();
+    const response = await request(app).get("/api/openapi.json");
+
+    const description =
+      response.body.paths["/api/posts/publish"].post.responses["422"].description;
+    for (const code of MEDIA_ERROR_CATEGORIES)
+      expect(description).toContain(code);
   });
 
   it("serves a page that renders the contract", async () => {

@@ -20,14 +20,19 @@ export interface VerifiedMedia {
   size: number;
 }
 
-type MediaErrorCategory =
-  | "UNSUPPORTED_MEDIA"
-  | "IMAGE_TOO_LARGE"
-  | "VIDEO_TOO_LARGE"
-  | "AUDIO_TOO_LARGE"
-  | "DOCUMENT_TOO_LARGE"
-  | "MALFORMED_MEDIA"
-  | "STORAGE_FAILURE";
+/**
+ * Every code a rejected upload can carry. The publish contract lists this set,
+ * so it is a runtime value the contract can read rather than a type-only union.
+ */
+export const MEDIA_ERROR_CATEGORIES = [
+  "UNSUPPORTED_MEDIA",
+  "IMAGE_TOO_LARGE",
+  "VIDEO_TOO_LARGE",
+  "AUDIO_TOO_LARGE",
+  "DOCUMENT_TOO_LARGE",
+  "MALFORMED_MEDIA",
+] as const;
+export type MediaErrorCategory = (typeof MEDIA_ERROR_CATEGORIES)[number];
 
 export class MediaValidationError extends Error {
   constructor(readonly category: MediaErrorCategory) {
