@@ -131,7 +131,7 @@ describe("MediaPlayer", () => {
   it("keeps a control click from toggling playback", () => {
     renderPlayer();
 
-    fireEvent.click(screen.getByRole("button", { name: "Mute video" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mute" }));
     act(() => vi.advanceTimersByTime(300));
 
     expect(playMock).not.toHaveBeenCalled();
@@ -185,7 +185,7 @@ describe("MediaPlayer", () => {
 
   it("shows a sound icon while unmuted and a mute icon once muted", () => {
     renderPlayer();
-    const mute = screen.getByRole("button", { name: "Mute video" });
+    const mute = screen.getByRole("button", { name: "Mute" });
     expect(mute.querySelector("path")).toHaveAttribute(
       "d",
       "M3 10v4h4l5 4V6l-5 4H3M16 9c2 2 2 4 0 6M19 6c4 4 4 8 0 12",
@@ -193,7 +193,7 @@ describe("MediaPlayer", () => {
 
     fireEvent.click(mute);
 
-    const unmute = screen.getByRole("button", { name: "Unmute video" });
+    const unmute = screen.getByRole("button", { name: "Unmute" });
     expect(unmute.querySelector("path")).toHaveAttribute(
       "d",
       "M3 10v4h4l5 4V6l-5 4H3M16 9l5 6M21 9l-5 6",
@@ -245,7 +245,7 @@ describe("MediaPlayer", () => {
     expect(video.volume).toBe(0);
     expect(video.muted).toBe(true);
     expect(level()).toBe("0");
-    expect(screen.getByRole("button", { name: "Unmute video" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Unmute" })).toBeVisible();
   });
 
   it("adjusts volume with the keyboard without seeking", () => {
@@ -267,7 +267,7 @@ describe("MediaPlayer", () => {
     pressVolumeAt(volumeSlider(), 100);
     expect(video.muted).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "Unmute video" }));
+    fireEvent.click(screen.getByRole("button", { name: "Unmute" }));
 
     expect(video.volume).toBe(1);
     expect(video.muted).toBe(false);
@@ -282,7 +282,7 @@ describe("MediaPlayer", () => {
     renderPlayer();
     const player = screen.getByRole("group", { name: "Clip" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Fullscreen video" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fullscreen" }));
 
     expect(requestFullscreen).toHaveBeenCalledTimes(1);
     expect(requestFullscreen.mock.instances[0]).toBe(player);

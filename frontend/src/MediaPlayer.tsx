@@ -211,7 +211,7 @@ export function MediaPlayer({
           max={duration || 0}
           step="0.1"
           value={currentTime}
-          aria-label="Video progress"
+          aria-label="Progress"
           onChange={(event) => seek(Number(event.target.value))}
         />
         <span className="video-time">
@@ -222,7 +222,7 @@ export function MediaPlayer({
           <button
             type="button"
             onClick={toggleMute}
-            aria-label={muted ? "Unmute video" : "Mute video"}
+            aria-label={muted ? "Unmute" : "Mute"}
             title={muted ? "Unmute" : "Mute"}
           >
             <VideoIcon name={muted ? "mute" : "unmute"} />
@@ -231,7 +231,7 @@ export function MediaPlayer({
         <button
           type="button"
           onClick={toggleFullscreen}
-          aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen video"}
+          aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
           title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
         >
           <VideoIcon name={fullscreen ? "exit-fullscreen" : "fullscreen"} />

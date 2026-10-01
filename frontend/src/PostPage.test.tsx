@@ -52,7 +52,7 @@ describe("PostPage", () => {
     expect(
       screen.queryByRole("button", { name: /play video/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Fullscreen video" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Fullscreen" })).toBeVisible();
   });
 
   it("blocks the buyer until the payment response arrives", async () => {
