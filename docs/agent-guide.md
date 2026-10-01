@@ -125,8 +125,8 @@ Publishing is free. `POST /api/posts/publish` is a normal multipart form, and
 - `caption`: text, 1-280 characters.
 - `price`: decimal KAS, up to 8 decimal places; `0` publishes it free for
   everyone.
-- `media`: one JPEG, PNG, WebP, MP4, or WebM file (images up to 25 MB, videos up
-  to 100 MB).
+- `media`: one JPEG, PNG, WebP, MP4, WebM, or MP3 file (images up to 25 MB,
+  videos up to 100 MB, audio up to 25 MB).
 
 Publishing the same bytes twice returns `409` with the existing `id`, so a retry
 is safe.
