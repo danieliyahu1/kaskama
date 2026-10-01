@@ -1,4 +1,9 @@
-import { AGENT_GUIDE_PATH, API_DOCS_PATH, OPENAPI_PATH } from "@kaskama/shared";
+import {
+  AGENT_GUIDE_PATH,
+  API_DOCS_PATH,
+  MEDIA_TYPES,
+  OPENAPI_PATH,
+} from "@kaskama/shared";
 
 /**
  * The public HTTP contract. This is the product surface: the browser app, an
@@ -214,7 +219,11 @@ export function openApiDocument(origin: string): Record<string, unknown> {
             creator: { type: "string" },
             caption: { type: "string" },
             priceSompi: { type: "string" },
-            mediaType: { type: "string" },
+            mediaType: {
+              type: "string",
+              enum: [...MEDIA_TYPES],
+              description: "MIME type of the post's media.",
+            },
             publishedAt: { type: "string" },
             canView: { type: "boolean" },
           },
@@ -426,14 +435,20 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         },
       },
       "/api/posts/{id}/preview": {
-        get: get("Blurred preview image.", {
-          security: false,
-          parameters: [pathParam("id", "Post id.")],
-          response: { status: "200", schema: { type: "string", format: "binary" } },
-        }),
+        get: get(
+          "Blurred preview image for a locked post. Images and videos have one; audio does not (404).",
+          {
+            security: false,
+            parameters: [pathParam("id", "Post id.")],
+            response: {
+              status: "200",
+              schema: { type: "string", format: "binary" },
+            },
+          },
+        ),
       },
       "/api/posts/{id}/media": {
-        get: get("Full media (paid); supports Range.", {
+        get: get("Full media (paid); returns the post's content type and supports Range.", {
           parameters: [pathParam("id", "Post id.")],
           response: { status: "200", schema: { type: "string", format: "binary" } },
           binary: true,
@@ -458,7 +473,11 @@ export function openApiDocument(origin: string): Record<string, unknown> {
                       description:
                         "What a buyer pays to unlock the post, in KAS with up to 8 decimals; `0` means free.",
                     },
-                    media: { type: "string", format: "binary" },
+                    media: {
+                      type: "string",
+                      format: "binary",
+                      description: `The media file: one of ${MEDIA_TYPES.join(", ")}. Images up to 25 MB, videos up to 100 MB, audio up to 25 MB.`,
+                    },
                   },
                 },
               },
