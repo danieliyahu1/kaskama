@@ -19,9 +19,6 @@ export const API_COPY = {
   purchasePending: "Purchase pending. Do not pay again.",
   transactionRejected: "Transaction rejected. Nothing was charged. Try again.",
   unlocked: "Unlocked.",
-  unsupportedMedia: "Choose a JPEG, PNG, WebP, MP4, or WebM file.",
-  imageTooLarge: "Images can be up to 25 MB.",
-  videoTooLarge: "Videos can be up to 100 MB.",
   mediaAlreadyPublished: "You've already published this.",
 } as const;
 
