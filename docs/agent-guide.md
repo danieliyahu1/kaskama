@@ -92,25 +92,15 @@ Money moves in two steps so a client never holds state between them:
 2. The client signs it locally.
 3. `POST .../finalize` submits the signed transaction.
 
-```ts
-const prepared = await post(`/api/posts/${postId}/payments/prepare`);
+`prepare` returns the transaction as Safe JSON. Sign it with the key from
+Prerequisites and change nothing else — the server rejects a transaction that
+differs from the prepared template:
 
-// The wallet signs the inputs it owns with SIGHASH_ALL and leaves the inputs
-// the server already signed untouched; every other field is preserved exactly.
-const signedTransaction = await wallet.signPskt({
-  txJsonString: prepared.transaction,
-});
-
-const result = await post(`/api/payments/${prepared.id}/finalize`, {
-  signedTransaction,
-});
-
-if (result.state === "PENDING") {
-  // On chain, not confirmed. Do not pay again; poll the post instead.
-} else if (result.state === "REJECTED") {
-  // Nothing was charged. Fix the cause and prepare a new payment.
-}
-```
+- **A post payment** leaves every input yours and unsigned, so sign them all
+  with `SIGHASH_ALL`.
+- **A subscription** returns a `signInputs` list of the indices to sign. The
+  server has already signed the covenant inputs; leave those inputs exactly as
+  they are.
 
 `finalize` returns:
 
@@ -119,13 +109,6 @@ if (result.state === "PENDING") {
 | `201`  | `{ state: "CONFIRMED", transactionId }` | Paid and recorded.                                    |
 | `202`  | `{ state: "PENDING", transactionId }`   | On chain but not confirmed yet. **Do not pay again.** |
 | `422`  | `{ state: "REJECTED", rejection }`      | Rejected. Nothing was charged.                        |
-
-The client signs only the inputs the server left unsigned — the empty
-`signatureScript`s. Covenant inputs the server already signed must be copied
-through unchanged, and every other field of the transaction preserved exactly;
-the server rejects a transaction that differs from the prepared template. A
-subscription prepare also returns a `signInputs` list; pass it as
-`options.signInputs` so only your inputs are signed.
 
 ## Endpoints
 
