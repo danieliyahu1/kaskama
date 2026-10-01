@@ -21,7 +21,9 @@ const CREATORS_BODY =
 
 const FIND_BODY =
   '<div class="find-page"><header><h1>Find a creator.</h1></header>' +
-  '<p class="feedback inline">Search Kaskama creators by name or wallet address.</p></div>';
+  '<p class="feedback inline">Search Kaskama creators by name or wallet address.</p>' +
+  '<noscript><p>Search needs JavaScript. The same creators are available as data at <a href="/api/creators/public">/api/creators/public</a>, and search at /api/creators/search?q=NAME.</p></noscript>' +
+  "</div>";
 
 const PUBLISH_BODY =
   '<div class="find-page"><header><h1>Publish your work.</h1></header>' +

@@ -1885,6 +1885,15 @@ describe("Server-rendered public pages", () => {
     );
   });
 
+  it("offers the same data fallback on the find page", async () => {
+    const response = await request(app).get("/find");
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain(
+      'Search needs JavaScript. The same creators are available as data at <a href="/api/creators/public">',
+    );
+  });
+
   it.each(PUBLIC_PAGES)(
     "serves a distinct document at $path",
     async (page) => {
