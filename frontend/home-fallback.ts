@@ -4,6 +4,8 @@ export interface HomeCopy {
   moneyHeading: string;
   moneyIntro: string;
   moneyPoints: { claim: string; detail: string }[];
+  fanViewHeading: string;
+  fanViewIntro: string;
   fanHeading: string;
   fanLede: string;
 }
@@ -32,6 +34,11 @@ export function homeFallbackHtml(copy: HomeCopy): string {
     `<p class="home-lede">${escapeHtml(copy.moneyIntro)}</p>` +
     `<ul class="home-money">${points}</ul>` +
     '<a class="home-powered" href="https://kaspa.org/">Powered by Kaspa</a>' +
+    "</section>" +
+    '<section class="home-section">' +
+    `<h2 class="home-section-title">${escapeHtml(copy.fanViewHeading)}</h2>` +
+    `<p class="home-lede">${escapeHtml(copy.fanViewIntro)}</p>` +
+    '<img class="fan-view" src="/fan-view.jpg" alt="An example creator\'s page on Kaskama as fans see it: a 30-day subscription, a locked post, and an unlocked post." />' +
     "</section>" +
     '<section class="home-section">' +
     `<h2 class="home-section-title">${escapeHtml(copy.fanHeading)}</h2>` +

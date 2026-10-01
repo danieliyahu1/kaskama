@@ -646,62 +646,14 @@ main:has(.home-page) {
   margin-top: 0.25rem;
 }
 
-/* Home preview */
+/* Home fan view */
 
-.preview-card {
-  display: grid;
-  gap: 0.85rem;
-  width: min(100%, 32rem);
-  padding: 1.1rem;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  text-align: left;
-}
-.preview-card .creator-identity {
-  min-width: 0;
-}
-.preview-card .preview-name {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-.preview-card .wallet-address {
+.fan-view {
   display: block;
+  width: 100%;
+  max-width: 54rem;
+  height: auto;
   margin-top: 0.25rem;
-  min-height: 0;
-  padding: 0;
-  font-size: 0.68rem;
-  text-align: left;
-}
-.preview-card .access-strip {
-  margin: 0;
-  padding: 0.65rem 0;
-}
-.preview-card .access-facts {
-  font-size: 0.75rem;
-}
-.preview-card .post-grid {
-  margin: 0;
-}
-.preview-card .post-card {
-  gap: 0.6rem 1rem;
-  padding: 0.85rem 0;
-}
-.preview-card .post-card-copy p {
-  font-size: 0.95rem;
-  line-height: 1.4;
-}
-.preview-card .post-lock {
-  width: 2rem;
-  height: 2rem;
-}
-.preview-card .post-lock-icon {
-  width: 1.05rem;
-  height: 1.05rem;
-}
-.preview-card .post-price {
-  font-size: 0.72rem;
 }
 
 /* Home fans */
@@ -1336,46 +1288,6 @@ button.visibility-badge:focus-visible {
 .subscription-price input:focus-visible {
   outline: none;
 }
-.post-grid {
-  margin-top: 3rem;
-  border-top: 1px solid var(--line);
-}
-.post-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 1rem 1.25rem;
-  align-items: center;
-  padding: 1.4rem 0;
-  border-bottom: 1px solid var(--line);
-  text-decoration: none;
-}
-.post-card-copy {
-  min-width: 0;
-}
-.post-card-copy p {
-  margin: 0;
-  color: var(--paper);
-  font-size: 1.05rem;
-  line-height: 1.5;
-}
-.post-card:hover .post-card-copy p {
-  color: var(--acid);
-}
-.post-lock {
-  display: inline-grid;
-  place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border: 1px solid var(--line);
-  color: var(--muted);
-}
-.post-lock.unlocked {
-  border-color: var(--acid);
-  color: var(--acid);
-}
-.post-lock.is-free {
-  border: 0;
-}
 .post-lock-icon {
   width: 1.35rem;
   height: 1.35rem;
@@ -1406,18 +1318,6 @@ a.media-type-badge:focus-visible {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.8;
-}
-.post-price {
-  color: var(--muted);
-  font:
-    500 0.75rem "DM Mono",
-    monospace;
-  white-space: nowrap;
-}
-.post-price.free {
-  color: var(--acid);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 /* Creator post tiles */
 
@@ -2075,18 +1975,6 @@ main:has(.message.is-centered) {
   }
   .access-strip.is-owner {
     flex-wrap: wrap;
-  }
-  .post-card {
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: start;
-    gap: 0.4rem 1rem;
-  }
-  .post-lock {
-    grid-row: span 2;
-  }
-  .post-card-copy,
-  .post-price {
-    grid-column: 2;
   }
   .video-controls {
     grid-template-columns: 1fr auto auto;

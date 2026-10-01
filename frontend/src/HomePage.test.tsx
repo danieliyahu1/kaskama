@@ -66,20 +66,15 @@ describe("HomePage", () => {
     await screen.findByText("What your fans see");
   });
 
-  it("shows a real profile as a subscribed fan sees it", async () => {
+  it("shows fans what an example creator's page looks like", async () => {
     renderHome();
 
+    expect(screen.getByText("What your fans see")).toBeVisible();
     expect(
       screen.getByRole("img", {
-        name: /a subscribed fan's view of a creator's profile/i,
+        name: /an example creator's page on kaskama as fans see it/i,
       }),
-    ).toBeVisible();
-    expect(screen.getByText("What your fans see")).toBeVisible();
-    expect(screen.getByText("Yonatan Sompolinsky")).toBeVisible();
-    expect(screen.getByText("Creator-priced access · 30 days")).toBeVisible();
-    expect(screen.getByText("Subscribed")).toBeVisible();
-    expect(screen.getByText("BlockDAG explanation with AI")).toBeVisible();
-    expect(screen.getByText("5 KAS")).toBeVisible();
+    ).toHaveAttribute("src", "/fan-view.jpg");
     await screen.findByText("What your fans see");
   });
 

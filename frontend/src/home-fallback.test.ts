@@ -16,12 +16,20 @@ describe("homeFallbackHtml", () => {
     expect(html).toContain("KAS");
   });
 
+  it("carries the static fan view image", () => {
+    const html = homeFallbackHtml(homeCopy);
+
+    expect(html).toContain('src="/fan-view.jpg"');
+  });
+
   it("mirrors the copy rendered on the page", () => {
     const html = homeFallbackHtml(homeCopy);
 
     expect(html).toContain(homeCopy.headline);
     expect(html).toContain(homeCopy.lede);
     expect(html).toContain(homeCopy.moneyHeading);
+    expect(html).toContain(homeCopy.fanViewHeading);
+    expect(html).toContain(homeCopy.fanViewIntro);
     expect(html).toContain(homeCopy.fanHeading);
   });
 

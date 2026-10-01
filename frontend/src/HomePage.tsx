@@ -1,11 +1,14 @@
 import { Link } from "react-router-dom";
 import type { CreatorSearchResult } from "@kaskama/shared";
 import * as homeCopy from "./home-copy.json";
-import { COPY } from "./copy.js";
-import { LockIcon } from "./Icons.js";
 import { api } from "./kasware.js";
 import { useAsyncResource } from "./useAsyncResource.js";
 import { creatorPath } from "./creator-url.js";
+
+// A picture of what a fan meets, captured from the real product. It is static
+// on purpose: nothing here reacts to the visitor.
+const FAN_VIEW_ALT =
+  "An example creator's page on Kaskama as fans see it: a 30-day subscription, a locked post, and an unlocked post.";
 
 export function HomePage() {
   return (
@@ -42,8 +45,9 @@ export function HomePage() {
       </section>
 
       <section className="home-section">
-        <h2 className="home-section-title">What your fans see</h2>
-        <CreatorPreview />
+        <h2 className="home-section-title">{homeCopy.fanViewHeading}</h2>
+        <p className="home-lede">{homeCopy.fanViewIntro}</p>
+        <img className="fan-view" src="/fan-view.jpg" alt={FAN_VIEW_ALT} />
       </section>
 
       <section className="home-section">
@@ -54,36 +58,6 @@ export function HomePage() {
           Browse creators
         </Link>
       </section>
-    </div>
-  );
-}
-
-function CreatorPreview() {
-  return (
-    <div
-      className="preview-card"
-      role="img"
-      aria-label="A subscribed fan's view of a creator's profile on Kaskama: Yonatan Sompolinsky, creator-priced access for 30 days, marked Subscribed, with the unlocked post BlockDAG explanation with AI."
-    >
-      <div className="creator-identity">
-        <h2 className="preview-name">Yonatan Sompolinsky</h2>
-        <span className="wallet-address">kaspa:qpchy8…09rle5a7</span>
-      </div>
-      <div className="access-strip">
-        <p className="access-facts">{COPY.membershipAccess}</p>
-        <span className="access-status">Subscribed</span>
-      </div>
-      <div className="post-grid">
-        <div className="post-card">
-          <span className="post-lock unlocked">
-            <LockIcon open={true} />
-          </span>
-          <div className="post-card-copy">
-            <p>BlockDAG explanation with AI</p>
-          </div>
-          <span className="post-price">5 KAS</span>
-        </div>
-      </div>
     </div>
   );
 }
