@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { CreatorSearchResult } from "@kaskama/shared";
 import * as homeCopy from "./home-copy.json";
+import { appConfig } from "./app-config.js";
 import { api } from "./kasware.js";
 import { useAsyncResource } from "./useAsyncResource.js";
 import { creatorPath } from "./creator-url.js";
@@ -47,7 +48,13 @@ export function HomePage() {
       <section className="home-section">
         <h2 className="home-section-title">{homeCopy.fanViewHeading}</h2>
         <p className="home-lede">{homeCopy.fanViewIntro}</p>
-        <img className="fan-view" src="/fan-view.jpg" alt={FAN_VIEW_ALT} />
+        <Link
+          className="fan-view-link"
+          to={creatorPath(homeCopy.exampleCreatorAddresses[appConfig().network])}
+        >
+          <img className="fan-view" src="/fan-view.jpg" alt={FAN_VIEW_ALT} />
+          <span className="fan-view-label">{homeCopy.fanViewLinkLabel}</span>
+        </Link>
       </section>
 
       <section className="home-section">

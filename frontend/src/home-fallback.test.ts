@@ -22,6 +22,15 @@ describe("homeFallbackHtml", () => {
     expect(html).toContain('src="/fan-view.jpg"');
   });
 
+  it("makes the example creator a real door without JavaScript", () => {
+    const html = homeFallbackHtml(homeCopy);
+
+    expect(html).toContain(
+      `href="/creator/${homeCopy.exampleCreatorAddresses.mainnet}"`,
+    );
+    expect(html).toContain(homeCopy.fanViewLinkLabel);
+  });
+
   it("mirrors the copy rendered on the page", () => {
     const html = homeFallbackHtml(homeCopy);
 

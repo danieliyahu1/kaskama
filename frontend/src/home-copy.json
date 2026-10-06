@@ -19,6 +19,11 @@
   ],
   "fanViewHeading": "What your fans see",
   "fanViewIntro": "An example creator. Your fans subscribe for 30 days, or unlock one post at a time.",
+  "fanViewLinkLabel": "Open the page — no sign-up, just look.",
+  "exampleCreatorAddresses": {
+    "mainnet": "qpg2gxu40zmtuwnsgny5mh7d7sq59dzfsnfsn0u5ds79az0tjh2g7guw4wnz6",
+    "testnet-10": "qpg2gxu40zmtuwnsgny5mh7d7sq59dzfsnfsn0u5ds79az0tjh2g7f6gwpdn7"
+  },
   "fanHeading": "Here to support a creator?",
   "fanLede": "Unlock their work or subscribe for 30 days. Your KAS goes straight to them."
 }

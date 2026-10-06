@@ -6,6 +6,8 @@ export interface HomeCopy {
   moneyPoints: { claim: string; detail: string }[];
   fanViewHeading: string;
   fanViewIntro: string;
+  fanViewLinkLabel: string;
+  exampleCreatorAddresses: { mainnet: string; "testnet-10": string };
   fanHeading: string;
   fanLede: string;
 }
@@ -38,7 +40,11 @@ export function homeFallbackHtml(copy: HomeCopy): string {
     '<section class="home-section">' +
     `<h2 class="home-section-title">${escapeHtml(copy.fanViewHeading)}</h2>` +
     `<p class="home-lede">${escapeHtml(copy.fanViewIntro)}</p>` +
+    // The baked shell targets production, which is mainnet.
+    `<a class="fan-view-link" href="/creator/${escapeHtml(copy.exampleCreatorAddresses.mainnet)}">` +
     '<img class="fan-view" src="/fan-view.jpg" alt="An example creator\'s page on Kaskama as fans see it: a 30-day subscription, a locked post, and an unlocked post." />' +
+    `<span class="fan-view-label">${escapeHtml(copy.fanViewLinkLabel)}</span>` +
+    "</a>" +
     "</section>" +
     '<section class="home-section">' +
     `<h2 class="home-section-title">${escapeHtml(copy.fanHeading)}</h2>` +

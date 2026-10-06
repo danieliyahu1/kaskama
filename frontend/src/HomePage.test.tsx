@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { HomePage } from "./HomePage.js";
 import { api } from "./kasware.js";
+import { appConfig } from "./app-config.js";
+import * as homeCopy from "./home-copy.json";
 
 vi.mock("./kasware.js", async () => ({
   ...(await vi.importActual("./kasware.js")),
@@ -76,6 +78,23 @@ describe("HomePage", () => {
       }),
     ).toHaveAttribute("src", "/fan-view.jpg");
     await screen.findByText("What your fans see");
+  });
+
+  it("opens the example creator's real page from the fan view", async () => {
+    const user = userEvent.setup();
+    renderHome();
+
+    const link = screen.getByRole("link", {
+      name: /open the page — no sign-up, just look/i,
+    });
+    expect(link).toHaveAttribute(
+      "href",
+      `/creator/${homeCopy.exampleCreatorAddresses[appConfig().network]}`,
+    );
+
+    await user.click(link);
+
+    expect(await screen.findByText("Creator page")).toBeVisible();
   });
 
   it("gives a creator one clear door", async () => {
