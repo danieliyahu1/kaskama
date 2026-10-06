@@ -67,6 +67,13 @@ export class WalletMissingError extends WalletError {}
  */
 export const KASWARE_DOWNLOAD_URL = "https://www.kasware.xyz/";
 
+/**
+ * Where to point users who have a wallet but no KAS yet. The official Kaspa
+ * site anchors its "Buy Kaspa" guide here, so the destination is maintained
+ * upstream instead of by Kaskama.
+ */
+export const KASPA_GET_KAS_URL = "https://kaspa.org/hodl#buy";
+
 export function kasware(): Kasware {
   if (!window.kasware) throw new WalletMissingError(COPY.kaswareMissing);
   return window.kasware;

@@ -18,6 +18,15 @@ export function isWalletMissing(error: unknown): boolean {
 }
 
 /**
+ * The wallet is present but the wallet does not hold enough KAS to pay the
+ * price plus the network fee. The user has a way forward (get KAS), so callers
+ * treat this as an actionable notice rather than a dead-end error.
+ */
+export function isInsufficientFunds(error: unknown): boolean {
+  return error instanceof ApiError && error.code === "INSUFFICIENT_FUNDS";
+}
+
+/**
  * User-facing error text. Server faults carry a short reference so a report can
  * be traced back to a request; user errors do not.
  */

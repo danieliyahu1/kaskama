@@ -3,6 +3,7 @@ export const COPY = {
     "Connect to Kaskama. This only identifies your wallet. No KAS will be sent.",
   kaswareMissing: "Kasware extension not found.",
   kaswareDownload: "Get Kasware",
+  getKas: "Get KAS",
   wrongNetwork: "Your wallet is on the wrong network. Switch networks and try again.",
   networkSwitched: "You're on {network} now.",
   walletCancelled: "Wallet connection cancelled.",
@@ -24,7 +25,7 @@ export const COPY = {
     "You are supporting this creator with {price} KAS. Kasware will show the network fee before you approve. This payment cannot be reversed.",
   paymentCancelled: "Payment cancelled.",
   unlocked: "Unlocked.",
-  insufficientFunds: "You need enough KAS for the post and the network fee.",
+  insufficientFunds: "You'll need some KAS to pay for this.",
   transactionRejected: "Transaction rejected. Nothing was charged. Try again.",
   purchasePending: "Purchase pending. Do not pay again.",
   paymentTimedOut:
