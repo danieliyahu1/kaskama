@@ -33,6 +33,8 @@ RUN pnpm --filter @kaskama/backend build
 # Frontend compile. Independent of the backend.
 FROM shared AS frontend-build
 COPY frontend/src ./frontend/src
+# Vite copies publicDir into dist; without it the logo and fan view never ship.
+COPY frontend/public ./frontend/public
 COPY frontend/home-fallback.ts ./frontend/
 RUN pnpm --filter @kaskama/frontend build
 
