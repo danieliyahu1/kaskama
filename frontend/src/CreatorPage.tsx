@@ -329,6 +329,7 @@ export function CreatorPage({
               <ShareButton
                 address={address}
                 path={creatorPath(currentCreator.address)}
+                compact
               />
             </div>
           </div>
