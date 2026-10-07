@@ -1368,13 +1368,27 @@ button.creator-card-handle:focus-visible {
 .profile {
   width: min(100%, 40rem);
 }
+.creator-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+/* The portrait sets the head's height, so the face ends on the line the bio begins. */
+.creator-head .creator-avatar {
+  width: clamp(5rem, 14vw, 9rem);
+  height: clamp(5rem, 14vw, 9rem);
+}
 .creator-identity {
   min-width: 0;
+}
+.creator-head .creator-identity {
+  flex: 1 1 auto;
 }
 .profile h1 {
   max-width: 24ch;
   margin: 0;
   font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1.12;
   overflow-wrap: anywhere;
 }
 .address-heading {
@@ -1406,6 +1420,13 @@ button.creator-card-handle:focus-visible {
   align-items: center;
   gap: 0.85rem;
   margin-top: 0.85rem;
+}
+.creator-bio {
+  max-width: 40rem;
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
 }
 .visibility-badge {
   display: inline-flex;

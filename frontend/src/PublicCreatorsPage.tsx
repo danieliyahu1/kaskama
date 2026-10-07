@@ -1,15 +1,12 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { CreatorSearchResult } from "@kaskama/shared";
 import { api, ApiError } from "./kasware.js";
+import { CreatorAvatar } from "./CreatorAvatar.js";
 import { Spinner } from "./Spinner.js";
 import { useToast } from "./Toast.js";
 import { useAsyncResource } from "./useAsyncResource.js";
 import { creatorPath } from "./creator-url.js";
 import { compactAddress, relativeTimeAgo } from "./format.js";
-
-/** The mark a card shows, quietly, when a creator has not set a picture. */
-const DEFAULT_AVATAR = "/kaskama-logo.svg";
 
 export function PublicCreatorsPage() {
   const {
@@ -67,13 +64,9 @@ export function PublicCreatorsPage() {
  * stand-in face.
  */
 function CreatorCard({ creator }: { creator: CreatorSearchResult }) {
-  const [imageFailed, setImageFailed] = useState(false);
   const { showToast } = useToast();
   const name = creator.displayName ?? compactAddress(creator.address);
   const address = compactAddress(creator.address);
-  const avatarSrc =
-    !imageFailed && creator.avatarUrl ? creator.avatarUrl : DEFAULT_AVATAR;
-  const isDefaultAvatar = avatarSrc === DEFAULT_AVATAR;
 
   async function copyAddress() {
     try {
@@ -92,12 +85,7 @@ function CreatorCard({ creator }: { creator: CreatorSearchResult }) {
         aria-label={`Open ${name}'s page`}
       />
       <div className="creator-card-head">
-        <span
-          className={isDefaultAvatar ? "creator-avatar is-default" : "creator-avatar"}
-          aria-hidden="true"
-        >
-          <img src={avatarSrc} alt="" onError={() => setImageFailed(true)} />
-        </span>
+        <CreatorAvatar avatarUrl={creator.avatarUrl} />
         <div className="creator-card-ident">
           {creator.displayName ? (
             <>

@@ -536,3 +536,32 @@ describe("CreatorPage post deletion", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("CreatorPage profile header", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("leads with the creator's face and their bio", async () => {
+    vi.mocked(api).mockResolvedValue({
+      ...creator(false, false),
+      bio: "Ambient music for deep work.",
+      avatarUrl: "/api/creators/abc/avatar",
+    });
+    renderCreator(consumerAddress);
+
+    expect(await screen.findByText("Ambient music for deep work.")).toBeVisible();
+    expect(
+      document.querySelector(".creator-head .creator-avatar img"),
+    ).toHaveAttribute("src", "/api/creators/abc/avatar");
+  });
+
+  it("falls back to the quiet Kaskama mark, and shows no bio, when a creator has neither", async () => {
+    vi.mocked(api).mockResolvedValue(creator(false, false));
+    renderCreator(consumerAddress);
+
+    await screen.findByText("Creator");
+    expect(
+      document.querySelector(".creator-head .creator-avatar img"),
+    ).toHaveAttribute("src", "/kaskama-logo.svg");
+    expect(document.querySelector(".creator-bio")).toBeNull();
+  });
+});

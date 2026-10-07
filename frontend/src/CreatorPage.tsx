@@ -17,6 +17,7 @@ import {
   unlockPost,
 } from "./purchase.js";
 import { Icon, LockIcon } from "./Icons.js";
+import { CreatorAvatar } from "./CreatorAvatar.js";
 import { PostTile, PostTileAction, PostTileMedia } from "./PostTile.js";
 import { PostMedia } from "./PostMedia.js";
 import { Spinner } from "./Spinner.js";
@@ -302,33 +303,39 @@ export function CreatorPage({
   return (
     <>
       <section className="profile">
-        <div className="creator-identity">
-          <h1 className={currentCreator.displayName ? undefined : "address-heading"}>
-            {currentCreator.displayName ?? shortenAddress(currentCreator.address)}
-          </h1>
-          <button
-            className="wallet-address"
-            type="button"
-            title={currentCreator.address}
-            aria-label="Copy Kaspa address"
-            onClick={() => void copyAddress()}
-          >
-            {shortenAddress(currentCreator.address)}
-          </button>
-          <div className="profile-visibility">
-            <VisibilityBadge
-              isPublic={currentCreator.isPublic}
-              busy={visibilityBusy}
-              {...(owner && onVisibilityChange && currentCreator.posts.length > 0
-                ? { onToggle: () => void toggleVisibility() }
-                : {})}
-            />
-            <ShareButton
-              address={address}
-              path={creatorPath(currentCreator.address)}
-            />
+        <div className="creator-head">
+          <CreatorAvatar avatarUrl={currentCreator.avatarUrl} />
+          <div className="creator-identity">
+            <h1 className={currentCreator.displayName ? undefined : "address-heading"}>
+              {currentCreator.displayName ?? shortenAddress(currentCreator.address)}
+            </h1>
+            <button
+              className="wallet-address"
+              type="button"
+              title={currentCreator.address}
+              aria-label="Copy Kaspa address"
+              onClick={() => void copyAddress()}
+            >
+              {shortenAddress(currentCreator.address)}
+            </button>
+            <div className="profile-visibility">
+              <VisibilityBadge
+                isPublic={currentCreator.isPublic}
+                busy={visibilityBusy}
+                {...(owner && onVisibilityChange && currentCreator.posts.length > 0
+                  ? { onToggle: () => void toggleVisibility() }
+                  : {})}
+              />
+              <ShareButton
+                address={address}
+                path={creatorPath(currentCreator.address)}
+              />
+            </div>
           </div>
         </div>
+        {currentCreator.bio && (
+          <p className="creator-bio">{currentCreator.bio}</p>
+        )}
         {showSubscription && (
           <div className={owner ? "access-strip is-owner" : "access-strip"}>
             <p className="access-facts">
