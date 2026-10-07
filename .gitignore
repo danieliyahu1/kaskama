@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 .opencode/
+opencode.json
 .playwright/
 playwright-report/
 test-results/
