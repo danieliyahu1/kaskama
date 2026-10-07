@@ -39,3 +39,13 @@ export function relativeTime(iso: string, now = Date.now()): string {
   if (days < 365) return `${Math.floor(days / 30)}mo`;
   return `${Math.floor(days / 365)}y`;
 }
+
+/**
+ * The same age read as a phrase: "2d ago", or "just now" on its own, which
+ * already reads as one. The single way a lone post age is phrased.
+ */
+export function relativeTimeAgo(iso: string, now = Date.now()): string {
+  const relative = relativeTime(iso, now);
+  if (relative === "") return "";
+  return relative === "just now" ? relative : `${relative} ago`;
+}

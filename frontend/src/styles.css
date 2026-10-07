@@ -1178,8 +1178,6 @@ button.creator-card-handle:focus-visible {
   font:
     0.66rem "DM Mono",
     monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .creator-card-open {
   position: absolute;
@@ -1672,8 +1670,6 @@ a.post-tile-caption {
   font:
     0.68rem "DM Mono",
     monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 .post-tile-action {
   display: flex;
@@ -1758,8 +1754,6 @@ main:has(.single-post) {
   font:
     0.68rem "DM Mono",
     monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 .single-post .caption {
   flex: 0 0 auto;

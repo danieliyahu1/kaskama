@@ -6,7 +6,7 @@ import { Spinner } from "./Spinner.js";
 import { useToast } from "./Toast.js";
 import { useAsyncResource } from "./useAsyncResource.js";
 import { creatorPath } from "./creator-url.js";
-import { compactAddress, relativeTime } from "./format.js";
+import { compactAddress, relativeTimeAgo } from "./format.js";
 
 /** The mark a card shows, quietly, when a creator has not set a picture. */
 const DEFAULT_AVATAR = "/kaskama-logo.svg";
@@ -130,7 +130,7 @@ function CreatorCard({ creator }: { creator: CreatorSearchResult }) {
       {creator.bio && <p className="creator-card-line">{creator.bio}</p>}
       {creator.lastPostedAt && (
         <p className="creator-card-posted">
-          {postedLabel(relativeTime(creator.lastPostedAt))}
+          {postedLabel(relativeTimeAgo(creator.lastPostedAt))}
         </p>
       )}
     </article>
@@ -139,5 +139,5 @@ function CreatorCard({ creator }: { creator: CreatorSearchResult }) {
 
 /** "Posted 2d ago" — or "Posted just now", which already reads as a phrase. */
 function postedLabel(relative: string): string {
-  return relative === "just now" ? "Posted just now" : `Posted ${relative} ago`;
+  return relative ? `Posted ${relative}` : "";
 }

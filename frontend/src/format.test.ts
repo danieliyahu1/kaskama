@@ -3,6 +3,7 @@ import {
   formatKas,
   formatTime,
   relativeTime,
+  relativeTimeAgo,
   shortenAddress,
 } from "./format.js";
 import { creatorAddressFromRoute, creatorPath } from "./creator-url.js";
@@ -42,6 +43,19 @@ describe("relativeTime", () => {
 
   it("keeps larger relative units concise", () => {
     expect(relativeTime("2026-09-19T10:00:00.000Z", now)).toBe("2h");
+  });
+});
+
+describe("relativeTimeAgo", () => {
+  const now = Date.parse("2026-09-19T12:00:00.000Z");
+
+  it("reads a lone age as a phrase", () => {
+    expect(relativeTimeAgo("2026-09-19T10:00:00.000Z", now)).toBe("2h ago");
+    expect(relativeTimeAgo("2026-09-17T12:00:00.000Z", now)).toBe("2d ago");
+  });
+
+  it("does not append ago to a phrase that already reads as one", () => {
+    expect(relativeTimeAgo("2026-09-19T11:59:45.000Z", now)).toBe("just now");
   });
 });
 

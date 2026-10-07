@@ -10,7 +10,7 @@ import { MediaTypeBadge } from "./MediaTypeBadge.js";
 import { HomeLink, Message } from "./Message.js";
 import { errorText, isNetworkRequired } from "./errors.js";
 import { presentError } from "./error-toast.js";
-import { formatKas, relativeTime } from "./format.js";
+import { formatKas, relativeTimeAgo } from "./format.js";
 import { PostMedia } from "./PostMedia.js";
 import { ShareButton } from "./ShareButton.js";
 import type { WalletProps } from "./wallet.js";
@@ -111,7 +111,7 @@ export function PostPage({ address, signIn, signingIn }: WalletProps) {
           <div className="post-meta">
             <MediaTypeBadge mediaType={currentPost.mediaType} />
             <span className="post-date">
-              {relativeTime(currentPost.publishedAt)}
+              {relativeTimeAgo(currentPost.publishedAt)}
             </span>
           </div>
         </div>

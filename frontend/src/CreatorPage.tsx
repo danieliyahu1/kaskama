@@ -26,7 +26,7 @@ import { COPY } from "./copy.js";
 import { errorText, isNetworkRequired } from "./errors.js";
 import { presentError } from "./error-toast.js";
 import { ApiError } from "./api-error.js";
-import { formatKas, relativeTime, shortenAddress } from "./format.js";
+import { formatKas, relativeTimeAgo, shortenAddress } from "./format.js";
 import { ShareButton } from "./ShareButton.js";
 import type { WalletProps } from "./wallet.js";
 import {
@@ -597,7 +597,7 @@ function PostCard({
         )
       }
       caption={post.caption}
-      date={relativeTime(post.publishedAt)}
+      date={relativeTimeAgo(post.publishedAt)}
       to={postPath}
       mediaType={post.mediaType}
       metaAction={<ShareButton address={address} path={postPath} compact />}
