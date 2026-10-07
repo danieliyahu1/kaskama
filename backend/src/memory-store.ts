@@ -198,19 +198,34 @@ export class MemoryStore implements Repositories {
       .map((v) => structuredClone(v));
   }
   async publicCreators(limit: number) {
-    const addresses = new Set([...this.posts.values()].map((p) => p.creator));
-    return [...addresses]
+    const lastPost = new Map<string, number>();
+    for (const post of this.posts.values()) {
+      const current = lastPost.get(post.creator) ?? 0;
+      if (post.publishedAt > current) lastPost.set(post.creator, post.publishedAt);
+    }
+    return [...lastPost.keys()]
       .map((address): Profile | null => {
         const profile = this.profiles.get(address);
         if (profile && !profile.isPublic) return null;
         return profile
           ? structuredClone(profile)
-          : { address, displayName: null, isPublic: true, updatedAt: 0 };
+          : {
+              address,
+              displayName: null,
+              bio: null,
+              avatarKey: null,
+              avatarType: null,
+              isPublic: true,
+              updatedAt: 0,
+            };
       })
       .filter((v): v is Profile => v !== null)
-      .sort((a, b) =>
-        (a.displayName ?? a.address).localeCompare(b.displayName ?? b.address),
-      )
+      .sort((a, b) => {
+        const at = lastPost.get(a.address) ?? 0;
+        const bt = lastPost.get(b.address) ?? 0;
+        if (at !== bt) return bt - at;
+        return (a.displayName ?? a.address).localeCompare(b.displayName ?? b.address);
+      })
       .slice(0, limit);
   }
   async publishPost(v: Post) {
@@ -267,6 +282,17 @@ export class MemoryStore implements Repositories {
       .sort((a, b) => b.publishedAt - a.publishedAt)
       .map((v) => structuredClone(v));
   }
+  async latestPosts(creators: string[]) {
+    const wanted = new Set(creators);
+    const latest = new Map<string, Post>();
+    for (const post of this.posts.values()) {
+      if (!wanted.has(post.creator)) continue;
+      const current = latest.get(post.creator);
+      if (!current || post.publishedAt > current.publishedAt)
+        latest.set(post.creator, post);
+    }
+    return [...latest.values()].map((v) => structuredClone(v));
+  }
   async deletePost(id: string) {
     const v = this.posts.get(id);
     if (!v) return null;
@@ -302,6 +328,16 @@ export class MemoryStore implements Repositories {
     return [...this.creatorCovenantHistory.values()]
       .filter((v) => v.creator === creator)
       .map((v) => structuredClone(v));
+  }
+  async activeCovenants(creators: string[]) {
+    const wanted = new Set(creators);
+    return [...this.creatorCovenants.values()]
+      .filter((v) => wanted.has(v.creator) && v.status !== "CANCELED")
+      .map((v) => ({
+        creator: v.creator,
+        covenantId: v.covenantId,
+        priceSompi: v.priceSompi,
+      }));
   }
   async saveCreatorCovenant(v: CreatorCovenant): Promise<DuplicateOutcome> {
     if (

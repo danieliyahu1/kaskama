@@ -14,6 +14,10 @@ function result(name: string): CreatorSearchResult {
     address: `kaspatest:${name.toLowerCase()}`,
     displayAddress: `kaspatest:${name.toLowerCase()}`,
     displayName: name,
+    bio: null,
+    avatarUrl: null,
+    lastPostedAt: null,
+    membership: { offered: false, priceSompi: null, durationDays: 30 },
   };
 }
 

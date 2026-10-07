@@ -20,6 +20,9 @@ export interface Session {
 export interface Profile {
   address: string;
   displayName: string | null;
+  bio: string | null;
+  avatarKey: string | null;
+  avatarType: MediaType | null;
   isPublic: boolean;
   updatedAt: number;
 }

@@ -2,6 +2,15 @@ export function shortenAddress(address: string): string {
   return `${address.slice(0, 16)}...${address.slice(-8)}`;
 }
 
+/**
+ * A quiet, network-prefix-free form of a wallet address for a card: enough to
+ * tell two identically-named creators apart, short enough to never wrap.
+ */
+export function compactAddress(address: string): string {
+  const body = address.replace(/^[^:]*:/, "");
+  return body.length <= 12 ? body : `${body.slice(0, 6)}…${body.slice(-4)}`;
+}
+
 export function formatKas(sompi: string): string {
   const padded = BigInt(sompi).toString().padStart(9, "0");
   return `${padded.slice(0, -8)}.${padded.slice(-8)}`.replace(/\.?0+$/, "");

@@ -194,6 +194,8 @@ export function openApiDocument(origin: string): Record<string, unknown> {
             address: { type: "string" },
             displayAddress: { type: "string" },
             displayName: { type: ["string", "null"] },
+            bio: { type: ["string", "null"] },
+            avatarUrl: { type: ["string", "null"] },
             isPublic: { type: "boolean" },
           },
         },
@@ -211,6 +213,17 @@ export function openApiDocument(origin: string): Record<string, unknown> {
             address: { type: "string" },
             displayAddress: { type: "string" },
             displayName: { type: ["string", "null"] },
+            bio: { type: ["string", "null"] },
+            avatarUrl: { type: ["string", "null"] },
+            lastPostedAt: { type: ["string", "null"] },
+            membership: {
+              type: "object",
+              properties: {
+                offered: { type: "boolean" },
+                priceSompi: { type: ["string", "null"] },
+                durationDays: { type: "integer" },
+              },
+            },
           },
         },
         Post: {
@@ -235,6 +248,8 @@ export function openApiDocument(origin: string): Record<string, unknown> {
             address: { type: "string" },
             displayAddress: { type: "string" },
             displayName: { type: ["string", "null"] },
+            bio: { type: ["string", "null"] },
+            avatarUrl: { type: ["string", "null"] },
             isPublic: { type: "boolean" },
             isOwner: { type: "boolean" },
             membership: {
@@ -384,6 +399,10 @@ export function openApiDocument(origin: string): Record<string, unknown> {
               type: "object",
               properties: {
                 displayName: { type: "string" },
+                bio: {
+                  type: "string",
+                  description: "The creator's bio, up to 120 characters.",
+                },
                 isPublic: { type: "boolean" },
               },
             }),
@@ -393,6 +412,50 @@ export function openApiDocument(origin: string): Record<string, unknown> {
             ...errorResponses,
           },
         },
+      },
+      "/api/profile/avatar": {
+        post: {
+          summary: "Set own avatar (multipart: avatar).",
+          description:
+            "Uploads a single image (JPEG, PNG or WebP, up to 5 MB). It replaces any previous avatar.",
+          requestBody: {
+            required: true,
+            content: {
+              "multipart/form-data": {
+                schema: {
+                  type: "object",
+                  required: ["avatar"],
+                  properties: {
+                    avatar: {
+                      type: "string",
+                      format: "binary",
+                      description: "The avatar image.",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: { description: "Success.", content: json(ref("Profile")) },
+            ...errorResponses,
+          },
+        },
+        delete: {
+          summary: "Remove own avatar.",
+          responses: {
+            200: { description: "Success.", content: json(ref("Profile")) },
+            ...errorResponses,
+          },
+        },
+      },
+      "/api/creators/{address}/avatar": {
+        get: get("A creator's avatar image, if any.", {
+          security: false,
+          parameters: [pathParam("address", "Creator wallet address.")],
+          response: { status: "200", schema: { type: "string", format: "binary" } },
+          binary: true,
+        }),
       },
       "/api/creators/public": {
         get: get("Public creators.", {

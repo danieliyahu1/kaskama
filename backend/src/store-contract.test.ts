@@ -62,12 +62,18 @@ describe.each([
     const visible = {
       address: creator,
       displayName: "Visible Creator",
+      bio: "Ambient music for deep work.",
+      avatarKey: "avatars/kaspatest:creator/abc",
+      avatarType: "image/png" as const,
       isPublic: true,
       updatedAt: now,
     };
     const hidden = {
       address: "kaspatest:hidden",
       displayName: "Hidden Creator",
+      bio: null,
+      avatarKey: null,
+      avatarType: null,
       isPublic: false,
       updatedAt: now,
     };
@@ -92,6 +98,9 @@ describe.each([
     await store.saveProfile({
       address: privateWithPosts,
       displayName: "hidden",
+      bio: null,
+      avatarKey: null,
+      avatarType: null,
       isPublic: false,
       updatedAt: now,
     });
@@ -99,19 +108,53 @@ describe.each([
     await store.saveProfile({
       address: creator,
       displayName: "named",
+      bio: null,
+      avatarKey: null,
+      avatarType: null,
       isPublic: true,
       updatedAt: now,
     });
     await store.saveProfile({
       address: publicWithoutPosts,
       displayName: "empty",
+      bio: null,
+      avatarKey: null,
+      avatarType: null,
       isPublic: true,
       updatedAt: now,
     });
 
     expect(await store.publicCreators(10)).toEqual([
-      { address: anonymous, displayName: null, isPublic: true, updatedAt: 0 },
-      { address: creator, displayName: "named", isPublic: true, updatedAt: now },
+      {
+        address: anonymous,
+        displayName: null,
+        bio: null,
+        avatarKey: null,
+        avatarType: null,
+        isPublic: true,
+        updatedAt: 0,
+      },
+      {
+        address: creator,
+        displayName: "named",
+        bio: null,
+        avatarKey: null,
+        avatarType: null,
+        isPublic: true,
+        updatedAt: now,
+      },
+    ]);
+  });
+
+  it("orders the directory by the most recent post", async () => {
+    const stale = "kaspatest:stale";
+    const fresh = "kaspatest:fresh";
+    await store.publishPost(post("stale-post", stale, now));
+    await store.publishPost(post("fresh-post", fresh, now + 100));
+
+    expect((await store.publicCreators(10)).map((p) => p.address)).toEqual([
+      fresh,
+      stale,
     ]);
   });
 
@@ -135,6 +178,27 @@ describe.each([
       shared,
     );
     expect(await store.creatorPosts(otherCreator)).toEqual([shared]);
+  });
+
+  it("returns the newest post per creator for a set of creators", async () => {
+    const other = "kaspatest:other";
+    await store.publishPost(post("a-old", creator, now));
+    await store.publishPost(post("a-new", creator, now + 10));
+    await store.publishPost(post("b-only", other, now + 5));
+
+    const latest = await store.latestPosts!([
+      creator,
+      other,
+      "kaspatest:missing",
+    ]);
+    expect(latest).toHaveLength(2);
+    expect(latest).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "a-new" }),
+        expect.objectContaining({ id: "b-only" }),
+      ]),
+    );
+    expect(await store.latestPosts!([])).toEqual([]);
   });
 
   it("enforces purchase uniqueness by post, buyer, and transaction", async () => {
@@ -170,6 +234,37 @@ describe.each([
     expect(await store.createMembershipPurchase(membership)).toBe("DUPLICATE");
     expect(await store.membershipReceipts(buyer, creator)).toEqual([membership]);
     expect(await store.membershipReceipts(buyer, "other-creator")).toEqual([]);
+  });
+
+  it("returns active offers for a set of creators in one call", async () => {
+    const other = "kaspatest:other";
+    await store.saveCreatorCovenant({
+      creator,
+      covenantId: "covenant-1",
+      priceSompi: "1000000000",
+    });
+    await store.saveCreatorCovenant({
+      creator: other,
+      covenantId: "covenant-2",
+      priceSompi: "2000000000",
+    });
+
+    const offers = await store.activeCovenants!([
+      creator,
+      other,
+      "kaspatest:missing",
+    ]);
+    expect(offers).toEqual(
+      expect.arrayContaining([
+        { creator, covenantId: "covenant-1", priceSompi: "1000000000" },
+        { creator: other, covenantId: "covenant-2", priceSompi: "2000000000" },
+      ]),
+    );
+    expect(offers).toHaveLength(2);
+    expect(await store.activeCovenants!([creator])).toEqual([
+      { creator, covenantId: "covenant-1", priceSompi: "1000000000" },
+    ]);
+    expect(await store.activeCovenants!([])).toEqual([]);
   });
 
   it("deletes a post together with its purchases", async () => {

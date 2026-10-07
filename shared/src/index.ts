@@ -90,6 +90,8 @@ export interface CreatorResponse {
   address: string;
   displayAddress: string;
   displayName: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
   isPublic: boolean;
   isOwner: boolean;
   membership: {
@@ -103,16 +105,30 @@ export interface CreatorResponse {
   posts: PostResponse[];
 }
 
+/** The subscription a creator offers, as listed in the directory. */
+export interface MembershipSummary {
+  offered: boolean;
+  priceSompi: string | null;
+  durationDays: number;
+}
+
 export interface CreatorSearchResult {
   address: string;
   displayAddress: string;
   displayName: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  /** When the creator last posted, shown as a sign they are still around. */
+  lastPostedAt: string | null;
+  membership: MembershipSummary;
 }
 
 export interface ProfileResponse {
   address: string;
   displayAddress: string;
   displayName: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
   isPublic: boolean;
 }
 
@@ -158,6 +174,20 @@ export function validateDisplayName(value: string): string | null {
   const name = normalizeDisplayName(value);
   if (Array.from(name).length > 40) return "Names can be up to 40 characters.";
   return name.length === 0 ? null : name;
+}
+
+/** The longest a creator's bio may be. */
+export const MAX_BIO_LENGTH = 120;
+
+export function normalizeBio(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+export function validateBio(value: string): string | null {
+  const text = normalizeBio(value);
+  if (Array.from(text).length > MAX_BIO_LENGTH)
+    return `A bio can be up to ${MAX_BIO_LENGTH} characters.`;
+  return text.length === 0 ? null : text;
 }
 
 export function isKaspaTestnetAddress(value: string): boolean {

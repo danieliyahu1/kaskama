@@ -121,6 +121,10 @@ describe("HomePage", () => {
         address: creatorAddress,
         displayAddress: "kaspatest:...",
         displayName: "Maya",
+        bio: null,
+        avatarUrl: null,
+        lastPostedAt: null,
+        membership: { offered: true, priceSompi: "2500000000", durationDays: 30 },
       },
     ]);
     const user = userEvent.setup();

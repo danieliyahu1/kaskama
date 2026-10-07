@@ -76,6 +76,8 @@ function mockApi(setup: { session?: { address: string }; profile?: unknown } = {
           address: signedInAddress,
           displayAddress: "kaspatest:qqq...qqq",
           displayName: null,
+          bio: null,
+          avatarUrl: null,
           isPublic: false,
         }
       );

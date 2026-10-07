@@ -108,6 +108,9 @@ describe("profile and discovery use cases", () => {
       normalizeDisplayName: (value) => value.trim().replace(/\s+/g, " "),
       validateDisplayName: (value) =>
         [...value].length > 40 ? "Names can be up to 40 characters." : null,
+      normalizeBio: (value) => value.trim().replace(/\s+/g, " "),
+      validateBio: (value) =>
+        [...value].length > 120 ? "A bio can be up to 120 characters." : null,
     });
 
   it("rejects invalid names without persisting and preserves omitted fields", async () => {
@@ -116,6 +119,9 @@ describe("profile and discovery use cases", () => {
     await store.saveProfile({
       address,
       displayName: "Maya",
+      bio: null,
+      avatarKey: null,
+      avatarType: null,
       isPublic: true,
       updatedAt: 1,
     });
@@ -135,7 +141,15 @@ describe("profile and discovery use cases", () => {
 
     expect(await useCases.update({ address, isPublic: false, now: 3 })).toEqual({
       kind: "UPDATED",
-      profile: { address, displayName: "Maya", isPublic: false, updatedAt: 3 },
+      profile: {
+        address,
+        displayName: "Maya",
+        bio: null,
+        avatarKey: null,
+        avatarType: null,
+        isPublic: false,
+        updatedAt: 3,
+      },
     });
   });
 
@@ -143,6 +157,9 @@ describe("profile and discovery use cases", () => {
     const profile: Profile = {
       address,
       displayName: "Maya",
+      bio: null,
+      avatarKey: null,
+      avatarType: null,
       isPublic: true,
       updatedAt: 1,
     };

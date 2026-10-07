@@ -21,6 +21,8 @@ export function creator(
     address: creatorAddress,
     displayAddress: creatorAddress,
     displayName: "Creator",
+    bio: null,
+    avatarUrl: null,
     isPublic: false,
     isOwner,
     membership: { offered, active },

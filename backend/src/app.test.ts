@@ -272,12 +272,18 @@ describe("profile visibility", () => {
     await store.saveProfile({
       address,
       displayName: "Visible",
+      bio: null,
+      avatarKey: null,
+      avatarType: null,
       isPublic: true,
       updatedAt: Date.now(),
     });
     await store.saveProfile({
       address: otherAddress,
       displayName: "Hidden",
+      bio: null,
+      avatarKey: null,
+      avatarType: null,
       isPublic: false,
       updatedAt: Date.now(),
     });
@@ -290,11 +296,56 @@ describe("profile visibility", () => {
     ]);
   });
 
+  it("lists each creator's subscription price in the directory", async () => {
+    const { app, store } = await profileApp();
+    await store.publishPost({ ...post("offer-post"), creator: address });
+    await store.saveCreatorCovenant({
+      creator: address,
+      covenantId: "covenant-1",
+      priceSompi: "2500000000",
+    });
+
+    const response = await request(app).get("/api/creators/public");
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([
+      expect.objectContaining({
+        address,
+        membership: { offered: true, priceSompi: "2500000000", durationDays: 30 },
+      }),
+    ]);
+  });
+
+  it("shows when each creator last posted in the directory", async () => {
+    const { app, store } = await profileApp();
+    await store.publishPost({
+      ...post("older-post"),
+      creator: address,
+      publishedAt: 1000,
+    });
+    await store.publishPost({
+      ...post("newer-post"),
+      creator: address,
+      publishedAt: 2000,
+    });
+
+    const response = await request(app).get("/api/creators/public");
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([
+      expect.objectContaining({
+        address,
+        lastPostedAt: new Date(2000).toISOString(),
+      }),
+    ]);
+  });
+
   it("excludes public profiles that have no posts", async () => {
     const { app, store } = await profileApp();
     await store.saveProfile({
       address,
       displayName: "Empty Creator",
+      bio: null,
+      avatarKey: null,
+      avatarType: null,
       isPublic: true,
       updatedAt: Date.now(),
     });
@@ -311,6 +362,9 @@ describe("profile visibility", () => {
     await store.saveProfile({
       address,
       displayName: "Hidden",
+      bio: null,
+      avatarKey: null,
+      avatarType: null,
       isPublic: false,
       updatedAt: Date.now(),
     });
@@ -367,6 +421,9 @@ describe("profile visibility", () => {
     await store.saveProfile({
       address,
       displayName: "Hidden",
+      bio: null,
+      avatarKey: null,
+      avatarType: null,
       isPublic: false,
       updatedAt: Date.now(),
     });
@@ -869,6 +926,111 @@ describe("media stream diagnostics", () => {
         path: "/api/posts/hang-post/media",
       }),
     });
+  });
+});
+
+describe("profile bio and avatar", () => {
+  const creator = `kaspatest:${"d".repeat(60)}`;
+  const avatar = Buffer.from("fake-png-bytes");
+
+  async function creatorApp() {
+    const store = new MemoryStore();
+    await store.createSession({
+      id: "avatar-session",
+      address: creator,
+      expiresAt: Date.now() + 60_000,
+    });
+    const storage = new TestStorage();
+    const { app } = testApp(store, undefined, undefined, storage, async () => ({
+      digest: "avatar-digest",
+      mediaType: "image/png",
+      size: avatar.byteLength,
+    }));
+    return { store, storage, app };
+  }
+
+  it("stores a normalized bio", async () => {
+    const { app, store } = await creatorApp();
+    const response = await request(app)
+      .put("/api/profile")
+      .set("Cookie", "kaskama_session=avatar-session")
+      .send({ bio: "  Ambient   music for deep work  " });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      bio: "Ambient music for deep work",
+    });
+    expect((await store.getProfile(creator))?.bio).toBe(
+      "Ambient music for deep work",
+    );
+  });
+
+  it("rejects a bio longer than the limit", async () => {
+    const { app } = await creatorApp();
+    const response = await request(app)
+      .put("/api/profile")
+      .set("Cookie", "kaskama_session=avatar-session")
+      .send({ bio: "x".repeat(121) });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("INVALID_BIO");
+  });
+
+  it("uploads, serves, lists and removes an avatar", async () => {
+    const { app, store } = await creatorApp();
+    await store.publishPost({ ...post("avatar-post"), creator });
+
+    const uploaded = await request(app)
+      .post("/api/profile/avatar")
+      .set("Cookie", "kaskama_session=avatar-session")
+      .attach("avatar", avatar, { filename: "me.png", contentType: "image/png" });
+
+    expect(uploaded.status).toBe(200);
+    const url = `/api/creators/${encodeURIComponent(creator)}/avatar`;
+    expect(uploaded.body.avatarUrl).toBe(url);
+
+    const served = await request(app).get(url);
+    expect(served.status).toBe(200);
+    expect(served.headers["content-type"]).toContain("image/png");
+
+    await request(app)
+      .put("/api/profile")
+      .set("Cookie", "kaskama_session=avatar-session")
+      .send({ bio: "Field recordings." });
+
+    const directory = await request(app).get("/api/creators/public");
+    expect(directory.body).toEqual([
+      expect.objectContaining({
+        address: creator,
+        bio: "Field recordings.",
+        avatarUrl: url,
+      }),
+    ]);
+
+    const removed = await request(app)
+      .delete("/api/profile/avatar")
+      .set("Cookie", "kaskama_session=avatar-session");
+    expect(removed.status).toBe(200);
+    expect(removed.body.avatarUrl).toBeNull();
+
+    expect((await request(app).get(url)).status).toBe(404);
+  });
+
+  it("saves a bio without clearing an existing avatar", async () => {
+    const { app } = await creatorApp();
+    await request(app)
+      .post("/api/profile/avatar")
+      .set("Cookie", "kaskama_session=avatar-session")
+      .attach("avatar", avatar, { filename: "me.png", contentType: "image/png" });
+
+    const updated = await request(app)
+      .put("/api/profile")
+      .set("Cookie", "kaskama_session=avatar-session")
+      .send({ bio: "Field recordings." });
+
+    expect(updated.status).toBe(200);
+    expect(updated.body.bio).toBe("Field recordings.");
+    expect(updated.body.avatarUrl).not.toBeNull();
   });
 });
 

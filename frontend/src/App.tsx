@@ -24,6 +24,7 @@ import { LegalPage } from "./LegalPage.js";
 import { SocialLinks } from "./SocialLinks.js";
 import { GlobalSearch } from "./GlobalSearch.js";
 import { AccountMenu } from "./AccountMenu.js";
+import { uploadAvatar, removeAvatar } from "./upload.js";
 import { HomeLink, Message } from "./Message.js";
 import { Spinner } from "./Spinner.js";
 import { errorText, isNetworkRequired } from "./errors.js";
@@ -40,7 +41,9 @@ export function App() {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("");
+  const [profileBio, setProfileBio] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
 
   const { toast, showToast, dismissToast } = useToast();
   const signedInAddress = useRef<string | null>(null);
@@ -75,6 +78,7 @@ export function App() {
     if (!address) {
       setProfile(null);
       setProfileName("");
+      setProfileBio("");
       setLoadingProfile(false);
       setProfileError(null);
       return;
@@ -87,6 +91,7 @@ export function App() {
         if (!active) return;
         setProfile(value);
         setProfileName(value.displayName ?? "");
+        setProfileBio(value.bio ?? "");
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -190,19 +195,51 @@ export function App() {
     reloadPage();
   }
 
-  async function saveName() {
+  async function saveProfile() {
     setSavingName(true);
     try {
       const value = await api<ProfileResponse>("/api/profile", {
         method: "PUT",
-        body: JSON.stringify({ displayName: profileName }),
+        body: JSON.stringify({
+          displayName: profileName,
+          bio: profileBio,
+        }),
       });
       setProfile(value);
       setProfileName(value.displayName ?? "");
+      setProfileBio(value.bio ?? "");
     } catch (error) {
-      showToast(errorText(error, "Name could not be saved."), "error");
+      showToast(errorText(error, "Profile could not be saved."), "error");
     } finally {
       setSavingName(false);
+    }
+  }
+
+  async function uploadAvatarPhoto(file: File) {
+    setAvatarBusy(true);
+    dismissToast();
+    try {
+      const value = await uploadAvatar(file);
+      setProfile(value);
+      showToast("Photo updated.", "success");
+    } catch (error) {
+      showToast(errorText(error, "Photo could not be uploaded."), "error");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function removeAvatarPhoto() {
+    setAvatarBusy(true);
+    dismissToast();
+    try {
+      const value = await removeAvatar();
+      setProfile(value);
+      showToast("Photo removed.", "success");
+    } catch (error) {
+      showToast(errorText(error, "Photo could not be removed."), "error");
+    } finally {
+      setAvatarBusy(false);
     }
   }
 
@@ -213,6 +250,7 @@ export function App() {
     });
     setProfile(value);
     setProfileName(value.displayName ?? "");
+    setProfileBio(value.bio ?? "");
     return value;
   }
 
@@ -236,12 +274,18 @@ export function App() {
               <AccountMenu
                 address={address}
                 displayName={profile?.displayName ?? null}
+                avatarUrl={profile?.avatarUrl ?? null}
                 name={profileName}
+                bio={profileBio}
                 loading={loadingProfile}
                 error={profileError}
                 saving={savingName}
+                avatarBusy={avatarBusy}
                 onNameChange={setProfileName}
-                onSaveName={() => void saveName()}
+                onBioChange={setProfileBio}
+                onSave={() => void saveProfile()}
+                onAvatarFile={(file) => void uploadAvatarPhoto(file)}
+                onAvatarRemove={() => void removeAvatarPhoto()}
                 onSignOut={() => void signOut()}
               />
             ) : (

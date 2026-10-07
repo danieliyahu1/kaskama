@@ -101,6 +101,8 @@ export interface PostRepository {
   getPost(id: string): Promise<Post | null>;
   findPostByMedia(creator: string, digest: string): Promise<Post | null>;
   creatorPosts(address: string): Promise<Post[]>;
+  /** The newest post for each of the given creators, for directory listings. */
+  latestPosts?(creators: string[]): Promise<Post[]>;
   deletePost(id: string): Promise<Post | null>;
 }
 
@@ -117,6 +119,8 @@ export interface PurchaseRepository {
 export interface CovenantRepository {
   getCreatorCovenant(creator: string): Promise<CreatorCovenant | null>;
   listCreatorCovenants?(creator: string): Promise<CreatorCovenant[]>;
+  /** Active offers for many creators at once, for directory listings. */
+  activeCovenants?(creators: string[]): Promise<CreatorCovenant[]>;
   saveCreatorCovenant(value: CreatorCovenant): Promise<DuplicateOutcome>;
   finalizeOffer(
     preparedMembershipId: string,

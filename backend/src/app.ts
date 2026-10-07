@@ -14,8 +14,10 @@ import {
   DEFAULT_NETWORK,
   isFreePost,
   LLMS_TXT_PATH,
+  mediaCategory,
   membershipPriceProblem,
   networkDefinition,
+  normalizeBio,
   normalizeDisplayName,
   normalizePostText,
   OPENAPI_PATH,
@@ -23,6 +25,7 @@ import {
   parsePostPrice,
   PUBLIC_PAGES,
   RETRY_AFTER_REFRESH,
+  validateBio,
   validateDisplayName,
   type MembershipAddressVerificationResponse,
   type NetworkConfigResponse,
@@ -80,6 +83,10 @@ import {
   readPublishMedia,
   type PublishMedia,
 } from "./adapters/http/publish-upload.js";
+import {
+  InvalidAvatarUploadError,
+  readAvatarUpload,
+} from "./adapters/http/avatar-upload.js";
 import { createPublishPostUseCase } from "./application/publication-use-cases.js";
 import { createDeletePostUseCase } from "./application/delete-post.js";
 import { MembershipAccess } from "./application/membership-access.js";
@@ -88,6 +95,8 @@ import { discardTempDir } from "./temp-files.js";
 
 const sessionCookie = "kaskama_session";
 const RESPONSE_STALL_MS = 10_000;
+/** Avatars are small by nature: a face, not a poster. */
+const AVATAR_MAX_BYTES = 5_000_000;
 
 export interface AppDependencies {
   store: Repositories;
@@ -149,6 +158,8 @@ export function createApp(d: AppDependencies) {
     profiles: d.store,
     normalizeDisplayName,
     validateDisplayName,
+    normalizeBio,
+    validateBio,
   });
   const discovery = createDiscoveryUseCases({ profiles: d.store });
   const membershipAccess = new MembershipAccess(d.store, d.store, d.membershipVerifier);
@@ -491,45 +502,104 @@ export function createApp(d: AppDependencies) {
       const b = z
         .object({
           displayName: z.string().max(80).optional(),
+          bio: z.string().max(200).optional(),
           isPublic: z.boolean().optional(),
         })
         .refine(
-          (value) => value.displayName !== undefined || value.isPublic !== undefined,
+          (value) =>
+            value.displayName !== undefined ||
+            value.bio !== undefined ||
+            value.isPublic !== undefined,
         )
         .parse(req.body);
       const result = await profiles.update({
         address: req.walletSession!.address,
         ...(b.displayName !== undefined ? { displayName: b.displayName } : {}),
+        ...(b.bio !== undefined ? { bio: b.bio } : {}),
         ...(b.isPublic !== undefined ? { isPublic: b.isPublic } : {}),
         now: now(),
       });
       if (result.kind === "INVALID_DISPLAY_NAME")
         return apiError(res, 400, "INVALID_DISPLAY_NAME");
+      if (result.kind === "INVALID_BIO") return apiError(res, 400, "INVALID_BIO");
       res.json(profileResponse(result.profile, result.profile.address));
+    }),
+  );
+  app.post(
+    "/api/profile/avatar",
+    optional,
+    required,
+    asyncHandler(async (req, res) => {
+      const address = req.walletSession!.address;
+      const dir = await mkdtemp(join(tmpdir(), "kaskama-avatar-")),
+        source = join(dir, "avatar");
+      try {
+        let upload: { bytesWritten: number };
+        try {
+          upload = await readAvatarUpload(req, {
+            filePath: source,
+            maxBytes: AVATAR_MAX_BYTES,
+          });
+        } catch (e) {
+          if (e instanceof InvalidAvatarUploadError)
+            return apiError(res, 400, "INVALID_AVATAR");
+          throw e;
+        }
+        if (!upload.bytesWritten) return apiError(res, 400, "INVALID_AVATAR");
+        const verified = await (d.verifyMedia ?? verifyMediaFile)(source);
+        if (mediaCategory(verified.mediaType) !== "image")
+          throw new MediaValidationError("UNSUPPORTED_MEDIA");
+        const previous = await profiles.get(address);
+        const key = `avatars/${address}/${verified.digest}`;
+        await d.storage.putFile(key, source, verified.mediaType);
+        const result = await profiles.update({
+          address,
+          avatar: { key, type: verified.mediaType },
+          now: now(),
+        });
+        if (result.kind !== "UPDATED") return apiError(res, 400, "INVALID_AVATAR");
+        if (previous?.avatarKey && previous.avatarKey !== key)
+          await d.storage.delete(previous.avatarKey).catch(() => undefined);
+        res.json(profileResponse(result.profile, address));
+      } catch (e) {
+        if (e instanceof MediaValidationError)
+          return apiError(res, 422, e.category);
+        throw e;
+      } finally {
+        await discardTempDir(dir, logger);
+      }
+    }),
+  );
+  app.delete(
+    "/api/profile/avatar",
+    optional,
+    required,
+    asyncHandler(async (req, res) => {
+      const address = req.walletSession!.address;
+      const previous = await profiles.get(address);
+      const result = await profiles.update({
+        address,
+        avatar: { key: null, type: null },
+        now: now(),
+      });
+      if (result.kind !== "UPDATED") return apiError(res, 400, "INVALID_AVATAR");
+      if (previous?.avatarKey)
+        await d.storage.delete(previous.avatarKey).catch(() => undefined);
+      res.json(profileResponse(result.profile, address));
     }),
   );
   app.get(
     "/api/creators/search",
     asyncHandler(async (req, res) => {
       const q = z.string().trim().min(1).max(40).parse(req.query.q);
-      res.json(
-        (await discovery.search(q, 20)).map((p) => ({
-          address: p.address,
-          displayAddress: shorten(p.address),
-          displayName: p.displayName,
-        })),
-      );
+      res.json(await directoryResults(d.store, await discovery.search(q, 20)));
     }),
   );
   app.get(
     "/api/creators/public",
     asyncHandler(async (_, res) =>
       res.json(
-        (await discovery.publicCreators(100)).map((p) => ({
-          address: p.address,
-          displayAddress: shorten(p.address),
-          displayName: p.displayName,
-        })),
+        await directoryResults(d.store, await discovery.publicCreators(100)),
       ),
     ),
   );
@@ -630,6 +700,8 @@ export function createApp(d: AppDependencies) {
         address,
         displayAddress: shorten(address),
         displayName: profile?.displayName ?? null,
+        bio: profile?.bio ?? null,
+        avatarUrl: avatarUrl(address, profile?.avatarKey ?? null),
         isPublic: profile?.isPublic ?? true,
         isOwner,
         membership: {
@@ -643,6 +715,20 @@ export function createApp(d: AppDependencies) {
         },
         posts: posts.map((p) => postResponse(p, unlocked.has(p.id))),
       });
+    }),
+  );
+  app.get(
+    "/api/creators/:address/avatar",
+    asyncHandler(async (req, res) => {
+      const address = param(req, "address");
+      if (!addressPattern.test(address)) return apiError(res, 400, "INVALID_ADDRESS");
+      const profile = await profiles.get(address);
+      if (!profile?.avatarKey || !profile.avatarType)
+        return apiError(res, 404, "AVATAR_NOT_FOUND");
+      const object = await d.storage.readRange(profile.avatarKey);
+      res.setHeader("Content-Type", profile.avatarType);
+      res.setHeader("Cache-Control", "public, max-age=300");
+      res.send(Buffer.from(object.bytes));
     }),
   );
   app.get(
@@ -1604,11 +1690,67 @@ function profileResponse(p: Profile | null, address: string) {
     address,
     displayAddress: shorten(address),
     displayName: p?.displayName ?? null,
+    bio: p?.bio ?? null,
+    avatarUrl: avatarUrl(address, p?.avatarKey ?? null),
     isPublic: p?.isPublic ?? true,
   };
 }
 function shorten(a: string) {
   return `${a.slice(0, 16)}...${a.slice(-8)}`;
+}
+/**
+ * The stable, public URL for a creator's avatar. The storage key never leaves
+ * the server: the URL is derived from the address and only exists when the
+ * profile actually carries an avatar.
+ */
+function avatarUrl(address: string, avatarKey: string | null): string | null {
+  return avatarKey ? `/api/creators/${encodeURIComponent(address)}/avatar` : null;
+}
+/**
+ * The directory entries for a set of profiles: identity plus the subscription
+ * each creator currently offers. The offer price is read in one batch when the
+ * store supports it, so a listing never becomes a query per creator.
+ */
+async function directoryResults(store: Repositories, creators: Profile[]) {
+  const addresses = creators.map((p) => p.address);
+  const [prices, latest] = await Promise.all([
+    directoryPrices(store, addresses),
+    latestPostsByCreator(store, addresses),
+  ]);
+  return creators.map((p) => {
+    const post = latest.get(p.address);
+    return {
+      address: p.address,
+      displayAddress: shorten(p.address),
+      displayName: p.displayName,
+      bio: p.bio,
+      avatarUrl: avatarUrl(p.address, p.avatarKey),
+      lastPostedAt: post ? new Date(post.publishedAt).toISOString() : null,
+      membership: {
+        offered: prices.has(p.address),
+        priceSompi: prices.get(p.address) ?? null,
+        durationDays: 30,
+      },
+    };
+  });
+}
+async function directoryPrices(store: Repositories, creators: string[]) {
+  if (!creators.length) return new Map<string, string>();
+  const offers = store.activeCovenants
+    ? await store.activeCovenants(creators)
+    : (await Promise.all(creators.map((a) => store.getCreatorCovenant(a)))).filter(
+        (value): value is CreatorCovenant => value !== null,
+      );
+  return new Map(offers.map((offer) => [offer.creator, offer.priceSompi]));
+}
+async function latestPostsByCreator(store: Repositories, creators: string[]) {
+  if (!creators.length) return new Map<string, Post>();
+  const posts = store.latestPosts
+    ? await store.latestPosts(creators)
+    : (await Promise.all(creators.map((a) => store.creatorPosts(a))))
+        .map((list) => list[0])
+        .filter((post): post is Post => post !== undefined);
+  return new Map(posts.map((post) => [post.creator, post]));
 }
 /**
  * A browser attaches the requesting origin to every cross-site request; a

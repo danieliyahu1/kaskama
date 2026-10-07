@@ -124,12 +124,16 @@ export function createSessionUseCases(dependencies: {
 export interface ProfileUpdateInput {
   address: string;
   displayName?: string;
+  bio?: string;
   isPublic?: boolean;
+  avatar?: { key: string | null; type: Profile["avatarType"] };
   now: number;
 }
 
 export type ProfileUpdateResult =
-  { kind: "INVALID_DISPLAY_NAME" } | { kind: "UPDATED"; profile: Profile };
+  | { kind: "INVALID_DISPLAY_NAME" }
+  | { kind: "INVALID_BIO" }
+  | { kind: "UPDATED"; profile: Profile };
 
 export interface ProfileUseCases {
   get(address: string): Promise<Profile | null>;
@@ -140,6 +144,8 @@ export function createProfileUseCases(dependencies: {
   profiles: ProfileRepository;
   normalizeDisplayName: (value: string) => string;
   validateDisplayName: (value: string) => string | null;
+  normalizeBio: (value: string) => string;
+  validateBio: (value: string) => string | null;
 }): ProfileUseCases {
   return {
     get(address) {
@@ -160,9 +166,26 @@ export function createProfileUseCases(dependencies: {
       ) {
         return { kind: "INVALID_DISPLAY_NAME" };
       }
+      const bio =
+        input.bio === undefined
+          ? (existing?.bio ?? null)
+          : dependencies.normalizeBio(input.bio);
+      const validBio = dependencies.validateBio(bio ?? "");
+      if (input.bio !== undefined && validBio !== null && validBio !== bio) {
+        return { kind: "INVALID_BIO" };
+      }
       const profile: Profile = {
         address: input.address,
         displayName: displayName === "" ? null : displayName,
+        bio: bio === "" ? null : bio,
+        avatarKey:
+          input.avatar === undefined
+            ? (existing?.avatarKey ?? null)
+            : input.avatar.key,
+        avatarType:
+          input.avatar === undefined
+            ? (existing?.avatarType ?? null)
+            : input.avatar.type,
         isPublic: input.isPublic ?? existing?.isPublic ?? true,
         updatedAt: input.now,
       };

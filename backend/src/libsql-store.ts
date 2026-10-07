@@ -384,8 +384,16 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
   }
   async saveProfile(v: Profile) {
     await this.execute({
-      sql: `INSERT INTO profiles (address,display_name,is_public,updated_at) VALUES (?,?,?,?) ON CONFLICT(address) DO UPDATE SET display_name=excluded.display_name,is_public=excluded.is_public,updated_at=excluded.updated_at`,
-      args: [v.address, v.displayName, v.isPublic ? 1 : 0, v.updatedAt],
+      sql: `INSERT INTO profiles (address,display_name,bio,avatar_key,avatar_type,is_public,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(address) DO UPDATE SET display_name=excluded.display_name,bio=excluded.bio,avatar_key=excluded.avatar_key,avatar_type=excluded.avatar_type,is_public=excluded.is_public,updated_at=excluded.updated_at`,
+      args: [
+        v.address,
+        v.displayName,
+        v.bio,
+        v.avatarKey,
+        v.avatarType,
+        v.isPublic ? 1 : 0,
+        v.updatedAt,
+      ],
     });
   }
   async searchCreators(name: string, limit: number) {
@@ -397,7 +405,7 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
   }
   async publicCreators(limit: number) {
     const r = await this.execute({
-      sql: `SELECT c.address AS address, pr.display_name AS display_name, COALESCE(pr.updated_at, 0) AS updated_at, 1 AS is_public FROM (SELECT DISTINCT creator AS address FROM posts) c LEFT JOIN profiles pr ON pr.address=c.address WHERE COALESCE(pr.is_public, 1)=1 ORDER BY COALESCE(pr.display_name,c.address), c.address LIMIT ?`,
+      sql: `SELECT c.address AS address, pr.display_name AS display_name, pr.bio AS bio, pr.avatar_key AS avatar_key, pr.avatar_type AS avatar_type, COALESCE(pr.updated_at, 0) AS updated_at, 1 AS is_public FROM (SELECT creator AS address, MAX(published_at) AS last_post FROM posts GROUP BY creator) c LEFT JOIN profiles pr ON pr.address=c.address WHERE COALESCE(pr.is_public, 1)=1 ORDER BY c.last_post DESC, COALESCE(pr.display_name, c.address), c.address LIMIT ?`,
       args: [limit],
     });
     return r.rows.map(profileFromRow);
@@ -515,6 +523,15 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
     });
     return r.rows.map(postFromRow);
   }
+  async latestPosts(creators: string[]) {
+    if (!creators.length) return [];
+    const placeholders = creators.map(() => "?").join(",");
+    const r = await this.execute({
+      sql: `SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY creator ORDER BY published_at DESC) AS rn FROM posts WHERE creator IN (${placeholders})) WHERE rn=1`,
+      args: creators,
+    });
+    return r.rows.map(postFromRow);
+  }
   async deletePost(id: string) {
     const transaction = await this.client.transaction("write");
     try {
@@ -576,6 +593,15 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
     const r = await this.execute({
       sql: `SELECT * FROM creator_covenant_history WHERE creator=?`,
       args: [creator],
+    });
+    return r.rows.map(creatorCovenantFromRow);
+  }
+  async activeCovenants(creators: string[]) {
+    if (!creators.length) return [];
+    const placeholders = creators.map(() => "?").join(",");
+    const r = await this.execute({
+      sql: `SELECT * FROM creator_covenants WHERE status<>'CANCELED' AND creator IN (${placeholders})`,
+      args: creators,
     });
     return r.rows.map(creatorCovenantFromRow);
   }
@@ -788,6 +814,10 @@ const challengeFromRow = (r: Record<string, unknown>): Challenge => ({
 const profileFromRow = (r: Record<string, unknown>): Profile => ({
   address: text(r.address),
   displayName: r.display_name === null ? null : text(r.display_name),
+  bio: r.bio == null ? null : text(r.bio),
+  avatarKey: r.avatar_key == null ? null : text(r.avatar_key),
+  avatarType:
+    r.avatar_type == null ? null : (text(r.avatar_type) as Profile["avatarType"]),
   isPublic: Boolean(r.is_public),
   updatedAt: number(r.updated_at),
 });

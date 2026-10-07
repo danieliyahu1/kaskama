@@ -1,6 +1,7 @@
 import { ApiError, toApiError, type ApiErrorBody } from "./api-error.js";
 import { COPY } from "./copy.js";
 import { logger } from "./logger.js";
+import type { ProfileResponse } from "@kaskama/shared";
 
 export interface UploadResult {
   id: string;
@@ -62,4 +63,48 @@ export function uploadMedia(
     };
     request.send(body);
   });
+}
+
+async function profileAvatarRequest(
+  method: "POST" | "DELETE",
+  body?: FormData,
+): Promise<ProfileResponse> {
+  let response: Response;
+  try {
+    response = await fetch(
+      "/api/profile/avatar",
+      body ? { method, body } : { method },
+    );
+  } catch {
+    throw new ApiError("SERVER_UNAVAILABLE", COPY.serverDown, 0);
+  }
+  let payload: ApiErrorBody | ProfileResponse = {};
+  try {
+    payload = (await response.json()) as ApiErrorBody | ProfileResponse;
+  } catch {
+    // Fall back to the generic error when the body is not JSON.
+  }
+  if (!response.ok) {
+    const error = toApiError(response.status, payload as ApiErrorBody);
+    logger.error("avatar_failed", {
+      status: response.status,
+      code: error.code,
+      message: error.message,
+      requestId: error.requestId,
+    });
+    throw error;
+  }
+  return payload as ProfileResponse;
+}
+
+/** Uploads an avatar image, replacing any previous one. */
+export function uploadAvatar(file: File): Promise<ProfileResponse> {
+  const body = new FormData();
+  body.append("avatar", file, file.name);
+  return profileAvatarRequest("POST", body);
+}
+
+/** Removes the signed-in creator's avatar. */
+export function removeAvatar(): Promise<ProfileResponse> {
+  return profileAvatarRequest("DELETE");
 }

@@ -7,26 +7,39 @@ import { creatorPath } from "./creator-url.js";
 type AccountMenuProps = {
   address: string;
   displayName: string | null;
+  avatarUrl: string | null;
   name: string;
+  bio: string;
   loading: boolean;
   error: string | null;
   saving: boolean;
+  avatarBusy: boolean;
   onNameChange: (value: string) => void;
-  onSaveName: () => void;
+  onBioChange: (value: string) => void;
+  onSave: () => void;
+  onAvatarFile: (file: File) => void;
+  onAvatarRemove: () => void;
   onSignOut: () => void;
 };
 
 export function AccountMenu({
   address,
   displayName,
+  avatarUrl,
   name,
+  bio,
   loading,
   error,
   saving,
+  avatarBusy,
   onNameChange,
-  onSaveName,
+  onBioChange,
+  onSave,
+  onAvatarFile,
+  onAvatarRemove,
   onSignOut,
 }: AccountMenuProps) {
+  const busy = saving || loading || Boolean(error);
   return (
     <details className="account">
       <summary aria-label={summaryLabel(loading, error, displayName)}>
@@ -34,6 +47,39 @@ export function AccountMenu({
         {greeting(loading, error, displayName)}
       </summary>
       <div className="account-menu">
+        <div className="account-avatar">
+          <span className="account-avatar-preview">
+            {avatarUrl ? <img src={avatarUrl} alt="" /> : <Icon name="user" />}
+          </span>
+          <div className="account-avatar-actions">
+            <label className="menu-button avatar-upload">
+              <input
+                type="file"
+                accept="image/*"
+                disabled={avatarBusy || busy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) onAvatarFile(file);
+                }}
+              />
+              <span className="menu-label">
+                {avatarBusy ? "Uploading..." : "Change photo"}
+              </span>
+            </label>
+            {avatarUrl && (
+              <button
+                className="menu-button"
+                type="button"
+                disabled={avatarBusy || busy}
+                onClick={onAvatarRemove}
+              >
+                Remove photo
+              </button>
+            )}
+          </div>
+        </div>
+
         <label htmlFor="display-name">Display name</label>
         <NameField
           name={name}
@@ -41,11 +87,18 @@ export function AccountMenu({
           error={error}
           onNameChange={onNameChange}
         />
-        <button
-          className="menu-button"
-          disabled={saving || loading || Boolean(error)}
-          onClick={onSaveName}
-        >
+
+        <label htmlFor="bio">Bio</label>
+        <input
+          id="bio"
+          value={bio}
+          onChange={(event) => onBioChange(event.target.value)}
+          placeholder="Ambient music for deep work"
+          maxLength={120}
+          disabled={loading || Boolean(error)}
+        />
+
+        <button className="menu-button" disabled={busy} onClick={onSave}>
           <span className="menu-label">
             {saving && <Spinner />}
             {saving ? "Saving..." : "Save"}

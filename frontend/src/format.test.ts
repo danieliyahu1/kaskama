@@ -1,4 +1,10 @@
-import { formatKas, formatTime, relativeTime, shortenAddress } from "./format.js";
+import {
+  compactAddress,
+  formatKas,
+  formatTime,
+  relativeTime,
+  shortenAddress,
+} from "./format.js";
 import { creatorAddressFromRoute, creatorPath } from "./creator-url.js";
 
 describe("formatKas", () => {
@@ -43,6 +49,17 @@ describe("shortenAddress", () => {
   it("keeps the head and tail of the address", () => {
     const address = `kaspatest:${"q".repeat(60)}`;
     expect(shortenAddress(address)).toBe("kaspatest:qqqqqq...qqqqqqqq");
+  });
+});
+
+describe("compactAddress", () => {
+  it("drops the network prefix and keeps a short head and tail", () => {
+    const address = `kaspatest:${"q".repeat(6)}${"z".repeat(50)}${"k".repeat(4)}`;
+    expect(compactAddress(address)).toBe("qqqqqq…kkkk");
+  });
+
+  it("leaves a short body unshortened", () => {
+    expect(compactAddress("kaspatest:abc")).toBe("abc");
   });
 });
 

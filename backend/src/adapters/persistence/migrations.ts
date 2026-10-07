@@ -310,6 +310,20 @@ export const migrations: Migration[] = [
       )`,
     ],
   },
+  {
+    version: 15,
+    name: "profile_description_and_avatar",
+    statements: [
+      "ALTER TABLE profiles ADD COLUMN description TEXT",
+      "ALTER TABLE profiles ADD COLUMN avatar_key TEXT",
+      "ALTER TABLE profiles ADD COLUMN avatar_type TEXT",
+    ],
+  },
+  {
+    version: 16,
+    name: "profile_bio",
+    statements: ["ALTER TABLE profiles RENAME COLUMN description TO bio"],
+  },
 ];
 
 export async function applyMigrations(client: Client): Promise<void> {
