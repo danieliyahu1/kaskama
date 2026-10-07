@@ -102,7 +102,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
     description:
       "The terms for publishing and unlocking paid content on Kaskama, including the 1% platform fee and direct Kaspa payments.",
     navLabel: "Terms",
-    updated: "September 29, 2026",
+    updated: "October 7, 2026",
     heading: "Terms of service",
     intro: [
       "These terms govern your use of Kaskama. By connecting a wallet, publishing content, or unlocking content, you agree to them. If you do not agree, do not use Kaskama.",
@@ -118,6 +118,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
         heading: "Fees and payments",
         paragraphs: [
           "Kaskama charges a 1% platform fee on paid unlocks and memberships. Creators keep the other 99%.",
+          "When a purchase is made through a creator's share link, Kaskama pays part of its platform fee to the referrer. The creator's 99% is unchanged.",
           "Payments are made directly from fans to creators in Kaspa (KAS). Kaskama never holds your funds and cannot reverse, refund, or block a payment.",
           "Kaspa network fees are set by the network, not by Kaskama, and are paid by the person sending the transaction.",
           "Subscription and unlock prices are set by each creator. All payments are final.",
@@ -159,7 +160,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
     description:
       "What data Kaskama collects, how it is used, and the choices you have. No email addresses or passwords, and payments stay in your wallet.",
     navLabel: "Privacy",
-    updated: "September 29, 2026",
+    updated: "October 7, 2026",
     heading: "Privacy policy",
     intro: [
       "Kaskama is built around a wallet, not an email and password. This policy explains what we collect, why, and what you can do about it.",
@@ -172,6 +173,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
           "Any display name you choose, and whether your creator page is public.",
           "The content you publish, its price, and when it was published.",
           "Which posts or memberships you unlock, so we can keep your access working.",
+          "The creator share link you followed, if any, and the wallet it credits for the next 24 hours.",
           "Feedback you send us, and basic technical logs such as request times and errors.",
           "Your IP address, used to rate-limit abuse and diagnose errors.",
         ],
@@ -192,7 +194,8 @@ export const PUBLIC_PAGES: PublicPage[] = [
       {
         heading: "Cookies",
         paragraphs: [
-          "We use a single session cookie to keep you signed in. It is required for the service to work and is not used for advertising.",
+          "We use a session cookie to keep you signed in. It is required for the service to work and is not used for advertising.",
+          "If you arrive through a creator's share link, we also set a referral cookie that holds the referrer's wallet address for 24 hours, so a purchase you make in that window can credit them. It expires on its own and is never used for advertising.",
         ],
       },
       {

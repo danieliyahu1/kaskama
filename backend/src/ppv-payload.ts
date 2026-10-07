@@ -15,9 +15,15 @@ export interface PpvPayload {
   type: "post-purchase";
   postId: string;
   mediaHash: PpvMediaHash;
+  /**
+   * The wallet credited with the referral share of this purchase, when one was
+   * named at prepare time. It is written into the payment itself so the split
+   * can be verified from the chain alone, with no server-side attribution.
+   */
+  referrer: string | null;
 }
 
-export function ppvPayload(postId: string, digest: string): string {
+export function ppvPayload(postId: string, digest: string, referrer?: string | null): string {
   return Buffer.from(JSON.stringify({
     protocol: PPV_PROTOCOL,
     version: PPV_METADATA_VERSION,
@@ -28,6 +34,7 @@ export function ppvPayload(postId: string, digest: string): string {
       encoding: PPV_HASH_ENCODING,
       digest: digest.toLowerCase(),
     },
+    ...(referrer ? { referrer } : {}),
   })).toString("hex");
 }
 
@@ -45,6 +52,7 @@ export function parsePpvPayload(payload: string | undefined): PpvPayload | null 
       type: "post-purchase",
       postId: value.postId,
       mediaHash,
+      referrer: parseReferrer(value),
     };
   } catch {
     return null;
@@ -72,4 +80,15 @@ function parseMediaHash(value: Record<string, unknown>): PpvMediaHash | null {
     };
   }
   return null;
+}
+
+/** A wallet address never comes close to this; the cap only bounds a crafted payload. */
+const REFERRER_MAX_LENGTH = 128;
+
+function parseReferrer(value: Record<string, unknown>): string | null {
+  return typeof value.referrer === "string" &&
+    value.referrer.length > 0 &&
+    value.referrer.length <= REFERRER_MAX_LENGTH
+    ? value.referrer
+    : null;
 }

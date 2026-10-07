@@ -66,6 +66,8 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     options: {
       security?: boolean | Record<string, unknown>[];
       body?: Record<string, unknown>;
+      /** When false, a request body may be omitted entirely. */
+      bodyRequired?: boolean;
       response?: { status: string; schema: Record<string, unknown> | { $ref: string } };
       parameters?: Record<string, unknown>[];
     },
@@ -74,7 +76,12 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     parameters: [idempotencyHeader, ...(options.parameters ?? [])],
     ...securityField(options.security),
     ...(options.body
-      ? { requestBody: { required: true, content: json(options.body) } }
+      ? {
+          requestBody: {
+            required: options.bodyRequired !== false,
+            content: json(options.body),
+          },
+        }
       : {}),
     responses: {
       ...(options.response
@@ -553,8 +560,19 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         },
       },
       "/api/posts/{id}/payments/prepare": {
-        post: post("Prepare a post purchase.", {
+        post: post("Prepare a post purchase, optionally crediting a referrer.", {
           parameters: [pathParam("id", "Post id.")],
+          body: {
+            type: "object",
+            properties: {
+              referrer: {
+                type: "string",
+                description:
+                  "Wallet to credit with the referral share of the platform fee (half of it), paid in the same transaction. Optional, and ignored when it is not a valid address on the server's network. The creator's payout is never reduced.",
+              },
+            },
+          },
+          bodyRequired: false,
           response: { status: "201", schema: ref("PreparedPayment") },
         }),
       },

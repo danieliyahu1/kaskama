@@ -5,6 +5,7 @@ import { parsePpvPayload, ppvPayload } from "./ppv-payload.js";
 const buyer = "kaspatest:qzvp9r3gxg4wvcl44lm5phav2gz5zfx2de7qqqwd3hjlr53rtsn6wefhk0aj8";
 const creator = "kaspatest:qrzjdw58hp75mvvx6aq58kjyg3xjk7pt0k8txpll9sxdary9npn8v3pmkukdl";
 const feeAddress = "kaspatest:qpd82aj5unvrcj59ygscnmv9g0lryl3j5lp0dqquufqae382lh7lyxkh30lue";
+const referrer = "kaspatest:qzexf809ys0ejw7n7r4srexxu3ye8j0pzsvelt7jx6h5fmlj2as9ueqrwty4k";
 
 describe("KaspaPaymentGateway preparation", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -49,6 +50,45 @@ describe("KaspaPaymentGateway preparation", () => {
     const transaction = JSON.parse(prepared.transaction) as { outputs: { value: string; scriptPublicKey: string }[] };
     expect(transaction.outputs[0]).toEqual({ value: "99000000000", scriptPublicKey: addressScript(creator), covenant: null });
     expect(transaction.outputs.some((output) => output.value === "1000000000" && output.scriptPublicKey === addressScript(feeAddress))).toBe(true);
+  });
+
+  it("splits the platform fee with a referrer and writes it into the payload", async () => {
+    stubNode([funding("200000000000", "55".repeat(32))]);
+    const gateway = new KaspaPaymentGateway(feeAddress, "https://node.test", undefined, undefined, undefined);
+    const prepared = await gateway.prepare({
+      id: "post-1", creator, caption: "", priceSompi: "20000000000", mediaType: "image/jpeg",
+      mediaSize: 1, mediaDigest: "a".repeat(64), mediaKey: "key", publishedAt: 0,
+    }, buyer, referrer);
+    const transaction = JSON.parse(prepared.transaction) as { payload: string; outputs: { value: string; scriptPublicKey: string }[] };
+    expect(parsePpvPayload(transaction.payload)?.referrer).toBe(referrer);
+    expect(transaction.outputs[0]).toEqual({ value: "19800000000", scriptPublicKey: addressScript(creator), covenant: null });
+    expect(transaction.outputs.some((output) => output.value === "100000000" && output.scriptPublicKey === addressScript(referrer))).toBe(true);
+    expect(transaction.outputs.some((output) => output.value === "100000000" && output.scriptPublicKey === addressScript(feeAddress))).toBe(true);
+  });
+
+  it("keeps the whole fee and drops the referrer when a one-KAS fee cannot be split", async () => {
+    stubNode([funding("200000000000", "66".repeat(32))]);
+    const gateway = new KaspaPaymentGateway(feeAddress, "https://node.test", undefined, undefined, undefined);
+    const prepared = await gateway.prepare({
+      id: "post-1", creator, caption: "", priceSompi: "9999999950", mediaType: "image/jpeg",
+      mediaSize: 1, mediaDigest: "a".repeat(64), mediaKey: "key", publishedAt: 0,
+    }, buyer, referrer);
+    const transaction = JSON.parse(prepared.transaction) as { payload: string; outputs: { value: string; scriptPublicKey: string }[] };
+    expect(parsePpvPayload(transaction.payload)?.referrer).toBeNull();
+    expect(transaction.outputs.some((output) => output.value === "100000000" && output.scriptPublicKey === addressScript(feeAddress))).toBe(true);
+    expect(transaction.outputs.some((output) => output.scriptPublicKey === addressScript(referrer))).toBe(false);
+  });
+
+  it("ignores a referrer that is not a valid address on this network", async () => {
+    stubNode([funding("200000000000", "77".repeat(32))]);
+    const gateway = new KaspaPaymentGateway(feeAddress, "https://node.test", undefined, undefined, undefined);
+    const prepared = await gateway.prepare({
+      id: "post-1", creator, caption: "", priceSompi: "20000000000", mediaType: "image/jpeg",
+      mediaSize: 1, mediaDigest: "a".repeat(64), mediaKey: "key", publishedAt: 0,
+    }, buyer, "kaspa:not-a-testnet-address");
+    const transaction = JSON.parse(prepared.transaction) as { payload: string; outputs: { value: string; scriptPublicKey: string }[] };
+    expect(parsePpvPayload(transaction.payload)?.referrer).toBeNull();
+    expect(transaction.outputs.some((output) => output.value === "200000000" && output.scriptPublicKey === addressScript(feeAddress))).toBe(true);
   });
 
   it("prefers the smallest sufficient UTXO to limit transaction storage mass", async () => {
@@ -233,6 +273,55 @@ describe("KaspaPaymentGateway purchase verification", () => {
     )).resolves.toBe(false);
   });
 
+  it("accepts a referred purchase that pays the referrer its half of the fee", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      Response.json({
+        is_accepted: true,
+        payload: ppvPayload("post-1", "a".repeat(64), referrer),
+        inputs: [{ previous_outpoint_resolved: { script_public_key_address: "kaspatest:buyer" } }],
+        outputs: [
+          { amount: "49500000000", script_public_key_address: "kaspatest:creator" },
+          { amount: "250000000", script_public_key_address: referrer },
+          { amount: "250000000", script_public_key_address: feeAddress },
+        ],
+      }),
+    ));
+    const gateway = new KaspaPaymentGateway(feeAddress);
+
+    await expect(gateway.verifyPurchase(
+      "a".repeat(64),
+      "kaspatest:buyer",
+      "kaspatest:creator",
+      "50000000000",
+      "post-1",
+      "a".repeat(64),
+    )).resolves.toBe(true);
+  });
+
+  it("rejects a referred purchase that keeps the whole fee for the platform", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      Response.json({
+        is_accepted: true,
+        payload: ppvPayload("post-1", "a".repeat(64), referrer),
+        inputs: [{ previous_outpoint_resolved: { script_public_key_address: "kaspatest:buyer" } }],
+        outputs: [
+          { amount: "49500000000", script_public_key_address: "kaspatest:creator" },
+          { amount: "500000000", script_public_key_address: feeAddress },
+        ],
+      }),
+    ));
+    const gateway = new KaspaPaymentGateway(feeAddress);
+
+    await expect(gateway.verifyPurchase(
+      "a".repeat(64),
+      "kaspatest:buyer",
+      "kaspatest:creator",
+      "50000000000",
+      "post-1",
+      "a".repeat(64),
+    )).resolves.toBe(false);
+  });
+
   it("does not hide upstream service failures", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       new Response("upstream unavailable", { status: 503 }),
@@ -297,5 +386,72 @@ describe("KaspaPaymentGateway purchase confirmation", () => {
     await expect(gateway.status("a".repeat(64))).rejects.toThrow(
       "Kaspa request failed: 503 upstream unavailable",
     );
+  });
+});
+
+describe("KaspaPaymentGateway evidence verification", () => {
+  const evidenceStore = (transaction: string) => ({
+    getTransactionEvidence: async () => ({
+      transactionId: "a".repeat(64),
+      transaction,
+      acceptedAt: 1,
+    }),
+    saveTransactionEvidence: async () => undefined,
+  });
+  const evidenceGateway = (transaction: string) =>
+    new KaspaPaymentGateway(
+      feeAddress,
+      "https://node.test",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      evidenceStore(transaction),
+    );
+
+  it("accepts a referred purchase from the captured transaction", async () => {
+    const transaction = JSON.stringify({
+      payload: ppvPayload("post-1", "a".repeat(64), referrer),
+      inputs: [{ utxo: { scriptPublicKey: addressScript(buyer) } }],
+      outputs: [
+        { value: "49500000000", scriptPublicKey: addressScript(creator) },
+        { value: "250000000", scriptPublicKey: addressScript(referrer) },
+        { value: "250000000", scriptPublicKey: addressScript(feeAddress) },
+      ],
+    });
+
+    await expect(
+      evidenceGateway(transaction).verifyPurchase(
+        "a".repeat(64),
+        buyer,
+        creator,
+        "50000000000",
+        "post-1",
+        "a".repeat(64),
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it("rejects evidence that keeps the whole fee for the platform", async () => {
+    const transaction = JSON.stringify({
+      payload: ppvPayload("post-1", "a".repeat(64), referrer),
+      inputs: [{ utxo: { scriptPublicKey: addressScript(buyer) } }],
+      outputs: [
+        { value: "49500000000", scriptPublicKey: addressScript(creator) },
+        { value: "500000000", scriptPublicKey: addressScript(feeAddress) },
+      ],
+    });
+
+    await expect(
+      evidenceGateway(transaction).verifyPurchase(
+        "a".repeat(64),
+        buyer,
+        creator,
+        "50000000000",
+        "post-1",
+        "a".repeat(64),
+      ),
+    ).resolves.toBe(false);
   });
 });

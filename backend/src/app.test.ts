@@ -493,6 +493,39 @@ describe("payment confirmation", () => {
     expect(await store.getPurchase("paid-post", buyer)).not.toBeNull();
   });
 
+  it("passes the referrer named in the request body to the gateway", async () => {
+    const store = new MemoryStore();
+    await buyerSession(store);
+    const target = post("paid-post");
+    await store.publishPost(target);
+    const referrer = `kaspatest:${"r".repeat(60)}`;
+    const prepare = vi.fn(async () => ({
+      transaction: "{}",
+      fingerprint: "fp",
+      amountSompi: target.priceSompi,
+      creator: target.creator,
+    }));
+    const gateway: PaymentGateway = {
+      prepare,
+      submit: async () => ({ isAccepted: false, transactionId: null, rejection: null }),
+      status: async () => ({ isAccepted: false, transactionId: null, rejection: null }),
+      verifyPurchase: async () => true,
+    };
+    const { app } = testApp(store, gateway);
+
+    const response = await request(app)
+      .post("/api/posts/paid-post/payments/prepare")
+      .set("Cookie", "kaskama_session=session-1")
+      .send({ referrer });
+
+    expect(response.status).toBe(201);
+    expect(prepare).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "paid-post" }),
+      expect.any(String),
+      referrer,
+    );
+  });
+
   it("reports pending when the node has not indexed the transaction yet", async () => {
     const store = new MemoryStore();
     const buyer = await buyerSession(store);

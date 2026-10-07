@@ -20,6 +20,31 @@ describe("PPV transaction payload", () => {
         encoding: "hex",
         digest,
       },
+      referrer: null,
+    });
+  });
+
+  it("round-trips the referrer credited on a referred purchase", () => {
+    const referrer =
+      "kaspatest:qpd82aj5unvrcj59ygscnmv9g0lryl3j5lp0dqquufqae382lh7lyxkh30lue";
+    const payload = ppvPayload("post-1", digest, referrer);
+
+    expect(parsePpvPayload(payload)).toMatchObject({ postId: "post-1", referrer });
+  });
+
+  it("treats an oversized referrer as absent instead of failing the payload", () => {
+    const payload = encode({
+      protocol: "kaskama",
+      version: 1,
+      type: "post-purchase",
+      postId: "post-1",
+      mediaHash: { algorithm: "blake3-256", encoding: "hex", digest },
+      referrer: "x".repeat(129),
+    });
+
+    expect(parsePpvPayload(payload)).toMatchObject({
+      postId: "post-1",
+      referrer: null,
     });
   });
 
@@ -42,6 +67,7 @@ describe("PPV transaction payload", () => {
         encoding: "hex",
         digest,
       },
+      referrer: null,
     });
   });
 

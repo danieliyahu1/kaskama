@@ -783,8 +783,9 @@ export function createApp(d: AppDependencies) {
         metrics.paymentPrepareAttempt("already_unlocked");
         return apiError(res, 409, "ALREADY_UNLOCKED");
       }
+      const referrer = requestedReferrer(req.body);
       try {
-        const prepared = await d.paymentGateway.prepare(post, buyer);
+        const prepared = await d.paymentGateway.prepare(post, buyer, referrer);
         if (
           prepared.amountSompi !== post.priceSompi ||
           prepared.creator !== post.creator
@@ -1769,6 +1770,17 @@ function param(req: Request, n: string) {
   const v = req.params[n];
   if (typeof v !== "string") throw new HttpError(400, "INVALID_REQUEST");
   return v;
+}
+/**
+ * The optional `referrer` named on a post payment: the wallet credited with the
+ * referral share of the platform fee. Absent or malformed, the purchase simply
+ * carries no referrer.
+ */
+function requestedReferrer(body: unknown): string | undefined {
+  const parsed = z
+    .object({ referrer: z.string().min(1).max(128).optional() })
+    .safeParse(body);
+  return parsed.success ? parsed.data.referrer : undefined;
 }
 function ownerFrom(req: Request, pattern: RegExp) {
   const v = req.query.owner;

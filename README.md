@@ -15,7 +15,11 @@ pnpm dev
 
 Copy the values described in `.env.example` into the process environment before starting the backend. The Vite server runs the browser application and proxies `/api` to Express.
 
-Each network has its own fee recipient: `PLATFORM_FEE_ADDRESS_TESTNET_10` for local development and `PLATFORM_FEE_ADDRESS_MAINNET` for production. Only the address matching `KASPA_NETWORK` is read, and it is required and must be a single-key P2PK address on that network. New individual post payments send the rounded-nearest 1% fee to this wallet and reduce the creator output by the same amount.
+Each network has its own fee recipient: `PLATFORM_FEE_ADDRESS_TESTNET_10` for local development and `PLATFORM_FEE_ADDRESS_MAINNET` for production. Only the address matching `KASPA_NETWORK` is read, and it is required and must be a single-key P2PK address on that network. New individual post payments send the rounded-nearest 1% fee to this wallet and reduce the creator output by the same amount. A purchase that arrives within a day of a `?ref=<wallet>` link splits that fee in half with the referrer, paid in the same transaction; the creator's output is unchanged.
+
+## Referrals
+
+Every post and creator page can be shared with a `?ref=<wallet>` query parameter. The visitor's browser keeps that wallet in a `kaskama_ref` cookie for 24 hours, and a purchase in that window credits it. The credit is paid as its own output in the same transaction, out of the platform fee: the referrer receives half the fee and the platform keeps the other half, so the creator's payout is never reduced. Because the fee is only charged once it reaches 1 KAS, a referral is paid only when both halves are at least 1 KAS; an address that is not valid on the configured network is ignored. Attribution lives in the payment's own payload, so the split is verifiable from the chain with no accounts, balances, or payout system. A headless client names the wallet as `referrer` when preparing a post payment.
 
 ## Networks
 

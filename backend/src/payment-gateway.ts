@@ -5,7 +5,7 @@ import type { Post, PreparedPayment, PaymentSubmission } from "./domain/models.j
 import type { PaymentGateway, TransactionEvidenceStore } from "./application/ports.js";
 import { logger as defaultLogger, type Logger } from "./observability.js";
 import { defaultMetrics, type Metrics } from "./metrics.js";
-import { platformFeeSompi } from "./payment-fee.js";
+import { paymentSplit, type PaymentSplit } from "./payment-fee.js";
 import { parsePpvPayload, ppvPayload } from "./ppv-payload.js";
 import { submitMembershipTransactionOverWrpc } from "./membership-gateway.js";
 
@@ -43,16 +43,22 @@ export class KaspaPaymentGateway implements PaymentGateway {
         ));
   }
 
-  async prepare(post: Post, buyer: string): Promise<PreparedPayment> {
+  async prepare(
+    post: Post,
+    buyer: string,
+    referrer?: string | null,
+  ): Promise<PreparedPayment> {
     const [utxos, estimate] = await Promise.all([
       this.request<Utxo[]>("utxos", `/addresses/${encodeURIComponent(buyer)}/utxos`),
       this.request<{ normalBuckets: { feerate: number }[]; priorityBucket: { feerate: number } }>("fee_estimate", "/info/fee-estimate"),
     ]);
     const amount = BigInt(post.priceSompi);
-    const fee = platformFeeSompi(amount);
-    const creatorAmount = amount - fee;
-    const outputCount = fee > 0n ? 3 : 2;
-    const payload = ppvPayload(post.id, post.mediaDigest);
+    const creditedReferrer = this.creditableReferrer(referrer);
+    const split = paymentSplit(amount, creditedReferrer !== null);
+    // The change output is the last one and only exists when it clears dust.
+    const outputCount =
+      1 + (split.referrer > 0n ? 1 : 0) + (split.platform > 0n ? 1 : 0) + 1;
+    const payload = ppvPayload(post.id, post.mediaDigest, split.referrer > 0n ? creditedReferrer : null);
     const rate = estimate.normalBuckets[0]?.feerate ?? estimate.priorityBucket.feerate;
     const buyerScript = scriptFor(buyer);
     const selected: Utxo[] = [];
@@ -72,9 +78,11 @@ export class KaspaPaymentGateway implements PaymentGateway {
       throw new Error("INSUFFICIENT_FUNDS");
     }
     const outputs = [
-      { value: creatorAmount.toString(), scriptPublicKey: scriptFor(post.creator), covenant: null },
+      { value: split.creator.toString(), scriptPublicKey: scriptFor(post.creator), covenant: null },
     ];
-    if (fee > 0n) outputs.push({ value: fee.toString(), scriptPublicKey: scriptFor(this.platformFeeAddress), covenant: null });
+    if (split.referrer > 0n && creditedReferrer !== null)
+      outputs.push({ value: split.referrer.toString(), scriptPublicKey: scriptFor(creditedReferrer), covenant: null });
+    if (split.platform > 0n) outputs.push({ value: split.platform.toString(), scriptPublicKey: scriptFor(this.platformFeeAddress), covenant: null });
     const change = total - amount - networkFee;
     if (change >= CHANGE_DUST_SOMPI) outputs.push({ value: change.toString(), scriptPublicKey: buyerScript, covenant: null });
     const transaction = JSON.stringify({ id: "0".repeat(64), version: 0, inputs: selected.map((utxo) => ({ transactionId: utxo.outpoint.transactionId, index: utxo.outpoint.index, sequence: "0", sigOpCount: 1, computeBudget: 0, signatureScript: "", utxo: { amount: utxo.utxoEntry.amount, scriptPublicKey: `0000${utxo.utxoEntry.scriptPublicKey.scriptPublicKey}`, blockDaaScore: utxo.utxoEntry.blockDaaScore, isCoinbase: utxo.utxoEntry.isCoinbase } })), outputs, subnetworkId: ZERO_SUBNETWORK, lockTime: "0", gas: "0", storageMass: "20000", payload });
@@ -83,8 +91,26 @@ export class KaspaPaymentGateway implements PaymentGateway {
       inputCount: selected.length,
       outputCount: outputs.length,
       amountSompi: post.priceSompi,
+      referred: split.referrer > 0n,
     });
     return { transaction, fingerprint: digest(transaction), amountSompi: post.priceSompi, creator: post.creator };
+  }
+
+  /**
+   * A referrer is only credited when it can actually receive a payout: a valid
+   * address on this network whose script encodes as a single-key P2PK output.
+   * Anything else is dropped without failing the purchase, so a bad share link
+   * can never block a sale.
+   */
+  private creditableReferrer(referrer: string | null | undefined): string | null {
+    if (!referrer) return null;
+    if (!networkDefinition(this.network).addressPattern.test(referrer)) return null;
+    try {
+      scriptFor(referrer);
+      return referrer;
+    } catch {
+      return null;
+    }
   }
 
   async submit(prepared: PreparedPayment, signedTransaction: string): Promise<PaymentSubmission> {
@@ -148,10 +174,14 @@ export class KaspaPaymentGateway implements PaymentGateway {
     if (tx.payload && (!payload || payload.postId !== postId || payload.mediaHash.digest !== mediaDigest.toLowerCase())) return false;
     if (!tx.inputs.every((input) => input.previous_outpoint_resolved?.script_public_key_address === buyer)) return false;
     const amount = BigInt(amountSompi);
-    const fee = platformFeeSompi(amount);
-    if (!tx.outputs.some((output) => String(output.amount) === (amount - fee).toString() && output.script_public_key_address === creator)) return false;
-    if (fee === 0n) return !tx.outputs.some((output) => output.script_public_key_address === this.platformFeeAddress);
-    return tx.outputs.some((output) => String(output.amount) === fee.toString() && output.script_public_key_address === this.platformFeeAddress);
+    const referrer = payload?.referrer ?? null;
+    return outputsPaySplit(
+      (tx.outputs ?? []).map((output) => ({ value: String(output.amount), address: output.script_public_key_address })),
+      paymentSplit(amount, referrer !== null),
+      creator,
+      referrer,
+      this.platformFeeAddress,
+    );
   }
 
   /**
@@ -169,11 +199,14 @@ export class KaspaPaymentGateway implements PaymentGateway {
     if (!Array.isArray(inputs) || inputs.length === 0) return false;
     if (!inputs.every((input) => this.addressOf(input.utxo?.scriptPublicKey) === buyer)) return false;
     const amount = BigInt(amountSompi);
-    const fee = platformFeeSompi(amount);
-    const outputs = tx.outputs ?? [];
-    if (!outputs.some((output) => String(output.value) === (amount - fee).toString() && this.addressOf(output.scriptPublicKey) === creator)) return false;
-    if (fee === 0n) return !outputs.some((output) => this.addressOf(output.scriptPublicKey) === this.platformFeeAddress);
-    return outputs.some((output) => String(output.value) === fee.toString() && this.addressOf(output.scriptPublicKey) === this.platformFeeAddress);
+    const referrer = payload?.referrer ?? null;
+    return outputsPaySplit(
+      (tx.outputs ?? []).map((output) => ({ value: String(output.value), address: this.addressOf(output.scriptPublicKey) })),
+      paymentSplit(amount, referrer !== null),
+      creator,
+      referrer,
+      this.platformFeeAddress,
+    );
   }
 
   private addressOf(script: string | undefined): string | undefined {
@@ -251,6 +284,22 @@ class KaspaRequestError extends Error {
 }
 
 function scriptFor(address: string): string { const data = address.slice(address.lastIndexOf(":") + 1, -8).split("").map((char) => CHARSET.indexOf(char)); const bytes: number[] = []; let buffer = 0n; let bits = 0; for (const value of data) { buffer = (buffer << 5n) | BigInt(value); bits += 5; while (bits >= 8) { bits -= 8; bytes.push(Number((buffer >> BigInt(bits)) & 255n)); buffer &= (1n << BigInt(bits)) - 1n; } } if (bytes[0] !== 0 || bytes.length !== 33) throw new Error("INVALID_CREATOR_ADDRESS"); return `000020${bytes.slice(1).map((byte) => byte.toString(16).padStart(2, "0")).join("")}ac`; }
+/** One payout as the verifier sees it: an amount and the address it reached. */
+type PaymentOutput = { value: string; address: string | undefined };
+/**
+ * Whether a transaction pays the split exactly: the creator receives `creator`,
+ * the platform receives `platform` (or nothing when the fee is waived), and a
+ * referred purchase also pays the referrer its share. This is the one statement
+ * of the payment rule, shared by the chain and evidence paths so they cannot
+ * drift apart.
+ */
+function outputsPaySplit(outputs: PaymentOutput[], split: PaymentSplit, creator: string, referrer: string | null, platformAddress: string): boolean {
+  if (!outputs.some((output) => output.value === split.creator.toString() && output.address === creator)) return false;
+  if (split.platform === 0n) return !outputs.some((output) => output.address === platformAddress);
+  if (!outputs.some((output) => output.value === split.platform.toString() && output.address === platformAddress)) return false;
+  if (split.referrer > 0n && !outputs.some((output) => output.value === split.referrer.toString() && output.address === referrer)) return false;
+  return true;
+}
 function digest(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function estimatedFee(inputs: Utxo[], rate: number, outputs: number, payload: string) { if (!Number.isFinite(rate) || rate <= 0) throw new Error("INVALID_FEE_RATE"); const inputSize = inputs.length * (32 + 4 + 8 + 66 + 8 + 2); const outputSize = outputs * (8 + 2 + 8 + 34); const transactionSize = 2 + 8 + inputSize + 8 + outputSize + 8 + 20 + 8 + 32 + 8 + payload.length / 2; const scriptPublicKeyMass = 10 * outputs * (2 + 34); const computeMass = transactionSize + scriptPublicKeyMass + 100 * inputs.length * 50; const estimated = BigInt(Math.ceil(computeMass * rate)); const relayFloor = 100n * BigInt(computeMass); return estimated > relayFloor ? estimated : relayFloor; }
 function rejected(rejection: string, transactionId: string | null = null): PaymentSubmission { return { isAccepted: false, transactionId, rejection }; }

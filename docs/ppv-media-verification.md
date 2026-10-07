@@ -20,7 +20,8 @@ this version 1 shape:
     "algorithm": "blake3-256",
     "encoding": "hex",
     "digest": "<64 lowercase hex characters>"
-  }
+  },
+  "referrer": "<wallet address>"
 }
 ```
 
@@ -28,6 +29,9 @@ this version 1 shape:
 - `encoding` names how the resulting bytes are written as text.
 - `digest` is the hash of the exact media bytes that Kaskama validated and
   stored, encoded as `encoding` specifies.
+- `referrer` is optional. It is present only when the purchase was made through
+  a `?ref=<wallet>` link and the platform fee was split with that wallet; see
+  Payment checks below.
 
 `blake3-256` always produces 32 bytes, so a `hex` digest is always 64
 characters.
@@ -67,9 +71,15 @@ The media commitment is necessary but not sufficient. A purchase is honored
 only when the transaction also:
 
 - has at least one input resolved to the buyer address;
-- pays `price - fee` sompi to the creator address;
-- pays the platform fee to the configured platform address when the fee is
-  non-zero, and pays the platform nothing when it is zero.
+- pays `price - fee` sompi to the creator address; a referral never reduces this;
+- when the payload names no referrer, pays the platform fee to the configured
+  platform address when the fee is non-zero, and pays the platform nothing when
+  it is zero;
+- when the payload names a referrer and both halves of the fee are at least one
+  KAS, splits the fee: half to the referrer address the payload names and half
+  to the configured platform address. When half the fee is below one KAS the
+  split is not made, so the payload names no referrer and the platform keeps the
+  whole fee.
 
 Kaskama verifies the payload when returning purchased media, so a client
 tampering with the stored receipt does not unlock a post.

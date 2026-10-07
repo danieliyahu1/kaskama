@@ -181,7 +181,11 @@ export interface IdempotencyStore {
 }
 
 export interface PaymentGateway {
-  prepare(post: Post, buyer: string): Promise<PreparedPayment>;
+  prepare(
+    post: Post,
+    buyer: string,
+    referrer?: string | null,
+  ): Promise<PreparedPayment>;
   submit(
     prepared: PreparedPayment,
     signedTransaction: string,

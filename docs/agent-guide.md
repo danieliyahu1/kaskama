@@ -110,6 +110,36 @@ differs from the prepared template:
 | `202`  | `{ state: "PENDING", transactionId }`   | On chain but not confirmed yet. **Do not pay again.** |
 | `422`  | `{ state: "REJECTED", rejection }`      | Rejected. Nothing was charged.                        |
 
+## Referrals
+
+Any post or creator page can be shared with a `?ref=<wallet>` query parameter.
+A visitor who lands through one of those links has that wallet remembered in a
+`kaskama_ref` cookie for 24 hours; a purchase made within that window credits it.
+
+The credit is paid in the same transaction as the purchase, out of the platform
+fee - the creator's payout is never reduced. The referrer receives half the
+platform fee and the platform keeps the other half. The fee is 1% and only
+charged once it reaches 1 KAS, so a referral is paid only when both halves are
+at least 1 KAS: when the fee is exactly 1 KAS there is nothing to split, no
+referrer output is built, and the platform keeps the whole fee.
+
+The attribution lives inside the payment: the signed transaction names the
+referrer in its payload and carries the referrer's share as its own output, so
+the split can be verified from the chain alone. There is no account, no balance,
+and no payout system, and nothing about the referrer is stored on the server.
+
+A headless client credits a wallet by naming it when preparing the payment:
+
+```http
+POST /api/posts/{id}/payments/prepare
+Content-Type: application/json
+
+{ "referrer": "kaspa:..." }
+```
+
+`referrer` is optional and equally optional to every client. An address that is
+not valid on the server's network is ignored, so a bad link never blocks a sale.
+
 ## Endpoints
 
 The endpoints, their request and response schemas, and which of them need the
