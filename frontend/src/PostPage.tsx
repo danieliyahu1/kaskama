@@ -12,6 +12,7 @@ import { errorText, isNetworkRequired } from "./errors.js";
 import { presentError } from "./error-toast.js";
 import { formatKas, relativeTime } from "./format.js";
 import { PostMedia } from "./PostMedia.js";
+import { ShareButton } from "./ShareButton.js";
 import type { WalletProps } from "./wallet.js";
 import { creatorPath } from "./creator-url.js";
 
@@ -137,9 +138,15 @@ export function PostPage({ address, signIn, signingIn }: WalletProps) {
             </div>
           )}
         </div>
-        <Link className="creator-link" to={creatorPath(currentPost.creator)}>
-          More from this creator
-        </Link>
+        <div className="post-actions">
+          <Link className="creator-link" to={creatorPath(currentPost.creator)}>
+            More from this creator
+          </Link>
+          <ShareButton
+            address={address}
+            path={`/post/${encodeURIComponent(currentPost.id)}`}
+          />
+        </div>
       </article>
     </>
   );

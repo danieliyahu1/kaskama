@@ -9,6 +9,7 @@ export function PostTile({
   date,
   to,
   mediaType,
+  metaAction,
   action,
 }: {
   media: ReactNode;
@@ -16,6 +17,8 @@ export function PostTile({
   date?: string | undefined;
   to?: string | undefined;
   mediaType?: MediaType | undefined;
+  /** A control that ends the existing badge-and-date line, adding no row. */
+  metaAction?: ReactNode;
   action?: ReactNode;
 }) {
   return (
@@ -32,6 +35,7 @@ export function PostTile({
         <div className="post-tile-meta">
           {mediaType ? <MediaTypeBadge mediaType={mediaType} to={to} /> : null}
           {date ? <span className="post-tile-date">{date}</span> : null}
+          {metaAction}
         </div>
       </div>
       {action}

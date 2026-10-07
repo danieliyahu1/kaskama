@@ -42,4 +42,9 @@ export const COPY = {
   feedbackThanks: "Thanks - sent.",
   feedbackRequired: "Write a few words first.",
   feedbackFailed: "Couldn’t send feedback. Try again.",
+  shareButton: "Share",
+  shareTitle: "Copy a link. You earn when someone buys through it.",
+  shareCopied: "Share link copied. You earn when someone buys through it.",
+  linkCopied: "Link copied.",
+  shareFailed: "Couldn't copy the link.",
 } as const;

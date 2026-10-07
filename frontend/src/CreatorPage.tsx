@@ -27,6 +27,7 @@ import { errorText, isNetworkRequired } from "./errors.js";
 import { presentError } from "./error-toast.js";
 import { ApiError } from "./api-error.js";
 import { formatKas, relativeTime, shortenAddress } from "./format.js";
+import { ShareButton } from "./ShareButton.js";
 import type { WalletProps } from "./wallet.js";
 import {
   creatorAddressFromRoute,
@@ -322,6 +323,10 @@ export function CreatorPage({
                 ? { onToggle: () => void toggleVisibility() }
                 : {})}
             />
+            <ShareButton
+              address={address}
+              path={creatorPath(currentCreator.address)}
+            />
           </div>
         </div>
         {showSubscription && (
@@ -367,6 +372,7 @@ export function CreatorPage({
               <PostCard
                 key={post.id}
                 post={post}
+                address={address}
                 busy={busyPostId === post.id}
                 approved={approvedPostId === post.id}
                 onBuy={buyPost}
@@ -541,6 +547,7 @@ function SubscriptionAction({
 
 function PostCard({
   post,
+  address,
   busy,
   approved,
   onBuy,
@@ -549,6 +556,7 @@ function PostCard({
   onDelete,
 }: {
   post: PostResponse;
+  address: string | null;
   busy: boolean;
   approved: boolean;
   onBuy: (post: PostResponse) => void;
@@ -592,6 +600,7 @@ function PostCard({
       date={relativeTime(post.publishedAt)}
       to={postPath}
       mediaType={post.mediaType}
+      metaAction={<ShareButton address={address} path={postPath} compact />}
       action={
         owner ? (
           <PostTileAction>

@@ -2,7 +2,7 @@
   "headline": "Get paid by the people who love your work.",
   "lede": "Publish a photo, a video, an audio track, or a document. Set your price. You keep 99%.",
   "moneyHeading": "Where your money goes.",
-  "moneyIntro": "Three things creators want to know. Kaskama answers all three.",
+  "moneyIntro": "Four things creators want to know. Kaskama answers all four.",
   "moneyPoints": [
     {
       "claim": "You keep 99%.",
@@ -15,6 +15,10 @@
     {
       "claim": "No one can hold your money.",
       "detail": "The money goes straight from your fans to you."
+    },
+    {
+      "claim": "Sharing pays.",
+      "detail": "Share any post or page from here. When someone buys through your link, you earn half the platform fee, the moment they do."
     }
   ],
   "fanViewHeading": "What your fans see",

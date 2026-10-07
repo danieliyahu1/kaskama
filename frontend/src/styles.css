@@ -1406,6 +1406,7 @@ button.creator-card-handle:focus-visible {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: 0.85rem;
   margin-top: 0.85rem;
 }
 .visibility-badge {
@@ -2168,6 +2169,54 @@ main:has(.single-post) {
 .creator-link:hover,
 .creator-link:focus-visible {
   color: var(--acid);
+}
+/* The post footer: where to go next, and how to pass it on. */
+.post-actions {
+  order: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-top: clamp(0.5rem, 1.5vh, 1rem);
+}
+.post-actions .creator-link {
+  order: 0;
+  align-self: center;
+  margin-top: 0;
+}
+/* Share attaches to the thing it shares: quiet beside page actions, a small
+   icon in the corner of a post card. */
+.share-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 0;
+  padding: 0.1rem 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  transition: color 0.12s ease;
+}
+.share-button:hover,
+.share-button:focus-visible {
+  color: var(--acid);
+}
+.share-button .icon {
+  width: 1rem;
+  height: 1rem;
+}
+.share-button--compact {
+  gap: 0;
+  padding: 0 0.4rem;
+  border: 0;
+}
+.share-button--compact .icon {
+  width: 1rem;
+  height: 1rem;
+}
+/* It ends the card's existing badge-and-date line instead of adding a row. */
+.post-tile-meta .share-button--compact {
+  margin-left: auto;
 }
 .message {
   display: grid;

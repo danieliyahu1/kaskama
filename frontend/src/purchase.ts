@@ -1,4 +1,5 @@
 import { api, signPreparedPayment } from "./kasware.js";
+import { readReferral } from "./referral.js";
 
 export interface PurchaseResult {
   state: string;
@@ -18,9 +19,14 @@ export async function unlockPost(
   postId: string,
   onApproved?: () => void,
 ): Promise<PurchaseResult> {
+  // A referral landed earlier in this visit is credited to the buyer's payment.
+  const referrer = readReferral();
   const prepared = await api<PreparedTransaction>(
     `/api/posts/${encodeURIComponent(postId)}/payments/prepare`,
-    { method: "POST" },
+    {
+      method: "POST",
+      ...(referrer ? { body: JSON.stringify({ referrer }) } : {}),
+    },
   );
   const signedTransaction = await signPreparedPayment(prepared.transaction);
   onApproved?.();

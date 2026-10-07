@@ -31,6 +31,7 @@ import { errorText, isNetworkRequired } from "./errors.js";
 import { presentError } from "./error-toast.js";
 import { Toast, useToast } from "./Toast.js";
 import { reloadPage } from "./navigation.js";
+import { captureReferral } from "./referral.js";
 
 export function App() {
   const mainRef = useRef<HTMLElement>(null);
@@ -258,6 +259,7 @@ export function App() {
     <BrowserRouter>
       <div className="shell">
         <ScrollReset target={mainRef} />
+        <ReferralCapture />
         <nav>
           <Link to="/" className="brand">
             KAS<span>KAMA</span>
@@ -368,6 +370,19 @@ function ScrollReset({ target }: { target: RefObject<HTMLElement | null> }) {
   useLayoutEffect(() => {
     if (target.current) target.current.scrollTop = 0;
   }, [pathname, target]);
+  return null;
+}
+
+/**
+ * Remembers a `?ref=<wallet>` that arrives on any route, so the visit can
+ * credit that wallet if it ends in a purchase. It renders nothing and never
+ * blocks the page.
+ */
+function ReferralCapture() {
+  const { search } = useLocation();
+  useEffect(() => {
+    captureReferral(search);
+  }, [search]);
   return null;
 }
 
