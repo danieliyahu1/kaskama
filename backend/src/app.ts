@@ -27,6 +27,7 @@ import {
   RETRY_AFTER_REFRESH,
   validateBio,
   validateDisplayName,
+  validatePost,
   type MembershipAddressVerificationResponse,
   type NetworkConfigResponse,
   type NetworkId,
@@ -235,6 +236,9 @@ export function createApp(d: AppDependencies) {
         durationMs: Date.now() - startedAt,
         authenticated: Boolean(req.walletSession),
         ...(res.locals.apiErrorCode ? { errorCode: res.locals.apiErrorCode } : {}),
+        ...(res.locals.apiErrorMessage
+          ? { message: res.locals.apiErrorMessage }
+          : {}),
         ...(res.locals.apiErrorFields
           ? { errorFields: res.locals.apiErrorFields }
           : {}),
@@ -625,14 +629,10 @@ export function createApp(d: AppDependencies) {
           throw e;
         }
         const priceSompi = parsePostPrice(upload.price);
-        const errors: string[] = priceSompi !== null ? [] : [COPY.invalidPrice];
-        if (!upload.caption.trim())
-          errors.push("Caption must be between 1 and 280 characters.");
-        if ([...upload.caption.trim()].length > 280)
-          errors.push("Caption must be between 1 and 280 characters.");
+        const errors = validatePost(upload.caption, upload.price);
         if (errors.length) {
           metrics.mediaPublishAttempt("invalid", "unknown");
-          return res.status(400).json({ error: "INVALID_POST", errors });
+          return apiError(res, 400, "INVALID_POST", errors.join(" "));
         }
         if (!upload.bytesWritten) return apiError(res, 400, "INVALID_MEDIA");
         const result = await publishPost({
@@ -1844,13 +1844,15 @@ function apiError(
   message?: string,
   extra?: Record<string, unknown>,
 ) {
+  const text = message ?? `${code.toLowerCase().replaceAll("_", " ")}.`;
   res.locals.apiErrorCode = code;
+  res.locals.apiErrorMessage = text;
   if (Array.isArray(extra?.errorFields)) res.locals.apiErrorFields = extra.errorFields;
   // A 401 names the scheme the caller must use, so an agent knows its state.
   if (status === 401) res.setHeader("WWW-Authenticate", "Bearer");
   return res.status(status).json({
     error: code,
-    message: message ?? `${code.toLowerCase().replaceAll("_", " ")}.`,
+    message: text,
     requestId: res.locals.requestId,
     ...(extra ?? {}),
   });

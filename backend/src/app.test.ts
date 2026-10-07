@@ -1295,6 +1295,62 @@ describe("publish failure diagnostics", () => {
     expect(response.status).toBe(400);
     expect(response.body).toMatchObject({ error: "INVALID_MEDIA" });
   });
+
+  it.each([
+    {
+      field: "price",
+      value: "1,000",
+      message: "Enter a KAS price of zero or more, using up to 8 decimal places.",
+    },
+    {
+      field: "caption",
+      value: " ".repeat(281),
+      message: "Caption must be between 1 and 280 characters.",
+    },
+  ])(
+    "names the failed $field when a post is rejected",
+    async ({ field, value, message }) => {
+      const { app, events } = await creatorApp(
+        {
+          putFile: async () => undefined,
+          readRange: async () => ({
+            bytes: new Uint8Array(),
+            size: 0,
+            contentType: "video/mp4",
+          }),
+          delete: async () => undefined,
+        },
+        async () => verifiedVideo,
+      );
+
+      const response = await request(app)
+        .post("/api/posts/publish")
+        .set("X-Request-Id", "publish-validation-trace")
+        .set("Cookie", "kaskama_session=publish-session")
+        .field("caption", field === "caption" ? value : "A private post")
+        .field("price", field === "price" ? value : "1")
+        .attach("media", Buffer.alloc(64), {
+          filename: "clip.mp4",
+          contentType: "video/mp4",
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({
+        error: "INVALID_POST",
+        message,
+        requestId: "publish-validation-trace",
+      });
+      expect(events).toContainEqual({
+        event: "request_completed",
+        fields: expect.objectContaining({
+          requestId: "publish-validation-trace",
+          statusCode: 400,
+          errorCode: "INVALID_POST",
+          message,
+        }),
+      });
+    },
+  );
 });
 
 describe("membership price validation", () => {

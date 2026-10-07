@@ -4,7 +4,6 @@ export const API_COPY = {
   authPrompt:
     "Connect to Kaskama. This only identifies your wallet. No KAS will be sent.",
   verificationFailed: "Kaskama could not verify this wallet. Try again.",
-  invalidPrice: "Enter a KAS price greater than zero, using up to 8 decimal places.",
   membershipPriceEmpty: "Enter a monthly subscription price.",
   membershipPriceFormat: "Enter the price in digits only, with up to 8 decimal places.",
   membershipPriceBelowMin: "The monthly subscription price must be at least 1 KAS.",
