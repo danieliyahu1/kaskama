@@ -176,9 +176,13 @@ export function normalizeDisplayName(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
+/** The longest a display name may be. */
+export const MAX_DISPLAY_NAME_LENGTH = 40;
+
 export function validateDisplayName(value: string): string | null {
   const name = normalizeDisplayName(value);
-  if (Array.from(name).length > 40) return "Names can be up to 40 characters.";
+  if (Array.from(name).length > MAX_DISPLAY_NAME_LENGTH)
+    return `Names can be up to ${MAX_DISPLAY_NAME_LENGTH} characters.`;
   return name.length === 0 ? null : name;
 }
 

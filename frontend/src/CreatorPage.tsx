@@ -41,26 +41,6 @@ const BUYER_MESSAGES = {
   failed: "Payment failed. Nothing was charged.",
 } as const;
 
-const START_MESSAGES = {
-  confirmed: "Subscription is ready.",
-  pending: "Your payment is confirming. Don't pay again.",
-  failed: "Payment failed. Nothing was charged.",
-} as const;
-
-const UPDATE_MESSAGES = {
-  confirmed: "Subscription price updated.",
-  pending: "Your update is confirming. Don't repeat it.",
-  failed: "Price update failed. Nothing was charged.",
-} as const;
-
-const CANCEL_MESSAGES = {
-  confirmed: "Subscription closed permanently.",
-  pending: "Your cancellation is confirming. Don't repeat it.",
-  failed: "Cancellation failed. Nothing was charged.",
-  confirm:
-    "Close this subscription permanently? Existing memberships remain valid until expiry, but this cannot be undone.",
-} as const;
-
 export function CreatorPage({
   address,
   signIn,
@@ -71,7 +51,6 @@ export function CreatorPage({
   const { address: routeAddress = "" } = useParams();
   const creatorAddress = creatorAddressFromRoute(routeAddress);
   const [creator, setCreator] = useState<CreatorResponse | null>(null);
-  const [membershipPrice, setMembershipPrice] = useState("10");
   const [busyPostId, setBusyPostId] = useState<string | null>(null);
   const [approvedPostId, setApprovedPostId] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
@@ -95,8 +74,6 @@ export function CreatorPage({
       );
       if (currentRequest === requestId.current) {
         setCreator(value);
-        if (value.membership.priceSompi)
-          setMembershipPrice(formatKas(value.membership.priceSompi));
       }
     } catch (error) {
       if (currentRequest !== requestId.current) return;
@@ -146,7 +123,8 @@ export function CreatorPage({
     currentCreator.membership.offered &&
     currentCreator.membership.available === false;
   const showSubscription =
-    owner || currentCreator.membership.offered || currentCreator.membership.active ||
+    currentCreator.membership.offered ||
+    currentCreator.membership.active ||
     currentCreator.membership.canceled;
 
   async function buyPost(target: PostResponse) {
@@ -262,12 +240,22 @@ export function CreatorPage({
                 compact
               />
               {owner && (
-                <Link
-                  className="secondary"
-                  to={checkoutPath(currentCreator.address)}
-                >
-                  {COPY.checkoutLinkLabel}
-                </Link>
+                <>
+                  <Link
+                    className="icon-link"
+                    to="/profile/edit"
+                    aria-label="Edit profile"
+                    title="Edit profile"
+                  >
+                    <Icon name="edit" />
+                  </Link>
+                  <Link
+                    className="secondary"
+                    to={checkoutPath(currentCreator.address)}
+                  >
+                    {COPY.checkoutLinkLabel}
+                  </Link>
+                </>
               )}
             </div>
           </div>
@@ -285,37 +273,16 @@ export function CreatorPage({
                   ? `${formatKas(currentCreator.membership.priceSompi)} KAS · 30 days`
                   : "30 days"}
             </p>
-            <div className="access-actions">
-              <SubscriptionAction
-                membership={currentCreator.membership}
-                owner={owner}
-                stage={membership.stage}
-                disabled={membership.busy || signingIn}
-                price={membershipPrice}
-                onPriceChange={setMembershipPrice}
-                onAction={() =>
-                  owner && currentCreator.membership.offered
-                    ? membership.updatePrice(membershipPrice, UPDATE_MESSAGES)
-                    : membership.subscribeOrStart(
-                        membershipPrice,
-                        BUYER_MESSAGES,
-                        START_MESSAGES,
-                      )
-                }
-              />
-              {owner && currentCreator.membership.offered && (
-                <button
-                  className="icon-button danger-icon"
-                  type="button"
+            {!owner && (
+              <div className="access-actions">
+                <SubscriptionAction
+                  membership={currentCreator.membership}
+                  stage={membership.stage}
                   disabled={membership.busy || signingIn}
-                  onClick={() => void membership.cancel(CANCEL_MESSAGES)}
-                  aria-label="Delete subscription"
-                  title="Delete subscription"
-                >
-                  <Icon name="trash" />
-                </button>
-              )}
-            </div>
+                  onSubscribe={() => membership.subscribe(BUYER_MESSAGES)}
+                />
+              </div>
+            )}
           </div>
         )}
         <div className="creator-posts">
@@ -382,113 +349,41 @@ function VisibilityBadge({
   );
 }
 
-function subscriptionLabel(owner: boolean, stage: SubscriptionStage): string {
-  if (stage === "confirming") return "Confirming...";
-  if (stage === "preparing") return owner ? "Starting..." : "Preparing...";
-  return owner ? "Start subscription" : "Subscribe";
-}
-
 function SubscriptionAction({
   membership,
-  owner,
   stage,
   disabled,
-  price,
-  onPriceChange,
-  onAction,
+  onSubscribe,
 }: {
   membership: CreatorResponse["membership"];
-  owner: boolean;
   stage: SubscriptionStage;
   disabled: boolean;
-  price: string;
-  onPriceChange: (value: string) => void;
-  onAction: () => Promise<void>;
+  onSubscribe: () => Promise<void>;
 }) {
-  const [editing, setEditing] = useState(false);
-
   if (membership.active)
     return <span className="access-status">Subscribed</span>;
   if (membership.offered && membership.available === false)
     return <span className="access-status">Unavailable</span>;
-  if (!owner && membership.canceled)
+  if (membership.canceled)
     return <span className="access-status">Subscription closed</span>;
-  if (!owner && !membership.offered)
+  if (!membership.offered)
     return <span className="access-status">Subscription live</span>;
-  if (!owner)
-    return (
-      <button className="primary" disabled={disabled} onClick={() => void onAction()}>
-        {stage !== null && <Spinner />}
-        {subscriptionLabel(owner, stage)}
-      </button>
-    );
-
-  const updating = membership.offered;
-  const priceField = (
-    <span className="price-input subscription-price">
-      <input
-        inputMode="decimal"
-        value={price}
-        onChange={(event) => onPriceChange(event.target.value)}
-        disabled={disabled}
-        aria-label="Monthly subscription price in KAS"
-      />
-      <span className="price-unit">KAS</span>
-    </span>
-  );
-
-  if (updating && editing)
-    return (
-      <div className="subscription-form">
-        {priceField}
-        <button
-          className="icon-button"
-          disabled={disabled}
-          onClick={() =>
-            void onAction().then(() => setEditing(false))
-          }
-          aria-label="Save price"
-          title="Save price"
-        >
-          {stage !== null ? <Spinner /> : <Icon name="check" />}
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          disabled={stage !== null}
-          onClick={() => setEditing(false)}
-          aria-label="Cancel"
-          title="Cancel"
-        >
-          <span className="icon-button-glyph" aria-hidden="true">
-            &times;
-          </span>
-        </button>
-      </div>
-    );
-
-  if (updating)
-    return (
-      <button
-        className="icon-button"
-        disabled={disabled}
-        onClick={() => setEditing(true)}
-        aria-label="Update price"
-        title="Update price"
-      >
-        <Icon name="edit" />
-      </button>
-    );
-
   return (
-    <div className="subscription-form">
-      {priceField}
-      <button className="primary" disabled={disabled} onClick={() => void onAction()}>
-        {stage !== null && <Spinner />}
-        {subscriptionLabel(owner, stage)}
-      </button>
-    </div>
+    <button
+      className="primary"
+      disabled={disabled}
+      onClick={() => void onSubscribe()}
+    >
+      {stage !== null && <Spinner />}
+      {buyerLabel(stage)}
+    </button>
   );
+}
+
+function buyerLabel(stage: SubscriptionStage): string {
+  if (stage === "confirming") return "Confirming...";
+  if (stage === "preparing") return "Preparing...";
+  return "Subscribe";
 }
 
 function PostCard({

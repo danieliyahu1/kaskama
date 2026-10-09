@@ -25,7 +25,7 @@ import { LegalPage } from "./LegalPage.js";
 import { SocialLinks } from "./SocialLinks.js";
 import { GlobalSearch } from "./GlobalSearch.js";
 import { AccountMenu } from "./AccountMenu.js";
-import { uploadAvatar, removeAvatar } from "./upload.js";
+import { EditProfilePage } from "./EditProfilePage.js";
 import { HomeLink, Message } from "./Message.js";
 import { Spinner } from "./Spinner.js";
 import { errorText, isNetworkRequired } from "./errors.js";
@@ -42,10 +42,7 @@ export function App() {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const [profileName, setProfileName] = useState("");
-  const [profileBio, setProfileBio] = useState("");
-  const [savingName, setSavingName] = useState(false);
-  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [profileReloadKey, setProfileReloadKey] = useState(0);
 
   const { toast, showToast, dismissToast } = useToast();
   const signedInAddress = useRef<string | null>(null);
@@ -79,8 +76,6 @@ export function App() {
   useEffect(() => {
     if (!address) {
       setProfile(null);
-      setProfileName("");
-      setProfileBio("");
       setLoadingProfile(false);
       setProfileError(null);
       return;
@@ -92,8 +87,6 @@ export function App() {
       .then((value) => {
         if (!active) return;
         setProfile(value);
-        setProfileName(value.displayName ?? "");
-        setProfileBio(value.bio ?? "");
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -107,7 +100,7 @@ export function App() {
     return () => {
       active = false;
     };
-  }, [address, showToast]);
+  }, [address, showToast, profileReloadKey]);
 
   useEffect(() => {
     let active = true;
@@ -197,62 +190,12 @@ export function App() {
     reloadPage();
   }
 
-  async function saveProfile() {
-    setSavingName(true);
-    try {
-      const value = await api<ProfileResponse>("/api/profile", {
-        method: "PUT",
-        body: JSON.stringify({
-          displayName: profileName,
-          bio: profileBio,
-        }),
-      });
-      setProfile(value);
-      setProfileName(value.displayName ?? "");
-      setProfileBio(value.bio ?? "");
-    } catch (error) {
-      showToast(errorText(error, "Profile could not be saved."), "error");
-    } finally {
-      setSavingName(false);
-    }
-  }
-
-  async function uploadAvatarPhoto(file: File) {
-    setAvatarBusy(true);
-    dismissToast();
-    try {
-      const value = await uploadAvatar(file);
-      setProfile(value);
-      showToast("Photo updated.", "success");
-    } catch (error) {
-      showToast(errorText(error, "Photo could not be uploaded."), "error");
-    } finally {
-      setAvatarBusy(false);
-    }
-  }
-
-  async function removeAvatarPhoto() {
-    setAvatarBusy(true);
-    dismissToast();
-    try {
-      const value = await removeAvatar();
-      setProfile(value);
-      showToast("Photo removed.", "success");
-    } catch (error) {
-      showToast(errorText(error, "Photo could not be removed."), "error");
-    } finally {
-      setAvatarBusy(false);
-    }
-  }
-
   async function saveVisibility(isPublic: boolean) {
     const value = await api<ProfileResponse>("/api/profile", {
       method: "PUT",
       body: JSON.stringify({ isPublic }),
     });
     setProfile(value);
-    setProfileName(value.displayName ?? "");
-    setProfileBio(value.bio ?? "");
     return value;
   }
 
@@ -278,17 +221,8 @@ export function App() {
                 address={address}
                 displayName={profile?.displayName ?? null}
                 avatarUrl={profile?.avatarUrl ?? null}
-                name={profileName}
-                bio={profileBio}
                 loading={loadingProfile}
                 error={profileError}
-                saving={savingName}
-                avatarBusy={avatarBusy}
-                onNameChange={setProfileName}
-                onBioChange={setProfileBio}
-                onSave={() => void saveProfile()}
-                onAvatarFile={(file) => void uploadAvatarPhoto(file)}
-                onAvatarRemove={() => void removeAvatarPhoto()}
                 onSignOut={() => void signOut()}
               />
             ) : (
@@ -342,6 +276,21 @@ export function App() {
               path="/post/:id"
               element={
                 <PostPage address={address} signIn={signIn} signingIn={signingIn} />
+              }
+            />
+            <Route
+              path="/profile/edit"
+              element={
+                <EditProfilePage
+                  address={address}
+                  signIn={signIn}
+                  signingIn={signingIn}
+                  profile={profile}
+                  loading={loadingProfile}
+                  error={profileError}
+                  onRetry={() => setProfileReloadKey((key) => key + 1)}
+                  onProfileChange={setProfile}
+                />
               }
             />
             {PUBLIC_PAGES.map((page) => (

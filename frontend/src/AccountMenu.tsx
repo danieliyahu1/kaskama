@@ -1,4 +1,6 @@
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { CreatorAvatar } from "./CreatorAvatar.js";
 import { Icon } from "./Icons.js";
 import { Spinner } from "./Spinner.js";
 import { shortenAddress } from "./format.js";
@@ -8,136 +10,78 @@ type AccountMenuProps = {
   address: string;
   displayName: string | null;
   avatarUrl: string | null;
-  name: string;
-  bio: string;
   loading: boolean;
   error: string | null;
-  saving: boolean;
-  avatarBusy: boolean;
-  onNameChange: (value: string) => void;
-  onBioChange: (value: string) => void;
-  onSave: () => void;
-  onAvatarFile: (file: File) => void;
-  onAvatarRemove: () => void;
   onSignOut: () => void;
 };
 
+/**
+ * The account menu is a doorway, not the room. It shows who you are and gets
+ * you out or onward; editing your identity happens on its own surface, where a
+ * deliberate act has room to land. The door closes behind you on every action.
+ */
 export function AccountMenu({
   address,
   displayName,
   avatarUrl,
-  name,
-  bio,
   loading,
   error,
-  saving,
-  avatarBusy,
-  onNameChange,
-  onBioChange,
-  onSave,
-  onAvatarFile,
-  onAvatarRemove,
   onSignOut,
 }: AccountMenuProps) {
-  const busy = saving || loading || Boolean(error);
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutside = (event: Event) => {
+      if (root.current && !root.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  const close = () => setOpen(false);
+
   return (
-    <details className="account">
+    <details
+      className="account"
+      ref={root}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
       <summary aria-label={summaryLabel(loading, error, displayName)}>
-        {loading ? <Spinner /> : <Icon name="user" />}{" "}
+        {loading ? <Spinner /> : <CreatorAvatar avatarUrl={avatarUrl} />}{" "}
         {greeting(loading, error, displayName)}
       </summary>
       <div className="account-menu">
-        <div className="account-avatar">
-          <span className="account-avatar-preview">
-            {avatarUrl ? <img src={avatarUrl} alt="" /> : <Icon name="user" />}
-          </span>
-          <div className="account-avatar-actions">
-            <label className="menu-button avatar-upload">
-              <input
-                type="file"
-                accept="image/*"
-                disabled={avatarBusy || busy}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (file) onAvatarFile(file);
-                }}
-              />
-              <span className="menu-label">
-                {avatarBusy ? "Uploading..." : "Change photo"}
-              </span>
-            </label>
-            {avatarUrl && (
-              <button
-                className="menu-button"
-                type="button"
-                disabled={avatarBusy || busy}
-                onClick={onAvatarRemove}
-              >
-                Remove photo
-              </button>
-            )}
-          </div>
-        </div>
-
-        <label htmlFor="display-name">Display name</label>
-        <NameField
-          name={name}
-          loading={loading}
-          error={error}
-          onNameChange={onNameChange}
-        />
-
-        <label htmlFor="bio">Bio</label>
-        <input
-          id="bio"
-          value={bio}
-          onChange={(event) => onBioChange(event.target.value)}
-          placeholder="Ambient music for deep work"
-          maxLength={120}
-          disabled={loading || Boolean(error)}
-        />
-
-        <button className="menu-button" disabled={busy} onClick={onSave}>
-          <span className="menu-label">
-            {saving && <Spinner />}
-            {saving ? "Saving..." : "Save"}
-          </span>
-          <Icon name="check" />
-        </button>
         <p className="account-address">{shortenAddress(address)}</p>
-        <Link className="menu-button" to={creatorPath(address)}>
+        <Link className="menu-button" to="/profile/edit" onClick={close}>
+          Edit profile
+          <Icon name="edit" />
+        </Link>
+        <Link className="menu-button" to={creatorPath(address)} onClick={close}>
           My page
         </Link>
-        <button className="menu-button" onClick={onSignOut}>
+        <button
+          className="menu-button"
+          onClick={() => {
+            close();
+            onSignOut();
+          }}
+        >
           Sign out
         </button>
       </div>
     </details>
-  );
-}
-
-function NameField({
-  name,
-  loading,
-  error,
-  onNameChange,
-}: {
-  name: string;
-  loading: boolean;
-  error: string | null;
-  onNameChange: (value: string) => void;
-}) {
-  if (loading) return <p className="account-loading">Loading profile...</p>;
-  if (error) return <p className="account-loading">{error}</p>;
-  return (
-    <input
-      id="display-name"
-      value={name}
-      onChange={(event) => onNameChange(event.target.value)}
-      placeholder="Add a display name"
-      maxLength={40}
-    />
   );
 }
 
