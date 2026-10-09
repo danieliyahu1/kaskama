@@ -1709,6 +1709,10 @@ button.visibility-badge:focus-visible {
   font-size: 0.95rem;
   line-height: 1.55;
 }
+.checkout-share {
+  display: flex;
+  margin-top: 1rem;
+}
 .checkout-name {
   display: grid;
   gap: 0.5rem;

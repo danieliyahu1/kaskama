@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { CheckoutPage } from "./CheckoutPage.js";
+import { shortenAddress } from "./format.js";
 import { api, signPreparedPayment, WalletNetworkError } from "./kasware.js";
 import { COPY } from "./copy.js";
 import {
@@ -31,8 +32,25 @@ function renderCheckout(address: string | null, signIn = vi.fn(async () => addre
   );
 }
 
+const writeText = vi.fn().mockResolvedValue(undefined);
+
 describe("CheckoutPage", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+  });
+
+  it("shows the seller's wallet address and copies it", async () => {
+    vi.mocked(api).mockResolvedValueOnce(creator(false, true));
+    renderCheckout(consumerAddress);
+
+    expect(await screen.findByText(shortenAddress(creatorAddress))).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Copy Kaspa address" }));
+    expect(writeText).toHaveBeenCalledWith(creatorAddress);
+  });
 
   it("lets a visitor subscribe to a named seller", async () => {
     vi.mocked(api)

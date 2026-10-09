@@ -73,15 +73,7 @@ export const COPY = {
   checkoutNameSaveFailed: "Couldn't save your name. Try again.",
   checkoutStartHint: "Set your price",
   checkoutStart: "Start subscription",
-  checkoutStarted: "Subscription is ready.",
-  checkoutStartFailed: "Subscription could not be started. Nothing was charged.",
   checkoutUpdatePrice: "Update price",
   checkoutPriceLabel: "Monthly subscription price in KAS",
-  checkoutPriceUpdated: "Subscription price updated.",
-  checkoutPriceFailed: "Price update failed. Nothing was charged.",
-  checkoutCancelConfirm:
-    "Close this subscription permanently? Existing memberships remain valid until expiry, but this cannot be undone.",
-  checkoutCanceled: "Subscription closed permanently.",
-  checkoutCancelFailed: "Cancellation failed. Nothing was charged.",
   checkoutPaymentFailed: "Payment failed. Nothing was charged.",
 } as const;

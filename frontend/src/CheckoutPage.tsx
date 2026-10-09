@@ -9,10 +9,15 @@ import { Message } from "./Message.js";
 import { COPY } from "./copy.js";
 import { errorText } from "./errors.js";
 import { presentError } from "./error-toast.js";
-import { formatKas } from "./format.js";
+import { formatKas, shortenAddress } from "./format.js";
 import { Icon } from "./Icons.js";
 import type { WalletProps } from "./wallet.js";
 import { useMembershipActions } from "./membership-actions.js";
+import {
+  CANCEL_MESSAGES,
+  START_MESSAGES,
+  UPDATE_MESSAGES,
+} from "./membership-messages.js";
 import {
   checkoutPath,
   creatorAddressFromRoute,
@@ -132,30 +137,17 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
   }
 
   function startSubscription() {
-    return membership.startOffer(price, {
-      confirmed: COPY.checkoutStarted,
-      pending: COPY.purchasePending,
-      failed: COPY.checkoutStartFailed,
-    });
+    return membership.startOffer(price, START_MESSAGES);
   }
 
   function updatePrice() {
     return membership
-      .updatePrice(price, {
-        confirmed: COPY.checkoutPriceUpdated,
-        pending: COPY.purchasePending,
-        failed: COPY.checkoutPriceFailed,
-      })
+      .updatePrice(price, UPDATE_MESSAGES)
       .then(() => setEditingPrice(false));
   }
 
   function cancelSubscription() {
-    return membership.cancel({
-      confirmed: COPY.checkoutCanceled,
-      pending: COPY.purchasePending,
-      failed: COPY.checkoutCancelFailed,
-      confirm: COPY.checkoutCancelConfirm,
-    });
+    return membership.cancel(CANCEL_MESSAGES);
   }
 
   function subscribe() {
@@ -166,15 +158,29 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
     });
   }
 
-  async function copyCheckoutLink() {
+  async function copyText(text: string, ok: string, fail: string) {
     try {
-      await navigator.clipboard.writeText(
-        new URL(checkoutPath(seller!.address), window.location.origin).toString(),
-      );
-      showToast(COPY.checkoutLinkCopied, "success");
+      await navigator.clipboard.writeText(text);
+      showToast(ok, "success");
     } catch {
-      showToast(COPY.shareFailed, "error");
+      showToast(fail, "error");
     }
+  }
+
+  function copyCheckoutLink() {
+    return copyText(
+      new URL(checkoutPath(seller!.address), window.location.origin).toString(),
+      COPY.checkoutLinkCopied,
+      COPY.shareFailed,
+    );
+  }
+
+  function copyAddress() {
+    return copyText(
+      seller!.address,
+      "Address copied.",
+      "Couldn't copy the address.",
+    );
   }
 
   if (offerUnavailable)
@@ -271,7 +277,7 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
                 {priceField}
                 <button
                   type="button"
-                  className="icon-button"
+                  className="icon-link"
                   disabled={busy}
                   aria-label="Save price"
                   title="Save price"
@@ -281,7 +287,7 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
                 </button>
                 <button
                   type="button"
-                  className="icon-button"
+                  className="icon-link"
                   disabled={busy}
                   aria-label="Cancel"
                   title="Cancel"
@@ -296,22 +302,17 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
               <>
                 <button
                   type="button"
-                  className="secondary"
+                  className="icon-link"
                   disabled={busy}
+                  aria-label={COPY.checkoutUpdatePrice}
+                  title={COPY.checkoutUpdatePrice}
                   onClick={() => setEditingPrice(true)}
                 >
-                  {COPY.checkoutUpdatePrice}
+                  <Icon name="edit" />
                 </button>
                 <button
                   type="button"
-                  className="secondary"
-                  onClick={() => void copyCheckoutLink()}
-                >
-                  {COPY.checkoutCopyLink}
-                </button>
-                <button
-                  type="button"
-                  className="icon-button danger-icon"
+                  className="icon-link danger-icon"
                   disabled={busy}
                   aria-label="Delete subscription"
                   title="Delete subscription"
@@ -322,6 +323,15 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
               </>
             )}
           </div>
+        </div>
+        <div className="checkout-share">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void copyCheckoutLink()}
+          >
+            {COPY.checkoutCopyLink}
+          </button>
         </div>
         <p className="checkout-note">{COPY.checkoutPreview}</p>
       </>
@@ -369,6 +379,15 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
         <div className="checkout-identity">
           <p className="checkout-kicker">{COPY.checkoutKicker}</p>
           <h1>{seller.displayName}</h1>
+          <button
+            className="wallet-address"
+            type="button"
+            title={seller.address}
+            aria-label="Copy Kaspa address"
+            onClick={() => void copyAddress()}
+          >
+            {shortenAddress(seller.address)}
+          </button>
         </div>
       </div>
       {owner ? ownerControls() : buyerControls()}
