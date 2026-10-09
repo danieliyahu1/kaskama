@@ -64,13 +64,6 @@ export const COPY = {
   checkoutOfferNotServiceable: "Your subscription isn't available right now.",
   checkoutOfferNotServiceableNote:
     "Kaskama can't verify it on-chain yet, so checkout is paused.",
-  checkoutOwnerNote:
-    "Checkout activates once you have a display name and an open subscription.",
-  checkoutNameRequired: "Add a display name to activate your checkout page.",
-  checkoutNameLabel: "Your display name",
-  checkoutSaveName: "Save name",
-  checkoutNameSaved: "Name saved.",
-  checkoutNameSaveFailed: "Couldn't save your name. Try again.",
   checkoutStartHint: "Set your price",
   checkoutStart: "Start subscription",
   checkoutUpdatePrice: "Update price",

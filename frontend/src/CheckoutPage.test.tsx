@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { CheckoutPage } from "./CheckoutPage.js";
-import { shortenAddress } from "./format.js";
+import { compactAddress, shortenAddress } from "./format.js";
 import { api, signPreparedPayment, WalletNetworkError } from "./kasware.js";
 import { COPY } from "./copy.js";
 import {
@@ -107,58 +107,43 @@ describe("CheckoutPage", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("does not activate checkout for a seller with no name", async () => {
+  it("shows a nameless seller's checkout under their wallet address", async () => {
     vi.mocked(api).mockResolvedValueOnce({
       ...creator(false, true),
       displayName: null,
     });
     renderCheckout(consumerAddress);
 
-    expect(await screen.findByText(COPY.checkoutUnavailable)).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Subscribe" })).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", {
+        name: compactAddress(creatorAddress),
+      }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Subscribe" })).toBeVisible();
   });
 
-  it("tells the owner to add a name before their checkout activates", async () => {
+  it("lets a nameless owner manage their checkout", async () => {
     vi.mocked(api).mockResolvedValueOnce({
       ...creator(true, true),
       displayName: null,
     });
     renderCheckout(creatorAddress);
 
-    expect(await screen.findByText(COPY.checkoutNameRequired)).toBeVisible();
-    expect(screen.getByText(COPY.checkoutOwnerNote)).toBeVisible();
-  });
-
-  it("lets the owner set their name from the checkout page itself", async () => {
-    vi.mocked(api)
-      .mockResolvedValueOnce({ ...creator(true, true), displayName: null })
-      .mockResolvedValueOnce({})
-      .mockResolvedValueOnce(creator(true, true));
-    const user = userEvent.setup();
-    renderCheckout(creatorAddress);
-
-    const field = await screen.findByLabelText(COPY.checkoutNameLabel);
-    await user.type(field, "Kaspa News");
-    await user.click(screen.getByRole("button", { name: COPY.checkoutSaveName }));
-
-    expect(api).toHaveBeenCalledWith("/api/profile", {
-      method: "PUT",
-      body: JSON.stringify({ displayName: "Kaspa News" }),
-    });
     expect(
-      await screen.findByRole("button", { name: COPY.checkoutCopyLink }),
+      await screen.findByRole("heading", {
+        name: compactAddress(creatorAddress),
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: COPY.checkoutUpdatePrice }),
     ).toBeVisible();
   });
 
   it("tells a visitor the creator hasn't set up checkout yet", async () => {
-    vi.mocked(api).mockResolvedValueOnce({
-      ...creator(false, true),
-      displayName: null,
-    });
+    vi.mocked(api).mockResolvedValueOnce(creator(false, false));
     renderCheckout(consumerAddress);
 
     expect(await screen.findByText(COPY.checkoutUnavailable)).toBeVisible();
-    expect(screen.queryByText(COPY.checkoutOwnerNote)).not.toBeInTheDocument();
   });
 
   it("refuses to sell a subscription the backend can't serve", async () => {

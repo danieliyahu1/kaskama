@@ -1713,35 +1713,6 @@ button.visibility-badge:focus-visible {
   display: flex;
   margin-top: 1rem;
 }
-.checkout-name {
-  display: grid;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-.checkout-name label {
-  color: var(--muted);
-  font:
-    500 0.72rem "DM Mono",
-    monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.checkout-name-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.checkout-name input {
-  flex: 1 1 12rem;
-  min-height: 2.75rem;
-  padding: 0.7rem 0.8rem;
-  border: 1px solid var(--line);
-  background: var(--ink);
-  color: var(--paper);
-  font:
-    500 0.95rem "DM Mono",
-    monospace;
-}
 .post-lock-icon {
   width: 1.35rem;
   height: 1.35rem;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { type CreatorResponse } from "@kaskama/shared";
 import { api } from "./kasware.js";
@@ -8,8 +8,7 @@ import { useToast } from "./Toast.js";
 import { Message } from "./Message.js";
 import { COPY } from "./copy.js";
 import { errorText } from "./errors.js";
-import { presentError } from "./error-toast.js";
-import { formatKas, shortenAddress } from "./format.js";
+import { formatKas, compactAddress, shortenAddress } from "./format.js";
 import { Icon } from "./Icons.js";
 import type { WalletProps } from "./wallet.js";
 import { useMembershipActions } from "./membership-actions.js";
@@ -24,30 +23,26 @@ import {
   hasAddressPrefix,
 } from "./creator-url.js";
 
-/** The longest a display name may be, matching the server's rule. */
-const DISPLAY_NAME_MAX = 40;
 const DEFAULT_PRICE = "10";
 
 /**
  * The checkout. For a buyer it is the seller's identity and their subscription,
  * and nothing else — the profile stripped of everything that is not the payment.
- * For the seller it is the whole management surface: set a name, set a price,
- * start, update, or cancel the subscription — so once they are here they never
- * need to leave to initialize or manage it. The membership actions are the same
- * shared ones the profile page uses; only the layout differs.
+ * For the seller it is the whole management surface: set a price, start, update,
+ * or cancel the subscription. The membership actions are the same shared ones
+ * the profile page uses; only the layout differs. A name is optional — a missing
+ * one falls back to the seller's wallet address.
  */
 export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
   const navigate = useNavigate();
   const { address: routeAddress = "" } = useParams();
   const sellerAddress = creatorAddressFromRoute(routeAddress);
   const [seller, setSeller] = useState<CreatorResponse | null>(null);
-  const [name, setName] = useState("");
-  const [savingName, setSavingName] = useState(false);
   const [price, setPrice] = useState(DEFAULT_PRICE);
   const [editingPrice, setEditingPrice] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const { showToast, dismissToast } = useToast();
+  const { showToast } = useToast();
   const requestId = useRef(0);
 
   async function loadSeller() {
@@ -108,33 +103,6 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
   const priceLabel = seller.membership.priceSompi
     ? `${formatKas(seller.membership.priceSompi)} KAS · ${durationDays} days`
     : `${durationDays} days`;
-
-  /**
-   * The owner can set a name here, on the checkout page itself, so being
-   * uninitialized is one step from fixed instead of a trip to another screen.
-   */
-  async function saveName(event: FormEvent) {
-    event.preventDefault();
-    const displayName = name.trim();
-    if (!displayName) return;
-    setSavingName(true);
-    dismissToast();
-    try {
-      await api("/api/profile", {
-        method: "PUT",
-        body: JSON.stringify({ displayName }),
-      });
-      showToast(COPY.checkoutNameSaved, "success");
-      await loadSeller();
-    } catch (error) {
-      showToast(
-        presentError(error, COPY.checkoutNameSaveFailed).message,
-        "error",
-      );
-    } finally {
-      setSavingName(false);
-    }
-  }
 
   function startSubscription() {
     return membership.startOffer(price, START_MESSAGES);
@@ -198,39 +166,7 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
       </Message>
     );
 
-  if (owner && !seller.displayName)
-    return (
-      <Message title={COPY.checkoutNameRequired}>
-        <form
-          className="checkout-name"
-          onSubmit={(event) => void saveName(event)}
-        >
-          <label htmlFor="checkout-name">{COPY.checkoutNameLabel}</label>
-          <div className="checkout-name-row">
-            <input
-              id="checkout-name"
-              name="displayName"
-              autoComplete="nickname"
-              maxLength={DISPLAY_NAME_MAX}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              disabled={savingName}
-            />
-            <button
-              className="primary"
-              type="submit"
-              disabled={savingName || name.trim().length === 0}
-            >
-              {savingName && <Spinner />}
-              {COPY.checkoutSaveName}
-            </button>
-          </div>
-        </form>
-        <p className="checkout-note">{COPY.checkoutOwnerNote}</p>
-      </Message>
-    );
-
-  if (!owner && (!seller.displayName || !seller.membership.offered))
+  if (!owner && !seller.membership.offered)
     return <Message title={COPY.checkoutUnavailable} />;
 
   const busy = membership.busy;
@@ -378,7 +314,7 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
         <CreatorAvatar avatarUrl={seller.avatarUrl} />
         <div className="checkout-identity">
           <p className="checkout-kicker">{COPY.checkoutKicker}</p>
-          <h1>{seller.displayName}</h1>
+          <h1>{seller.displayName ?? compactAddress(seller.address)}</h1>
           <button
             className="wallet-address"
             type="button"
