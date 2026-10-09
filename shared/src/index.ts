@@ -96,6 +96,12 @@ export interface CreatorResponse {
   isOwner: boolean;
   membership: {
     offered: boolean;
+    /**
+     * Whether the offer can currently be served: its covenant output is on
+     * chain and the transaction behind it is readable. A database row alone
+     * does not mean the subscription is live.
+     */
+    available?: boolean;
     canceled?: boolean;
     active: boolean;
     priceSompi?: string | null;

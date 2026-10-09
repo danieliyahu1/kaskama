@@ -240,6 +240,16 @@ export interface MembershipGateway {
     signedTransaction: string,
   ): Promise<PaymentSubmission>;
   /**
+   * Whether the creator's offer can currently be served: its covenant output
+   * is on chain and the transaction that created it is readable. A stored
+   * covenant alone does not mean the subscription is live.
+   */
+  offerAvailable?(
+    creator: string,
+    covenantId: string,
+    priceSompi: string,
+  ): Promise<boolean>;
+  /**
    * Reports whether the chain has accepted a previously submitted transaction.
    * Used by the reconciler to finish workflows whose client disappeared.
    */

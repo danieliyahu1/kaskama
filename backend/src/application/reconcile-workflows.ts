@@ -4,6 +4,7 @@ import type {
   PaymentGateway,
   Repositories,
 } from "./ports.js";
+import { MembershipSettlement } from "./membership-settlement.js";
 import type {
   MembershipWorkflow,
   PaymentWorkflow,
@@ -60,6 +61,7 @@ export class WorkflowReconciler {
   private readonly metrics: Metrics;
   private readonly batchSize: number;
   private readonly staleWorkflowMs: number;
+  private readonly settlement: MembershipSettlement;
 
   constructor(private readonly d: WorkflowReconcilerDependencies) {
     this.now = d.now ?? Date.now;
@@ -67,6 +69,10 @@ export class WorkflowReconciler {
     this.metrics = d.metrics ?? defaultMetrics;
     this.batchSize = d.batchSize ?? DEFAULT_BATCH;
     this.staleWorkflowMs = d.staleWorkflowMs ?? STALE_WORKFLOW_MS;
+    this.settlement = new MembershipSettlement(
+      d.membershipGateway,
+      d.membershipVerifier,
+    );
   }
 
   /** One reconciliation pass over all unresolved workflows. */
@@ -220,49 +226,21 @@ export class WorkflowReconciler {
       await this.abandonMembership(workflow, now, "prepared_missing", summary);
       return;
     }
-    const accepted = await this.membershipAccepted(workflow.transactionId, prepared);
-    if (accepted === null) {
+    const settlement = await this.settlement.settle(
+      prepared,
+      workflow.transactionId,
+    );
+    if (settlement.state === "PENDING") {
       if (this.workflowAge(workflow, now) > this.staleWorkflowMs)
         await this.abandonMembership(workflow, now, "unconfirmed_timeout", summary);
       else summary.retried += 1;
       return;
     }
-    if (!accepted) {
+    if (settlement.state === "REJECTED") {
       await this.rejectMembership(workflow, now, summary);
       return;
     }
     await this.confirmMembership(workflow, prepared, now, summary);
-  }
-
-  /**
-   * Confirms the transaction is accepted on chain for the exact covenant and
-   * member output the server prepared. Returns null while it cannot yet tell.
-   */
-  private async membershipAccepted(
-    transactionId: string,
-    prepared: PreparedMembershipRecord,
-  ): Promise<boolean | null> {
-    const verifier = this.d.membershipVerifier;
-    if (!verifier) return this.gatewayAccepted(transactionId);
-    if (prepared.kind !== "purchase" || prepared.memberOutputIndex === null)
-      return this.gatewayAccepted(transactionId);
-    const check = await verifier.verifyUtxo(
-      transactionId,
-      prepared.memberOutputIndex,
-      prepared.buyer,
-      prepared.covenantId,
-      prepared.creator,
-    );
-    if (check.status === "VALID") return true;
-    if (check.status === "EXPIRED") return true;
-    return null;
-  }
-
-  private async gatewayAccepted(transactionId: string): Promise<boolean | null> {
-    const gateway = this.d.membershipGateway;
-    if (!gateway?.status) return null;
-    const submission = await gateway.status(transactionId);
-    return submission.isAccepted;
   }
 
   private async confirmMembership(

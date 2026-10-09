@@ -718,6 +718,7 @@ describe("subscription recognition", () => {
       .set("Cookie", cookie);
     expect(creatorResponse.body.membership).toEqual({
       offered: true,
+      available: true,
       active: true,
       priceSompi: "1000000000",
       durationDays: 30,
@@ -730,6 +731,93 @@ describe("subscription recognition", () => {
       .get("/api/posts/paid-post")
       .set("Cookie", cookie);
     expect(postResponse.body.canView).toBe(true);
+  });
+
+  it("reports an offer the chain cannot serve as unavailable", async () => {
+    const store = new MemoryStore();
+    await store.saveCreatorCovenant({
+      creator,
+      covenantId: "covenant-1",
+      priceSompi: "1000000000",
+    });
+    const membershipGateway: MembershipGateway = {
+      prepareOffer: async () => {
+        throw new Error("unused");
+      },
+      prepareMint: async () => {
+        throw new Error("unused");
+      },
+      preparePriceUpdate: async () => {
+        throw new Error("unused");
+      },
+      prepareCancellation: async () => {
+        throw new Error("unused");
+      },
+      submit: async () => {
+        throw new Error("unused");
+      },
+      offerAvailable: async () => false,
+    };
+    const { app } = testApp(
+      store,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      membershipGateway,
+    );
+
+    const response = await request(app).get(`/api/creators/${creator}`);
+    expect(response.body.membership).toEqual({
+      offered: true,
+      available: false,
+      active: false,
+      priceSompi: "1000000000",
+      durationDays: 30,
+    });
+  });
+
+  it("re-checks offer serviceability on every read, never caching it", async () => {
+    const store = new MemoryStore();
+    await store.saveCreatorCovenant({
+      creator,
+      covenantId: "covenant-1",
+      priceSompi: "1000000000",
+    });
+    const offerAvailable = vi.fn(async () => true);
+    const membershipGateway: MembershipGateway = {
+      prepareOffer: async () => {
+        throw new Error("unused");
+      },
+      prepareMint: async () => {
+        throw new Error("unused");
+      },
+      preparePriceUpdate: async () => {
+        throw new Error("unused");
+      },
+      prepareCancellation: async () => {
+        throw new Error("unused");
+      },
+      submit: async () => {
+        throw new Error("unused");
+      },
+      offerAvailable,
+    };
+    const { app } = testApp(
+      store,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      membershipGateway,
+    );
+
+    await request(app).get(`/api/creators/${creator}`);
+    await request(app).get(`/api/creators/${creator}`);
+
+    expect(offerAvailable).toHaveBeenCalledTimes(2);
   });
 
   it("keeps a viewer locked when no membership is found on chain", async () => {
@@ -1544,6 +1632,147 @@ describe("membership state changes", () => {
       membershipGateway,
     );
   }
+
+  function check(status: MembershipCheck["status"]): MembershipCheck {
+    return {
+      transactionId: "tx-1",
+      outputIndex: 1,
+      covenantId,
+      kind: status === "VALID" ? "token" : "none",
+      tokenType: status === "VALID" ? "membership" : null,
+      owner: null,
+      contentCreator: null,
+      platformAddress: null,
+      createdAtDaa: null,
+      expiresAtDaa: null,
+      createdAt: null,
+      validUntil: null,
+      status,
+    };
+  }
+
+  async function seedPurchase(store: MemoryStore) {
+    const creator = await creatorSession(store);
+    await store.savePreparedMembership({
+      id: "prepared-1",
+      transaction: "{}",
+      fingerprint: "fp",
+      covenantId,
+      signInputs: [1],
+      memberOutputIndex: 1,
+      creator,
+      buyer: creator,
+      kind: "purchase",
+      expiresAt: Date.now() + 60_000,
+      priceSompi: "1000000000",
+    });
+    return creator;
+  }
+
+  it("keeps a relayed purchase pending until the member output verifies", async () => {
+    const store = new MemoryStore();
+    await seedPurchase(store);
+    const verifier: MembershipVerifier = {
+      verifyAddress: async () => [],
+      findMembership: async () => null,
+      verifyUtxo: async () => check("NOT_MEMBERSHIP"),
+    };
+    const { app } = testApp(
+      store,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      verifier,
+      gatewayThatConfirms(),
+    );
+
+    const response = await request(app)
+      .post("/api/membership/purchases/prepared-1/finalize")
+      .set("Cookie", "kaskama_session=creator-session")
+      .send({ signedTransaction: "{}" });
+
+    expect(response.status).toBe(202);
+    expect(response.body).toMatchObject({ state: "PENDING", transactionId: "tx-1" });
+    expect(await store.getMembershipWorkflow("prepared-1")).toMatchObject({
+      state: "SUBMITTED",
+    });
+  });
+
+  it("confirms a purchase once the member output verifies on chain", async () => {
+    const store = new MemoryStore();
+    const creator = await seedPurchase(store);
+    const verifier: MembershipVerifier = {
+      verifyAddress: async () => [],
+      findMembership: async () => null,
+      verifyUtxo: async () => check("VALID"),
+    };
+    const { app } = testApp(
+      store,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      verifier,
+      gatewayThatConfirms(),
+    );
+
+    const response = await request(app)
+      .post("/api/membership/purchases/prepared-1/finalize")
+      .set("Cookie", "kaskama_session=creator-session")
+      .send({ signedTransaction: "{}" });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      state: "CONFIRMED",
+      transactionId: "tx-1",
+    });
+    expect(await store.membershipReceipts(creator, creator)).toHaveLength(1);
+  });
+
+  it("re-checks an in-flight purchase instead of relaying again", async () => {
+    const store = new MemoryStore();
+    await seedPurchase(store);
+    await store.saveMembershipWorkflow({
+      preparedMembershipId: "prepared-1",
+      state: "SUBMITTED",
+      transactionId: "tx-1",
+      rejection: null,
+    });
+    const submit = vi.fn(async () => {
+      throw new Error("must not relay again");
+    });
+    const gateway: MembershipGateway = {
+      ...gatewayThatThrows(new Error("unused")),
+      submit,
+    };
+    const verifier: MembershipVerifier = {
+      verifyAddress: async () => [],
+      findMembership: async () => null,
+      verifyUtxo: async () => check("VALID"),
+    };
+    const { app } = testApp(
+      store,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      verifier,
+      gateway,
+    );
+
+    const response = await request(app)
+      .post("/api/membership/purchases/prepared-1/finalize")
+      .set("Cookie", "kaskama_session=creator-session")
+      .send({});
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      state: "CONFIRMED",
+      transactionId: "tx-1",
+    });
+    expect(submit).not.toHaveBeenCalled();
+  });
 
   it.each([
     ["price/prepare", "/api/membership/price/prepare", { price: "10" }],

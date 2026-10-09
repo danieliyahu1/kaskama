@@ -499,6 +499,22 @@ export class KaspaMembershipGateway implements MembershipGateway {
     return result;
   }
 
+  /**
+   * Whether the creator's offer can currently be served: the same lookup a mint
+   * performs — a matching covenant output whose parent transaction is readable.
+   * A `false` answer means a database row says "live" but subscribing would fail.
+   */
+  async offerAvailable(
+    creator: string,
+    covenantIdHex: string,
+    priceSompi: string,
+  ): Promise<boolean> {
+    const minter = minterState(creator, this.platformFeeAddress, BigInt(priceSompi));
+    const minterUtxos = await this.utxos(membershipAddress(minter, this.network));
+    const found = await this.findMinterUtxo(minterUtxos, minter, covenantIdHex);
+    return found !== undefined;
+  }
+
   async submit(
     preparedValue: PreparedMembershipTransaction,
     signedTransaction: string,
@@ -679,18 +695,23 @@ export class KaspaMembershipGateway implements MembershipGateway {
     );
     const matches = await Promise.all(
       candidates.map(async (utxo) => {
-        const transaction = await this.readTransaction(
-          utxo.outpoint.transactionId,
-        );
-        const output = transaction.outputs?.[utxo.outpoint.index];
-        return transaction.version === 1 &&
-          transaction.is_accepted === true &&
-          outputAmount(output) === MEMBERSHIP_OUTPUT_VALUE &&
-          output?.script_public_key === expectedScript &&
-          outputCovenantId(output) === covenantIdHex &&
-          outputAuthorizingInput(output) === 0
-          ? utxo
-          : undefined;
+        // A candidate whose parent transaction we cannot read (stale evidence,
+        // or a covenant output created elsewhere that the node will not serve)
+        // is simply not a match. One unreadable output must never break a mint.
+        try {
+          const transaction = await this.readTransaction(utxo.outpoint.transactionId);
+          const output = transaction.outputs?.[utxo.outpoint.index];
+          return transaction.version === 1 &&
+            transaction.is_accepted === true &&
+            outputAmount(output) === MEMBERSHIP_OUTPUT_VALUE &&
+            output?.script_public_key === expectedScript &&
+            outputCovenantId(output) === covenantIdHex &&
+            outputAuthorizingInput(output) === 0
+            ? utxo
+            : undefined;
+        } catch {
+          return undefined;
+        }
       }),
     );
     return matches.find((utxo) => utxo !== undefined);

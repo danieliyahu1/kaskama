@@ -144,6 +144,76 @@ describe("KaspaMembershipGateway", () => {
     expect(inputValue - outputValue).toBe(1_748_900n);
   });
 
+  it("reports an offer available when its covenant output is readable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes(encodeURIComponent(membershipAddress(minter))))
+          return Response.json([
+            {
+              outpoint: { transactionId: "33".repeat(32), index: 0 },
+              utxoEntry: {
+                amount: MEMBERSHIP_OUTPUT_VALUE.toString(),
+                scriptPublicKey: { scriptPublicKey: membershipScript(minter).slice(4) },
+                blockDaaScore: "100",
+                isCoinbase: false,
+              },
+            },
+          ]);
+        if (url.endsWith(`/transactions/${"33".repeat(32)}`))
+          return Response.json({
+            version: 1,
+            is_accepted: true,
+            outputs: [
+              {
+                amount: MEMBERSHIP_OUTPUT_VALUE.toString(),
+                script_public_key: membershipScript(minter).slice(4),
+                covenant_authorizing_input: 0,
+                covenant_id: "55".repeat(32),
+              },
+            ],
+          });
+        return new Response("not found", { status: 404 });
+      }),
+    );
+    const gateway = new KaspaMembershipGateway(platformFeeAddress, "https://node.test");
+
+    await expect(
+      gateway.offerAvailable(creator, "55".repeat(32), "1000000000"),
+    ).resolves.toBe(true);
+  });
+
+  it("reports an offer unavailable when its transaction cannot be read", async () => {
+    // The covenant output is on the ledger, but its parent transaction is not
+    // served (no evidence, and the node 404s v1 transactions). The offer cannot
+    // be minted, so it is not available.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes(encodeURIComponent(membershipAddress(minter))))
+          return Response.json([
+            {
+              outpoint: { transactionId: "99".repeat(32), index: 0 },
+              utxoEntry: {
+                amount: MEMBERSHIP_OUTPUT_VALUE.toString(),
+                scriptPublicKey: { scriptPublicKey: membershipScript(minter).slice(4) },
+                blockDaaScore: "100",
+                isCoinbase: false,
+              },
+            },
+          ]);
+        return new Response("not found", { status: 404 });
+      }),
+    );
+    const gateway = new KaspaMembershipGateway(platformFeeAddress, "https://node.test");
+
+    await expect(
+      gateway.offerAvailable(creator, "55".repeat(32), "1000000000"),
+    ).resolves.toBe(false);
+  });
+
   it("prices fees from version 1 compute mass", async () => {
     vi.stubGlobal(
       "fetch",

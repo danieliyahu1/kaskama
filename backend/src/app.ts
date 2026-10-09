@@ -91,6 +91,7 @@ import {
 import { createPublishPostUseCase } from "./application/publication-use-cases.js";
 import { createDeletePostUseCase } from "./application/delete-post.js";
 import { MembershipAccess } from "./application/membership-access.js";
+import { MembershipSettlement } from "./application/membership-settlement.js";
 import { StorageError } from "./r2-storage.js";
 import { discardTempDir } from "./temp-files.js";
 
@@ -164,6 +165,25 @@ export function createApp(d: AppDependencies) {
   });
   const discovery = createDiscoveryUseCases({ profiles: d.store });
   const membershipAccess = new MembershipAccess(d.store, d.store, d.membershipVerifier);
+  // The one decision maker for "has this membership transaction settled?",
+  // shared with the reconciler so the immediate finalize and the background
+  // pass can never disagree about whether a purchase happened.
+  const membershipSettlement =
+    d.membershipGateway && d.membershipVerifier
+      ? new MembershipSettlement(d.membershipGateway, d.membershipVerifier)
+      : undefined;
+  // Offering is a database fact; serviceable is a chain fact. The chain can
+  // change without the database changing, so the check runs on every read and
+  // is never cached: a stale "available" is a lie a reader would pay into.
+  async function offerAvailable(covenant: CreatorCovenant): Promise<boolean> {
+    const gateway = d.membershipGateway;
+    if (!gateway?.offerAvailable) return true;
+    // A read that fails is not proof the offer is dead: keep serving rather than
+    // declaring a live subscription unavailable because a node blipped.
+    return gateway
+      .offerAvailable(covenant.creator, covenant.covenantId, covenant.priceSompi)
+      .catch(() => true);
+  }
   const publishPost = createPublishPostUseCase({
     posts: d.store,
     storage: d.storage,
@@ -688,6 +708,8 @@ export function createApp(d: AppDependencies) {
           viewer && !isOwner && (await membershipAccess.isActive(viewer, address)),
         ),
         profile = await profiles.get(address);
+      const available =
+        offered && covenant ? await offerAvailable(covenant) : false;
       const unlocked = new Set(
         posts.filter((p) => isFreePost(p.priceSompi)).map((p) => p.id),
       );
@@ -706,6 +728,7 @@ export function createApp(d: AppDependencies) {
         isOwner,
         membership: {
           offered,
+          available,
           ...(!covenant && history.some((value) => value.status === "CANCELED")
             ? { canceled: true }
             : {}),
@@ -1320,63 +1343,73 @@ export function createApp(d: AppDependencies) {
           retry: RETRY_AFTER_REFRESH,
         });
       }
-      const body = z.object({ signedTransaction: z.string().min(1) }).parse(req.body);
-      logger.info("membership_finalize", {
-        requestId: req.requestId,
-        kind: "purchase",
-      });
-      let submission: PaymentSubmission;
-      try {
-        submission = await d.membershipGateway.submit(value, body.signedTransaction);
-      } catch (error) {
-        if (error instanceof MembershipStateChangedError) {
-          await d.store.deleteMembershipWorkflow(id);
-          await d.store.deletePreparedMembership(id);
-          return membershipStale(res);
-        }
-        throw error;
-      }
-      if (submission.isAccepted !== true || !submission.transactionId) {
-        if (submission.isAccepted === null && submission.transactionId) {
-          await d.store.saveMembershipWorkflow({
-            preparedMembershipId: id,
-            state: "SUBMITTED",
-            transactionId: submission.transactionId,
-            rejection: null,
-          });
-        } else {
-          await d.store.deleteMembershipWorkflow(id);
-          await d.store.deletePreparedMembership(id);
-        }
-        metrics.membershipFinalizeAttempt(
-          "purchase",
-          submission.isAccepted === null ? "pending" : "rejected",
-        );
-        return res.status(submission.isAccepted === null ? 202 : 422).json({
-          state: submission.isAccepted === null ? "PENDING" : "REJECTED",
-          transactionId: submission.transactionId,
-          rejection: submission.rejection,
+      // Like the post payment: a finalize that arrives while the purchase is
+      // already in flight re-checks it instead of relaying again. Only the first
+      // finalize — with no stored workflow — needs the signed transaction.
+      const workflow = await d.store.getMembershipWorkflow(id);
+      let transactionId: string;
+      if (workflow) {
+        transactionId = workflow.transactionId;
+      } else {
+        const body = z
+          .object({ signedTransaction: z.string().min(1) })
+          .parse(req.body);
+        logger.info("membership_finalize", {
+          requestId: req.requestId,
+          kind: "purchase",
         });
+        let submission: PaymentSubmission;
+        try {
+          submission = await d.membershipGateway.submit(
+            value,
+            body.signedTransaction,
+          );
+        } catch (error) {
+          if (error instanceof MembershipStateChangedError) {
+            await d.store.deleteMembershipWorkflow(id);
+            await d.store.deletePreparedMembership(id);
+            return membershipStale(res);
+          }
+          throw error;
+        }
+        // The relay refused the transaction outright: nothing was charged.
+        if (!submission.transactionId) {
+          await d.store.deleteMembershipWorkflow(id);
+          await d.store.deletePreparedMembership(id);
+          metrics.membershipFinalizeAttempt("purchase", "rejected");
+          return res.status(422).json({
+            state: "REJECTED",
+            rejection: submission.rejection,
+          });
+        }
+        transactionId = submission.transactionId;
       }
-      const check = await d.membershipVerifier.verifyUtxo(
-        submission.transactionId,
-        value.memberOutputIndex!,
-        value.buyer,
-        value.covenantId,
-        value.creator,
-      );
-      if (check.status !== "VALID") {
+      // One decision, shared with the reconciler: has the purchase settled? A
+      // purchase is confirmed only once its member output is verified on chain;
+      // until then it is pending, never a rejection.
+      const settlement = await membershipSettlement!.settle(value, transactionId);
+      if (settlement.state === "PENDING") {
+        await d.store.saveMembershipWorkflow({
+          preparedMembershipId: id,
+          state: "SUBMITTED",
+          transactionId,
+          rejection: null,
+        });
+        metrics.membershipFinalizeAttempt("purchase", "pending");
+        return res.status(202).json({ state: "PENDING", transactionId });
+      }
+      if (settlement.state === "REJECTED") {
         await d.store.deleteMembershipWorkflow(id);
         await d.store.deletePreparedMembership(id);
-        metrics.membershipFinalizeAttempt("purchase", "not_confirmed");
+        metrics.membershipFinalizeAttempt("purchase", "rejected");
         return res.status(422).json({
           state: "REJECTED",
-          error: "MEMBERSHIP_NOT_CONFIRMED",
-          membership: check,
+          transactionId,
+          rejection: settlement.rejection,
         });
       }
       const outcome = await d.store.finalizeMembershipPurchase(id, {
-        transactionId: submission.transactionId,
+        transactionId,
         buyer: value.buyer,
         creator: value.creator,
         covenantId: value.covenantId,
@@ -1384,7 +1417,7 @@ export function createApp(d: AppDependencies) {
       await d.store.saveMembershipWorkflow({
         preparedMembershipId: id,
         state: "CONFIRMED",
-        transactionId: submission.transactionId,
+        transactionId,
         rejection: null,
       });
       await d.store.deleteMembershipWorkflow(id);
@@ -1395,8 +1428,8 @@ export function createApp(d: AppDependencies) {
       metrics.membershipFinalizeAttempt("purchase", "confirmed");
       res.status(201).json({
         state: "CONFIRMED",
-        transactionId: submission.transactionId,
-        membership: check,
+        transactionId,
+        membership: settlement.check,
       });
     }),
   );
