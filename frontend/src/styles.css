@@ -1713,6 +1713,33 @@ button.visibility-badge:focus-visible {
   display: flex;
   margin-top: 1rem;
 }
+.checkout-verify {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.85rem 0 0;
+}
+.checkout-verify-link {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.checkout-verify-link:hover,
+.checkout-verify-link:focus-visible {
+  color: var(--acid);
+}
+.checkout-verify-id {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 0.72rem "DM Mono", monospace;
+  cursor: pointer;
+}
+.checkout-verify-id:hover,
+.checkout-verify-id:focus-visible {
+  color: var(--acid);
+}
 .post-lock-icon {
   width: 1.35rem;
   height: 1.35rem;

@@ -10,6 +10,7 @@ import { COPY } from "./copy.js";
 import { errorText } from "./errors.js";
 import { formatKas, compactAddress, shortenAddress } from "./format.js";
 import { Icon } from "./Icons.js";
+import { covenantUrl } from "./app-config.js";
 import type { WalletProps } from "./wallet.js";
 import { useMembershipActions } from "./membership-actions.js";
 import {
@@ -149,6 +150,16 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
       "Address copied.",
       "Couldn't copy the address.",
     );
+  }
+
+  function copyCovenantId() {
+    const covenantId = seller!.membership.covenantId;
+    if (covenantId)
+      return copyText(
+        covenantId,
+        "Covenant id copied.",
+        "Couldn't copy the covenant id.",
+      );
   }
 
   if (offerUnavailable)
@@ -327,6 +338,27 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
         </div>
       </div>
       {owner ? ownerControls() : buyerControls()}
+      {seller.membership.covenantId && (
+        <p className="checkout-verify">
+          <a
+            className="checkout-verify-link"
+            href={covenantUrl(seller.membership.covenantId)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Verify on-chain
+          </a>
+          <button
+            type="button"
+            className="checkout-verify-id"
+            title={seller.membership.covenantId}
+            aria-label="Copy covenant id"
+            onClick={() => void copyCovenantId()}
+          >
+            {seller.membership.covenantId.slice(0, 12)}…
+          </button>
+        </p>
+      )}
     </section>
   );
 }

@@ -52,6 +52,30 @@ describe("CheckoutPage", () => {
     expect(writeText).toHaveBeenCalledWith(creatorAddress);
   });
 
+  it("links the live offer to the covenant explorer and copies the covenant id", async () => {
+    const covenantId = "a".repeat(64);
+    vi.mocked(api).mockResolvedValueOnce({
+      ...creator(false, true),
+      membership: {
+        offered: true,
+        active: false,
+        priceSompi: "1000000000",
+        durationDays: 30,
+        covenantId,
+      },
+    });
+    renderCheckout(consumerAddress);
+
+    expect(
+      await screen.findByRole("link", { name: "Verify on-chain" }),
+    ).toHaveAttribute(
+      "href",
+      `https://tn10-covenants.kaspa.com/covenants/${covenantId}`,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Copy covenant id" }));
+    expect(writeText).toHaveBeenCalledWith(covenantId);
+  });
+
   it("lets a visitor subscribe to a named seller", async () => {
     vi.mocked(api)
       .mockResolvedValueOnce(creator(false, true))

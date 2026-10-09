@@ -722,6 +722,7 @@ describe("subscription recognition", () => {
       active: true,
       priceSompi: "1000000000",
       durationDays: 30,
+      covenantId: "covenant-1",
     });
     expect(creatorResponse.body.posts[0].canView).toBe(true);
     expect(findMembership).toHaveBeenCalledWith(viewer, creator, "covenant-1");
@@ -775,6 +776,7 @@ describe("subscription recognition", () => {
       active: false,
       priceSompi: "1000000000",
       durationDays: 30,
+      covenantId: "covenant-1",
     });
   });
 

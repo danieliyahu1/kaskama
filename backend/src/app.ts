@@ -735,6 +735,7 @@ export function createApp(d: AppDependencies) {
           active,
           priceSompi: covenant?.priceSompi ?? null,
           durationDays: 30,
+          covenantId: covenant?.covenantId ?? null,
         },
         posts: posts.map((p) => postResponse(p, unlocked.has(p.id))),
       });

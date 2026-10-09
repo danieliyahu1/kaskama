@@ -30,6 +30,15 @@ export function addressPrefix(): string {
   return current.addressPrefix;
 }
 
+/**
+ * The covenant explorer page for an offer, where a buyer can verify it on-chain
+ * before paying. The explorer is a third party; the URL is built from the
+ * network the server reported, never guessed.
+ */
+export function covenantUrl(covenantId: string): string {
+  return `${networkDefinition(current.network).covenantExplorerUrl}/covenants/${covenantId}`;
+}
+
 export function isAppAddress(value: string): boolean {
   return networkDefinition(current.network).addressPattern.test(value);
 }

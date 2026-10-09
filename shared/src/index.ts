@@ -16,6 +16,8 @@ export interface NetworkDefinition {
   addressPrefix: string;
   addressPattern: RegExp;
   defaultNodeUrl: string;
+  /** Base URL of the covenant explorer, where an offer can be verified. */
+  covenantExplorerUrl: string;
 }
 
 export const NETWORK_DEFINITIONS: Record<NetworkId, NetworkDefinition> = {
@@ -26,6 +28,7 @@ export const NETWORK_DEFINITIONS: Record<NetworkId, NetworkDefinition> = {
     addressPrefix: "kaspa",
     addressPattern: /^kaspa:[a-z0-9]{40,80}$/,
     defaultNodeUrl: "https://api.kaspa.org",
+    covenantExplorerUrl: "https://covenants.kaspa.com",
   },
   "testnet-10": {
     id: "testnet-10",
@@ -34,6 +37,7 @@ export const NETWORK_DEFINITIONS: Record<NetworkId, NetworkDefinition> = {
     addressPrefix: "kaspatest",
     addressPattern: /^kaspatest:[a-z0-9]{40,80}$/,
     defaultNodeUrl: "https://api-tn10.kaspa.org",
+    covenantExplorerUrl: "https://tn10-covenants.kaspa.com",
   },
 };
 
@@ -107,6 +111,11 @@ export interface CreatorResponse {
     priceSompi?: string | null;
     durationDays?: number | null;
     version?: number | null;
+    /**
+     * The covenant id of the live offer, for verifying it on-chain. Present only
+     * when an offer exists.
+     */
+    covenantId?: string | null;
   };
   posts: PostResponse[];
 }

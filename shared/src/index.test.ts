@@ -137,4 +137,13 @@ describe("network definitions", () => {
       "https://api-tn10.kaspa.org",
     );
   });
+
+  it("exposes one covenant explorer per network", () => {
+    expect(networkDefinition("mainnet").covenantExplorerUrl).toBe(
+      "https://covenants.kaspa.com",
+    );
+    expect(networkDefinition("testnet-10").covenantExplorerUrl).toBe(
+      "https://tn10-covenants.kaspa.com",
+    );
+  });
 });
