@@ -4,6 +4,7 @@ import * as homeCopy from "./home-copy.json";
 import { appConfig } from "./app-config.js";
 import { api } from "./kasware.js";
 import { useAsyncResource } from "./useAsyncResource.js";
+import { compactAddress } from "./format.js";
 import { creatorPath } from "./creator-url.js";
 
 // A picture of what a fan meets, captured from the real product. It is static
@@ -74,14 +75,14 @@ function FanCreators() {
     (signal) => api<CreatorSearchResult[]>("/api/creators/public", { signal }),
     [],
   );
-  const creators = (data ?? []).filter((creator) => creator.displayName).slice(0, 4);
+  const creators = (data ?? []).slice(0, 4);
   if (!creators.length) return null;
   return (
     <ul className="fan-creators">
       {creators.map((creator) => (
         <li key={creator.address}>
           <Link to={creatorPath(creator.address)}>
-            {creator.displayName}
+            {creator.displayName ?? compactAddress(creator.address)}
           </Link>
         </li>
       ))}

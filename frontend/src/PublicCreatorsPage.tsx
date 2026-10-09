@@ -65,8 +65,8 @@ export function PublicCreatorsPage() {
  */
 function CreatorCard({ creator }: { creator: CreatorSearchResult }) {
   const { showToast } = useToast();
-  const name = creator.displayName ?? compactAddress(creator.address);
   const address = compactAddress(creator.address);
+  const name = creator.displayName ?? address;
 
   async function copyAddress() {
     try {
@@ -87,32 +87,28 @@ function CreatorCard({ creator }: { creator: CreatorSearchResult }) {
       <div className="creator-card-head">
         <CreatorAvatar avatarUrl={creator.avatarUrl} />
         <div className="creator-card-ident">
-          {creator.displayName ? (
-            <>
-              <h2 className="creator-card-name">{creator.displayName}</h2>
-              <button
-                type="button"
-                className="creator-card-handle"
-                title={creator.address}
-                aria-label={`Copy ${creator.displayName}'s wallet address`}
-                onClick={() => void copyAddress()}
-              >
-                {address}
-              </button>
-            </>
-          ) : (
-            <h2 className="creator-card-name is-address">
-              <button
-                type="button"
-                className="creator-card-copy"
-                title={creator.address}
-                aria-label={`Copy wallet address ${address}`}
-                onClick={() => void copyAddress()}
-              >
-                {address}
-              </button>
-            </h2>
-          )}
+          <h2
+            className={
+              creator.displayName
+                ? "creator-card-name"
+                : "creator-card-name is-address"
+            }
+          >
+            {name}
+          </h2>
+          <button
+            type="button"
+            className="creator-card-handle"
+            title={creator.address}
+            aria-label={
+              creator.displayName
+                ? `Copy ${creator.displayName}'s wallet address`
+                : `Copy wallet address ${address}`
+            }
+            onClick={() => void copyAddress()}
+          >
+            {address}
+          </button>
         </div>
       </div>
       {creator.bio && <p className="creator-card-line">{creator.bio}</p>}

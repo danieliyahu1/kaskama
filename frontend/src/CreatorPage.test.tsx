@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { CreatorPage } from "./CreatorPage.js";
-import { shortenAddress } from "./format.js";
+import { compactAddress } from "./format.js";
 import {
   api,
   signPreparedPayment,
@@ -135,7 +135,7 @@ describe("CreatorPage subscription actions", () => {
     renderCreator(null);
 
     expect(
-      await screen.findByRole("heading", { name: shortenAddress(creatorAddress) }),
+      await screen.findByRole("heading", { name: compactAddress(creatorAddress) }),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Copy Kaspa address" })).toBeVisible();
   });

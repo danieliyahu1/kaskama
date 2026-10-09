@@ -17,7 +17,7 @@ import { HomeLink, Message } from "./Message.js";
 import { COPY } from "./copy.js";
 import { errorText } from "./errors.js";
 import { actionFailure } from "./error-toast.js";
-import { formatKas, relativeTimeAgo, shortenAddress } from "./format.js";
+import { formatKas, relativeTimeAgo, compactAddress, shortenAddress } from "./format.js";
 import { ShareButton } from "./ShareButton.js";
 import type { WalletProps } from "./wallet.js";
 import {
@@ -215,7 +215,7 @@ export function CreatorPage({
           <CreatorAvatar avatarUrl={currentCreator.avatarUrl} />
           <div className="creator-identity">
             <h1 className={currentCreator.displayName ? undefined : "address-heading"}>
-              {currentCreator.displayName ?? shortenAddress(currentCreator.address)}
+              {currentCreator.displayName ?? compactAddress(currentCreator.address)}
             </h1>
             <button
               className="wallet-address"

@@ -193,7 +193,9 @@ describe("PublicCreatorsPage", () => {
     ]);
     renderPage();
 
-    expect(await screen.findByText(compactAddress(address))).toBeVisible();
+    expect(
+      await screen.findByRole("heading", { name: compactAddress(address) }),
+    ).toBeVisible();
   });
 
   it("shows an empty state", async () => {

@@ -1222,21 +1222,6 @@ button.creator-card-handle:hover,
 button.creator-card-handle:focus-visible {
   color: var(--acid);
 }
-.creator-card-copy {
-  position: relative;
-  z-index: 2;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.creator-card-copy:hover,
-.creator-card-copy:focus-visible {
-  color: var(--acid);
-}
 .creator-avatar {
   flex: 0 0 auto;
   display: grid;

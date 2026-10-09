@@ -7,6 +7,7 @@ import { Icon } from "./Icons.js";
 import { Spinner } from "./Spinner.js";
 import { useAutoDismiss } from "./useAutoDismiss.js";
 import { creatorPath, hasAddressPrefix } from "./creator-url.js";
+import { compactAddress } from "./format.js";
 
 export function FindCreatorPage() {
   const navigate = useNavigate();
@@ -131,8 +132,8 @@ export function FindCreatorPage() {
             key={result.address}
             onClick={() => navigate(creatorPath(result.address))}
           >
-            <strong>{result.displayName ?? result.displayAddress}</strong>
-            {result.displayName && <span>{result.displayAddress}</span>}
+            <strong>{result.displayName ?? compactAddress(result.address)}</strong>
+            <span>{result.displayAddress}</span>
           </button>
         ))}
       </div>
