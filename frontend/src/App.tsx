@@ -16,6 +16,7 @@ import {
 import { HomePage } from "./HomePage.js";
 import { PublishPage } from "./PublishPage.js";
 import { CreatorPage } from "./CreatorPage.js";
+import { CheckoutPage } from "./CheckoutPage.js";
 import { PostPage } from "./PostPage.js";
 import { FindCreatorPage } from "./FindCreatorPage.js";
 import { PublicCreatorsPage } from "./PublicCreatorsPage.js";
@@ -324,6 +325,16 @@ export function App() {
                   signIn={signIn}
                   signingIn={signingIn}
                   onVisibilityChange={saveVisibility}
+                />
+              }
+            />
+            <Route
+              path="/checkout/:address"
+              element={
+                <CheckoutPage
+                  address={address}
+                  signIn={signIn}
+                  signingIn={signingIn}
                 />
               }
             />

@@ -4,6 +4,10 @@ export function creatorPath(address: string): string {
   return `/creator/${encodeURIComponent(stripAddressPrefix(address))}`;
 }
 
+export function checkoutPath(address: string): string {
+  return `/checkout/${encodeURIComponent(stripAddressPrefix(address))}`;
+}
+
 export function creatorAddressFromRoute(value: string): string {
   const prefix = `${addressPrefix()}:`;
   return value.startsWith(prefix) ? value : `${prefix}${value}`;

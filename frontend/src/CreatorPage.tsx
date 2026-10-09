@@ -2,20 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   isFreePost,
-  RETRY_AFTER_REFRESH,
   type CreatorResponse,
   type PostResponse,
 } from "@kaskama/shared";
-import { api, signPreparedPayment } from "./kasware.js";
-import {
-  finalizePriceUpdate,
-  finalizeCancellation,
-  finalizeSubscription,
-  preparePriceUpdate,
-  prepareCancellation,
-  prepareSubscription,
-  unlockPost,
-} from "./purchase.js";
+import { api } from "./kasware.js";
+import { unlockPost } from "./purchase.js";
 import { Icon, LockIcon } from "./Icons.js";
 import { CreatorAvatar } from "./CreatorAvatar.js";
 import { PostTile, PostTileAction, PostTileMedia } from "./PostTile.js";
@@ -24,13 +15,17 @@ import { Spinner } from "./Spinner.js";
 import { useToast } from "./Toast.js";
 import { HomeLink, Message } from "./Message.js";
 import { COPY } from "./copy.js";
-import { errorText, isNetworkRequired } from "./errors.js";
-import { presentError } from "./error-toast.js";
-import { ApiError } from "./api-error.js";
+import { errorText } from "./errors.js";
+import { actionFailure } from "./error-toast.js";
 import { formatKas, relativeTimeAgo, shortenAddress } from "./format.js";
 import { ShareButton } from "./ShareButton.js";
 import type { WalletProps } from "./wallet.js";
 import {
+  useMembershipActions,
+  type SubscriptionStage,
+} from "./membership-actions.js";
+import {
+  checkoutPath,
   creatorAddressFromRoute,
   creatorPath,
   hasAddressPrefix,
@@ -40,7 +35,31 @@ type CreatorPageProps = WalletProps & {
   onVisibilityChange?: (isPublic: boolean) => Promise<unknown>;
 };
 
-type SubscriptionStage = "preparing" | "confirming" | null;
+const BUYER_MESSAGES = {
+  confirmed: "Subscribed for 30 days.",
+  pending: "Your payment is confirming. Don't pay again.",
+  failed: "Payment failed. Nothing was charged.",
+} as const;
+
+const START_MESSAGES = {
+  confirmed: "Subscription is ready.",
+  pending: "Your payment is confirming. Don't pay again.",
+  failed: "Payment failed. Nothing was charged.",
+} as const;
+
+const UPDATE_MESSAGES = {
+  confirmed: "Subscription price updated.",
+  pending: "Your update is confirming. Don't repeat it.",
+  failed: "Price update failed. Nothing was charged.",
+} as const;
+
+const CANCEL_MESSAGES = {
+  confirmed: "Subscription closed permanently.",
+  pending: "Your cancellation is confirming. Don't repeat it.",
+  failed: "Cancellation failed. Nothing was charged.",
+  confirm:
+    "Close this subscription permanently? Existing memberships remain valid until expiry, but this cannot be undone.",
+} as const;
 
 export function CreatorPage({
   address,
@@ -52,7 +71,6 @@ export function CreatorPage({
   const { address: routeAddress = "" } = useParams();
   const creatorAddress = creatorAddressFromRoute(routeAddress);
   const [creator, setCreator] = useState<CreatorResponse | null>(null);
-  const [busy, setBusy] = useState<SubscriptionStage>(null);
   const [membershipPrice, setMembershipPrice] = useState("10");
   const [busyPostId, setBusyPostId] = useState<string | null>(null);
   const [approvedPostId, setApprovedPostId] = useState<string | null>(null);
@@ -92,6 +110,13 @@ export function CreatorPage({
     }
   }
 
+  const membership = useMembershipActions({
+    creator: creatorAddress,
+    address,
+    signIn,
+    reload: loadCreator,
+  });
+
   useEffect(() => {
     if (hasAddressPrefix(routeAddress)) {
       navigate(creatorPath(creatorAddress), { replace: true });
@@ -115,112 +140,14 @@ export function CreatorPage({
 
   const currentCreator = creator;
   const owner = currentCreator.isOwner || address === currentCreator.address;
+  // A subscription can be "offered" in the database yet not serviceable on
+  // chain. The page never claims it is live unless the backend can serve it.
+  const subscriptionUnavailable =
+    currentCreator.membership.offered &&
+    currentCreator.membership.available === false;
   const showSubscription =
     owner || currentCreator.membership.offered || currentCreator.membership.active ||
     currentCreator.membership.canceled;
-
-  /**
-   * One place the membership actions react to a failed request. The server
-   * states the semantics with the generic `retry` hint, so this page never has
-   * to know a domain code.
-   */
-  async function handleActionFailure(error: unknown, fallback: string) {
-    if (isNetworkRequired(error)) return;
-    const refresh = error instanceof ApiError && error.retry === RETRY_AFTER_REFRESH;
-    if (refresh) await loadCreator();
-    const presented = presentError(error, fallback);
-    showToast(presented.message, refresh ? "info" : presented.tone, presented.action);
-  }
-
-  async function membershipAction() {
-    const wallet = address ?? (await signIn());
-    if (!wallet) return;
-    const actingAsOwner = wallet === currentCreator.address;
-    setBusy("preparing");
-    dismissToast();
-    try {
-      const prepared = await prepareSubscription(
-        actingAsOwner,
-        currentCreator.address,
-        actingAsOwner ? membershipPrice : undefined,
-      );
-      const signedTransaction = await signPreparedPayment(
-        prepared.transaction,
-        prepared.signInputs,
-      );
-      setBusy("confirming");
-      const result = await finalizeSubscription(
-        actingAsOwner,
-        prepared.id,
-        signedTransaction,
-      );
-      showToast(
-        result.state === "CONFIRMED"
-          ? actingAsOwner
-            ? "Subscription is ready."
-            : "Subscribed for 30 days."
-          : "Your payment is confirming. Don't pay again.",
-        result.state === "CONFIRMED" ? "success" : "info",
-      );
-      if (result.state === "CONFIRMED") await loadCreator();
-    } catch (error) {
-      await handleActionFailure(error, "Payment failed. Nothing was charged.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function updateMembershipPrice() {
-    const wallet = address ?? (await signIn());
-    if (!wallet || wallet !== currentCreator.address) return;
-    setBusy("preparing");
-    dismissToast();
-    try {
-      const prepared = await preparePriceUpdate(membershipPrice);
-      const signedTransaction = await signPreparedPayment(
-        prepared.transaction,
-        prepared.signInputs,
-      );
-      setBusy("confirming");
-      const result = await finalizePriceUpdate(prepared.id, signedTransaction);
-      showToast(
-        result.state === "CONFIRMED"
-          ? "Subscription price updated."
-          : "Your update is confirming. Don't repeat it.",
-        result.state === "CONFIRMED" ? "success" : "info",
-      );
-      if (result.state === "CONFIRMED") await loadCreator();
-    } catch (error) {
-      await handleActionFailure(error, "Price update failed. Nothing was charged.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function cancelMembership() {
-    const wallet = address ?? (await signIn());
-    if (!wallet || wallet !== currentCreator.address) return;
-    if (!window.confirm("Close this subscription permanently? Existing memberships remain valid until expiry, but this cannot be undone.")) return;
-    setBusy("preparing");
-    dismissToast();
-    try {
-      const prepared = await prepareCancellation();
-      const signedTransaction = await signPreparedPayment(prepared.transaction, prepared.signInputs);
-      setBusy("confirming");
-      const result = await finalizeCancellation(prepared.id, signedTransaction);
-      showToast(
-        result.state === "CONFIRMED"
-          ? "Subscription closed permanently."
-          : "Your cancellation is confirming. Don't repeat it.",
-        result.state === "CONFIRMED" ? "success" : "info",
-      );
-      if (result.state === "CONFIRMED") await loadCreator();
-    } catch (error) {
-      await handleActionFailure(error, "Cancellation failed. Nothing was charged.");
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function buyPost(target: PostResponse) {
     const buyer = address ?? (await signIn());
@@ -246,7 +173,10 @@ export function CreatorPage({
         showToast(result.message ?? COPY.purchasePending, "info");
       }
     } catch (error) {
-      await handleActionFailure(error, "Payment failed. Nothing was charged.");
+      await actionFailure(error, "Payment failed. Nothing was charged.", {
+        reload: loadCreator,
+        show: showToast,
+      });
     } finally {
       setBusyPostId(null);
       setApprovedPostId(null);
@@ -331,6 +261,14 @@ export function CreatorPage({
                 path={creatorPath(currentCreator.address)}
                 compact
               />
+              {owner && (
+                <Link
+                  className="secondary"
+                  to={checkoutPath(currentCreator.address)}
+                >
+                  {COPY.checkoutLinkLabel}
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -341,30 +279,36 @@ export function CreatorPage({
           <div className={owner ? "access-strip is-owner" : "access-strip"}>
             <p className="access-facts">
               Subscription ·{" "}
-              {currentCreator.membership.priceSompi
-                ? `${formatKas(currentCreator.membership.priceSompi)} KAS · 30 days`
-                : "30 days"}
+              {subscriptionUnavailable
+                ? "unavailable"
+                : currentCreator.membership.priceSompi
+                  ? `${formatKas(currentCreator.membership.priceSompi)} KAS · 30 days`
+                  : "30 days"}
             </p>
             <div className="access-actions">
               <SubscriptionAction
                 membership={currentCreator.membership}
                 owner={owner}
-                stage={busy}
-                disabled={busy !== null || signingIn}
+                stage={membership.stage}
+                disabled={membership.busy || signingIn}
                 price={membershipPrice}
                 onPriceChange={setMembershipPrice}
                 onAction={() =>
                   owner && currentCreator.membership.offered
-                    ? updateMembershipPrice()
-                    : membershipAction()
+                    ? membership.updatePrice(membershipPrice, UPDATE_MESSAGES)
+                    : membership.subscribeOrStart(
+                        membershipPrice,
+                        BUYER_MESSAGES,
+                        START_MESSAGES,
+                      )
                 }
               />
               {owner && currentCreator.membership.offered && (
                 <button
                   className="icon-button danger-icon"
                   type="button"
-                  disabled={busy !== null || signingIn}
-                  onClick={() => void cancelMembership()}
+                  disabled={membership.busy || signingIn}
+                  onClick={() => void membership.cancel(CANCEL_MESSAGES)}
                   aria-label="Delete subscription"
                   title="Delete subscription"
                 >
@@ -464,15 +408,9 @@ function SubscriptionAction({
   const [editing, setEditing] = useState(false);
 
   if (membership.active)
-    return (
-      <div className="subscription-renewal">
-        <span className="access-status">Subscribed</span>
-        <button className="secondary" disabled={disabled} onClick={() => void onAction()}>
-          {stage !== null && <Spinner />}
-          Renew for 30 days
-        </button>
-      </div>
-    );
+    return <span className="access-status">Subscribed</span>;
+  if (membership.offered && membership.available === false)
+    return <span className="access-status">Unavailable</span>;
   if (!owner && membership.canceled)
     return <span className="access-status">Subscription closed</span>;
   if (!owner && !membership.offered)

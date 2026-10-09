@@ -97,6 +97,19 @@ describe("CreatorPage subscription actions", () => {
     await waitFor(() => expect(screen.getByText("Subscribed")).toBeVisible());
   });
 
+  it("shows an offer the backend can't serve as unavailable", async () => {
+    vi.mocked(api).mockResolvedValueOnce({
+      ...creator(false, true),
+      membership: { offered: true, active: false, available: false },
+    });
+    renderCreator(consumerAddress);
+
+    expect(await screen.findByText("Unavailable")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Subscribe" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows preparing before wallet approval and confirming after", async () => {
     let resolveSign!: (value: string) => void;
     const sign = new Promise<string>((resolve) => {
@@ -563,5 +576,49 @@ describe("CreatorPage profile header", () => {
       document.querySelector(".creator-head .creator-avatar img"),
     ).toHaveAttribute("src", "/kaskama-logo.svg");
     expect(document.querySelector(".creator-bio")).toBeNull();
+  });
+});
+
+describe("CreatorPage checkout link", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("shows the owner a link to their checkout when the subscription is live", async () => {
+    vi.mocked(api).mockResolvedValueOnce(creator(true, true));
+    renderCreator(creatorAddress);
+
+    expect(
+      await screen.findByRole("link", { name: "Checkout page" }),
+    ).toHaveAttribute("href", `/checkout/${creatorAddress.split(":")[1]}`);
+  });
+
+  it("hides the checkout link from visitors", async () => {
+    vi.mocked(api).mockResolvedValueOnce(creator(false, true));
+    renderCreator(consumerAddress);
+
+    await screen.findByRole("button", { name: "Subscribe" });
+    expect(
+      screen.queryByRole("link", { name: "Checkout page" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the checkout link for the owner even before a name is set", async () => {
+    vi.mocked(api).mockResolvedValueOnce({
+      ...creator(true, true),
+      displayName: null,
+    });
+    renderCreator(creatorAddress);
+
+    expect(
+      await screen.findByRole("link", { name: "Checkout page" }),
+    ).toBeVisible();
+  });
+
+  it("keeps the checkout link for the owner even before a subscription exists", async () => {
+    vi.mocked(api).mockResolvedValueOnce(creator(true, false));
+    renderCreator(creatorAddress);
+
+    expect(
+      await screen.findByRole("link", { name: "Checkout page" }),
+    ).toBeVisible();
   });
 });

@@ -1,5 +1,12 @@
+import { RETRY_AFTER_REFRESH } from "@kaskama/shared";
 import { COPY } from "./copy.js";
-import { errorText, isInsufficientFunds, isWalletMissing } from "./errors.js";
+import {
+  errorText,
+  isInsufficientFunds,
+  isNetworkRequired,
+  isWalletMissing,
+} from "./errors.js";
+import { ApiError } from "./api-error.js";
 import { KASPA_GET_KAS_URL, KASWARE_DOWNLOAD_URL } from "./kasware.js";
 import type { ToastAction, ToastTone } from "./Toast.js";
 
@@ -27,4 +34,29 @@ export function presentError(
     };
   }
   return { message: errorText(error, fallback), tone: "error" };
+}
+
+/**
+ * The one reaction to a failed wallet action: refresh when the server says the
+ * resource moved, and present the outcome. Shared by the membership actions and
+ * the one-off post purchase, so the policy lives once.
+ */
+export async function actionFailure(
+  error: unknown,
+  fallback: string,
+  report: {
+    reload?: () => Promise<void> | void;
+    show: (message: string, tone: ToastTone, action?: ToastAction) => void;
+  },
+): Promise<void> {
+  if (isNetworkRequired(error)) return;
+  const refresh =
+    error instanceof ApiError && error.retry === RETRY_AFTER_REFRESH;
+  if (refresh && report.reload) await report.reload();
+  const presented = presentError(error, fallback);
+  report.show(
+    presented.message,
+    refresh ? "info" : presented.tone,
+    presented.action,
+  );
 }
