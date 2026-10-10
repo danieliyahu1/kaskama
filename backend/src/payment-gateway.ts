@@ -178,11 +178,10 @@ export class KaspaPaymentGateway implements PaymentGateway {
     if (!tx.inputs.every((input) => input.previous_outpoint_resolved?.script_public_key_address === buyer)) return false;
     const amount = BigInt(amountSompi);
     const referrer = payload?.referrer ?? null;
-    return outputsPaySplit(
+    return outputsPayCreatorAndPlatform(
       (tx.outputs ?? []).map((output) => ({ value: String(output.amount), address: output.script_public_key_address })),
       paymentSplit(amount, referrer !== null),
       creator,
-      referrer,
       this.platformFeeAddress,
     );
   }
@@ -203,11 +202,10 @@ export class KaspaPaymentGateway implements PaymentGateway {
     if (!inputs.every((input) => this.addressOf(input.utxo?.scriptPublicKey) === buyer)) return false;
     const amount = BigInt(amountSompi);
     const referrer = payload?.referrer ?? null;
-    return outputsPaySplit(
+    return outputsPayCreatorAndPlatform(
       (tx.outputs ?? []).map((output) => ({ value: String(output.value), address: this.addressOf(output.scriptPublicKey) })),
       paymentSplit(amount, referrer !== null),
       creator,
-      referrer,
       this.platformFeeAddress,
     );
   }
@@ -290,18 +288,16 @@ function scriptFor(address: string): string { const data = address.slice(address
 /** One payout as the verifier sees it: an amount and the address it reached. */
 type PaymentOutput = { value: string; address: string | undefined };
 /**
- * Whether a transaction pays the split exactly: the creator receives `creator`,
- * the platform receives `platform` (or nothing when the fee is waived), and a
- * referred purchase also pays the referrer its share. This is the one statement
- * of the payment rule, shared by the chain and evidence paths so they cannot
- * drift apart.
+ * Whether a purchase paid what the buyer owes: the creator receives their exact
+ * share and the platform receives its fee (or nothing when the fee is waived).
+ * The referrer's bonus is deliberately not checked, so a bad referral can never
+ * strand a paid buyer. This is the one statement of the payment rule, shared by
+ * the chain and evidence paths so they cannot drift apart.
  */
-function outputsPaySplit(outputs: PaymentOutput[], split: PaymentSplit, creator: string, referrer: string | null, platformAddress: string): boolean {
+function outputsPayCreatorAndPlatform(outputs: PaymentOutput[], split: PaymentSplit, creator: string, platformAddress: string): boolean {
   if (!outputs.some((output) => output.value === split.creator.toString() && output.address === creator)) return false;
   if (split.platform === 0n) return !outputs.some((output) => output.address === platformAddress);
-  if (!outputs.some((output) => output.value === split.platform.toString() && output.address === platformAddress)) return false;
-  if (split.referrer > 0n && !outputs.some((output) => output.value === split.referrer.toString() && output.address === referrer)) return false;
-  return true;
+  return outputs.some((output) => output.value === split.platform.toString() && output.address === platformAddress);
 }
 function digest(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function estimatedFee(inputs: Utxo[], rate: number, outputs: number, payload: string) { if (!Number.isFinite(rate) || rate <= 0) throw new Error("INVALID_FEE_RATE"); const inputSize = inputs.length * (32 + 4 + 8 + 66 + 8 + 2); const outputSize = outputs * (8 + 2 + 8 + 34); const transactionSize = 2 + 8 + inputSize + 8 + outputSize + 8 + 20 + 8 + 32 + 8 + payload.length / 2; const scriptPublicKeyMass = 10 * outputs * (2 + 34); const computeMass = transactionSize + scriptPublicKeyMass + 100 * inputs.length * 50; const estimated = BigInt(Math.ceil(computeMass * rate)); const relayFloor = 100n * BigInt(computeMass); return estimated > relayFloor ? estimated : relayFloor; }

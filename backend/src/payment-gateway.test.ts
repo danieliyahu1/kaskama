@@ -312,6 +312,32 @@ describe("KaspaPaymentGateway purchase verification", () => {
     )).resolves.toBe(true);
   });
 
+  it("accepts a referred purchase even when the named referrer did not receive the share", async () => {
+    const namedReferrer = `${referrer.slice(0, -1)}9`;
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      Response.json({
+        is_accepted: true,
+        payload: ppvPayload("post-1", "a".repeat(64), namedReferrer),
+        inputs: [{ previous_outpoint_resolved: { script_public_key_address: "kaspatest:buyer" } }],
+        outputs: [
+          { amount: "49500000000", script_public_key_address: "kaspatest:creator" },
+          { amount: "250000000", script_public_key_address: referrer },
+          { amount: "250000000", script_public_key_address: feeAddress },
+        ],
+      }),
+    ));
+    const gateway = new KaspaPaymentGateway(feeAddress);
+
+    await expect(gateway.verifyPurchase(
+      "a".repeat(64),
+      "kaspatest:buyer",
+      "kaspatest:creator",
+      "50000000000",
+      "post-1",
+      "a".repeat(64),
+    )).resolves.toBe(true);
+  });
+
   it("rejects a referred purchase that keeps the whole fee for the platform", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       Response.json({
@@ -427,6 +453,30 @@ describe("KaspaPaymentGateway evidence verification", () => {
   it("accepts a referred purchase from the captured transaction", async () => {
     const transaction = JSON.stringify({
       payload: ppvPayload("post-1", "a".repeat(64), referrer),
+      inputs: [{ utxo: { scriptPublicKey: addressScript(buyer) } }],
+      outputs: [
+        { value: "49500000000", scriptPublicKey: addressScript(creator) },
+        { value: "250000000", scriptPublicKey: addressScript(referrer) },
+        { value: "250000000", scriptPublicKey: addressScript(feeAddress) },
+      ],
+    });
+
+    await expect(
+      evidenceGateway(transaction).verifyPurchase(
+        "a".repeat(64),
+        buyer,
+        creator,
+        "50000000000",
+        "post-1",
+        "a".repeat(64),
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it("accepts a referred purchase from evidence even when the named referrer did not receive the share", async () => {
+    const namedReferrer = `${referrer.slice(0, -1)}9`;
+    const transaction = JSON.stringify({
+      payload: ppvPayload("post-1", "a".repeat(64), namedReferrer),
       inputs: [{ utxo: { scriptPublicKey: addressScript(buyer) } }],
       outputs: [
         { value: "49500000000", scriptPublicKey: addressScript(creator) },
