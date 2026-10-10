@@ -1,4 +1,9 @@
 import * as homeCopy from "./home-copy.json";
+import {
+  AGENT_GUIDE_PATH,
+  LLMS_TXT_PATH,
+  OPENAPI_PATH,
+} from "@kaskama/shared";
 import { homeFallbackHtml } from "../home-fallback.js";
 
 describe("homeFallbackHtml", () => {
@@ -50,12 +55,11 @@ describe("homeFallbackHtml", () => {
     expect(html.endsWith("</noscript>")).toBe(true);
   });
 
-  it("hands a JavaScript-free client the machine entry points", () => {
+  it("hands a JavaScript-free client the machine entry points the server serves", () => {
     const html = homeFallbackHtml(homeCopy);
 
-    expect(html).toContain('href="/llms.txt"');
-    expect(html).toContain('href="/docs/agent-guide.md"');
-    expect(html).toContain('href="/api/openapi.json"');
+    for (const path of [LLMS_TXT_PATH, AGENT_GUIDE_PATH, OPENAPI_PATH])
+      expect(html).toContain(`href="${path}"`);
   });
 
   it("escapes copy so the shell stays valid HTML", () => {

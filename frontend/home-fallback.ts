@@ -1,8 +1,10 @@
-import {
-  AGENT_GUIDE_PATH,
-  LLMS_TXT_PATH,
-  OPENAPI_PATH,
-} from "@kaskama/shared";
+// Baked here rather than imported from @kaskama/shared: vite.config.ts bundles
+// this module with esbuild, which does not apply the package's `development`
+// export condition, so it cannot resolve the package before it is built.
+// home-fallback.test.ts pins these to the shared constants.
+const LLMS_TXT_PATH = "/llms.txt";
+const AGENT_GUIDE_PATH = "/docs/agent-guide.md";
+const OPENAPI_PATH = "/api/openapi.json";
 
 export interface HomeCopy {
   headline: string;
