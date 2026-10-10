@@ -324,6 +324,11 @@ export const migrations: Migration[] = [
     name: "profile_bio",
     statements: ["ALTER TABLE profiles RENAME COLUMN description TO bio"],
   },
+  {
+    version: 17,
+    name: "drop_idempotency_keys",
+    statements: ["DROP TABLE IF EXISTS idempotency_keys"],
+  },
 ];
 
 export async function applyMigrations(client: Client): Promise<void> {

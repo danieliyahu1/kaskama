@@ -236,9 +236,10 @@ then you may submit again. Known codes include `AUTHENTICATION_REQUIRED`,
 ## Concurrency
 
 - `prepare` results expire; finalize promptly.
-- Payment and membership `finalize` are idempotent per prepared id.
-- Send an `Idempotency-Key` header on any write to make a retry replay the
-  first result instead of acting twice; keys are scoped to your wallet.
+- Payment and membership `finalize` are idempotent per prepared id, so a retry
+  returns the same outcome instead of charging twice.
+- A repeated `prepare` is harmless: nothing is signed or paid until you
+  finalize, so it just issues a fresh template.
 - A `409` with `retry: "AFTER_REFRESH"` is not an error to retry blindly:
   re-read the resource, then decide.
 

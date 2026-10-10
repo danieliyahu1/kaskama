@@ -11,7 +11,6 @@ import type {
   Purchase,
   Session,
   TransactionEvidence,
-  IdempotencyRecord,
 } from "./domain/models.js";
 import type { DuplicateOutcome, Repositories } from "./application/ports.js";
 
@@ -30,17 +29,7 @@ export class MemoryStore implements Repositories {
   readonly membershipWorkflows = new Map<string, MembershipWorkflow>();
   readonly preparedMembershipRecords = new Map<string, PreparedMembershipRecord>();
   readonly transactionEvidence = new Map<string, TransactionEvidence>();
-  readonly idempotencyRecords = new Map<string, IdempotencyRecord>();
   async initialize() {}
-  async saveIdempotency(v: IdempotencyRecord) {
-    const id = `${v.key}|${v.method}|${v.path}`;
-    if (!this.idempotencyRecords.has(id))
-      this.idempotencyRecords.set(id, structuredClone(v));
-  }
-  async getIdempotency(key: string, method: string, path: string) {
-    const v = this.idempotencyRecords.get(`${key}|${method}|${path}`);
-    return v ? structuredClone(v) : null;
-  }
   async saveTransactionEvidence(v: TransactionEvidence) {
     if (!this.transactionEvidence.has(v.transactionId))
       this.transactionEvidence.set(v.transactionId, structuredClone(v));

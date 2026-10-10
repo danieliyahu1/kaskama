@@ -2199,61 +2199,6 @@ describe("agent and browser clients are served alike", () => {
     expect(viaBearer.status).toBe(200);
     expect(viaBearer.body).toEqual(viaCookie.body);
   });
-
-  it("replays a write for a repeated idempotency key instead of acting twice", async () => {
-    const store = new MemoryStore();
-    await session(store);
-    const { app } = testApp(store);
-
-    const first = await request(app)
-      .put("/api/profile")
-      .set("Cookie", "kaskama_session=session-parity")
-      .set("Idempotency-Key", "key-1")
-      .send({ displayName: "Agent One" });
-    expect(first.status).toBe(200);
-    expect(first.body.displayName).toBe("Agent One");
-
-    const replay = await request(app)
-      .put("/api/profile")
-      .set("Cookie", "kaskama_session=session-parity")
-      .set("Idempotency-Key", "key-1")
-      .send({ displayName: "Different" });
-
-    expect(replay.status).toBe(200);
-    expect(replay.body.displayName).toBe("Agent One");
-    expect((await store.getProfile(first.body.address))?.displayName).toBe("Agent One");
-  });
-
-  it("keeps one wallet from replaying another wallet's idempotency key", async () => {
-    const store = new MemoryStore();
-    const owner = `kaspatest:${"a".repeat(60)}`;
-    const stranger = `kaspatest:${"b".repeat(60)}`;
-    const expiresAt = Date.now() + 60_000;
-    await store.createSession({ id: "session-owner", address: owner, expiresAt });
-    await store.createSession({
-      id: "session-stranger",
-      address: stranger,
-      expiresAt,
-    });
-    const { app } = testApp(store);
-
-    const first = await request(app)
-      .put("/api/profile")
-      .set("Cookie", "kaskama_session=session-owner")
-      .set("Idempotency-Key", "shared")
-      .send({ displayName: "Owner" });
-    expect(first.status).toBe(200);
-
-    const second = await request(app)
-      .put("/api/profile")
-      .set("Cookie", "kaskama_session=session-stranger")
-      .set("Idempotency-Key", "shared")
-      .send({ displayName: "Stranger" });
-
-    expect(second.status).toBe(200);
-    expect(second.body.address).toBe(stranger);
-    expect(second.body.displayName).toBe("Stranger");
-  });
 });
 
 describe("network configuration", () => {

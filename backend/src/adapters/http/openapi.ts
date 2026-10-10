@@ -49,14 +49,6 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     503: { description: "Upstream unavailable.", content: json(ref("Error")) },
   };
 
-  const idempotencyHeader = {
-    name: "Idempotency-Key",
-    in: "header",
-    required: false,
-    schema: { type: "string" },
-    description:
-      "Retry-safe writes: if the same key arrives again on the same path, the first response is replayed instead of acting twice. Keys are scoped to the calling wallet.",
-  };
   // `false` opts a public operation out of the root requirement; an array
   // declares an override, such as `optionalAuth` for a call that works signed
   // in or anonymous.
@@ -83,7 +75,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
   ) => ({
     summary,
     ...(options.description ? { description: options.description } : {}),
-    parameters: [idempotencyHeader, ...(options.parameters ?? [])],
+    parameters: [...(options.parameters ?? [])],
     ...securityField(options.security),
     ...(options.body
       ? {
@@ -160,7 +152,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
   ) => ({
     summary,
     ...(description ? { description } : {}),
-    parameters: [idempotencyHeader, pathParam("id", idDescription)],
+    parameters: [pathParam("id", idDescription)],
     requestBody: { required: true, content: json(tokenBody) },
     responses: {
       "201": {
@@ -453,7 +445,6 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         get: get("Own profile.", { response: { status: "200", schema: ref("Profile") } }),
         put: {
           summary: "Update own profile.",
-          parameters: [idempotencyHeader],
           requestBody: {
             required: true,
             content: json({
@@ -554,7 +545,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         }),
         delete: {
           summary: "Delete own post.",
-          parameters: [pathParam("id", "Post id."), idempotencyHeader],
+          parameters: [pathParam("id", "Post id.")],
           responses: {
             204: { description: "Deleted." },
             ...errorResponses,
