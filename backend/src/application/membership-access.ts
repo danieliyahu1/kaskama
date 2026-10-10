@@ -34,7 +34,10 @@ export class MembershipAccess {
         if (check.status === "VALID") return true;
       }
     }
-    const ids = covenantIds.size ? [...covenantIds] : [undefined];
+    // Scan only against covenants this creator actually registered. A token
+    // that names its own creator but binds to no known covenant is self-minted
+    // and must not grant access, so there is no unbound scan.
+    const ids = [...covenantIds];
     for (const covenantId of ids) {
       const found = await this.verifier.findMembership(buyer, creator, covenantId);
       if (!found) continue;

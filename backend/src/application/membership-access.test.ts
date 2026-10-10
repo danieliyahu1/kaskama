@@ -85,25 +85,38 @@ describe("MembershipAccess", () => {
     expect(findMembership).not.toHaveBeenCalled();
   });
 
-  it("discovers a membership by scanning the address and caches it", async () => {
+  it("discovers a membership for a registered offer and caches it", async () => {
     const { access, saved, findMembership } = harness({
+      covenantId: "covenant-1",
       found: check("tx-scan", "VALID"),
     });
 
     await expect(access.isActive(buyer, creator)).resolves.toBe(true);
-    expect(findMembership).toHaveBeenCalledWith(buyer, creator, undefined);
-    expect(saved).toEqual([{ transactionId: "tx-scan", buyer, creator }]);
+    expect(findMembership).toHaveBeenCalledWith(buyer, creator, "covenant-1");
+    expect(saved).toEqual([
+      { transactionId: "tx-scan", buyer, creator, covenantId: "covenant-1" },
+    ]);
   });
 
   it("falls back to a scan when stored receipts have expired", async () => {
     const { access, findMembership } = harness({
+      covenantId: "covenant-1",
       receipts: [{ transactionId: "tx-old", buyer, creator }],
       receiptStatus: "EXPIRED",
       found: check("tx-scan", "VALID"),
     });
 
     await expect(access.isActive(buyer, creator)).resolves.toBe(true);
-    expect(findMembership).toHaveBeenCalledTimes(1);
+    expect(findMembership).toHaveBeenCalledWith(buyer, creator, "covenant-1");
+  });
+
+  it("denies a self-minted membership when the creator has no registered offer", async () => {
+    const { access, findMembership } = harness({
+      found: check("tx-self-minted", "VALID"),
+    });
+
+    await expect(access.isActive(buyer, creator)).resolves.toBe(false);
+    expect(findMembership).not.toHaveBeenCalled();
   });
 
   it("denies access when nothing valid is on chain", async () => {
