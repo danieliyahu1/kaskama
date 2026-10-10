@@ -110,6 +110,61 @@ differs from the prepared template:
 | `202`  | `{ state: "PENDING", transactionId }`   | On chain but not confirmed yet. **Do not pay again.** |
 | `422`  | `{ state: "REJECTED", rejection }`      | Rejected. Nothing was charged.                        |
 
+## Checkout and subscriptions
+
+A creator can sell a 30-day subscription as well as one-off posts. The offer
+lives on chain as a covenant the creator owns, and `GET /api/creators/{address}`
+reports it. The browser checkout page at `/checkout/<creator-wallet>` is one
+client of the same endpoints — there is nothing a buyer can do there that you
+cannot do with the API.
+
+Two roles, one flow; every step uses the same `prepare -> sign -> finalize` and
+the same three finalize outcomes:
+
+| Step           | Who     | Endpoints                                                                                             |
+| -------------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| Read a creator | anyone  | `GET /api/creators/{address}`                                                                          |
+| Open the offer | creator | `POST /api/membership/offers/prepare` then `POST /api/membership/offers/{id}/finalize`                 |
+| Subscribe      | buyer   | `POST /api/membership/{creator}/prepare` then `POST /api/membership/purchases/{id}/finalize`           |
+| Change price   | creator | `POST /api/membership/price/prepare` then `POST /api/membership/price/{id}/finalize`                   |
+| Close offer    | creator | `POST /api/membership/cancel/prepare` then `POST /api/membership/cancel/{id}/finalize`                 |
+
+The price is the creator's, but the chain enforces the terms, so they hold for
+any client: a minimum and maximum price, and a 1% platform fee with a floor. The
+running server states the exact numbers in `/api/openapi.json` — they are
+generated from the covenant, not typed by hand, so read them there.
+
+### Read an offer before you pay
+
+`GET /api/creators/{address}` answers three different questions, and the answers
+can disagree:
+
+- `offered` — the server has a subscription row for this creator.
+- `available` — the offer is live on chain right now. Re-check it before buying:
+  an offer can be listed while the chain cannot serve it.
+- `active` — the wallet making this request holds an unexpired membership.
+
+Subscribe only when `offered` and `available` are both true. The response also
+carries `covenantId` when an offer exists.
+
+### Membership errors
+
+Besides the shared codes, a subscription can fail with:
+
+| Code                          | Status | Meaning                                                              |
+| ----------------------------- | ------ | -------------------------------------------------------------------- |
+| `INVALID_MEMBERSHIP_PRICE`    | `400`  | The price failed the format, floor, or ceiling check.                 |
+| `MEMBERSHIP_OFFER_EXISTS`     | `409`  | The creator already has a live offer.                                 |
+| `MEMBERSHIP_OFFER_STALE`      | `409`  | The covenant moved while you worked; carries `retry: AFTER_REFRESH`.  |
+| `MEMBERSHIP_SUBMISSION_FAILED`| `502`  | The network refused the signed transaction. Nothing was charged.      |
+| `MEMBERSHIP_UNAVAILABLE`      | `503`  | The subscription service is not wired on this server.                 |
+
+The `*_NOT_FOUND` variants (`OFFER`, `PRICE_UPDATE`, `CANCELLATION`,
+`PURCHASE`) are `404` — the prepared id expired or belongs to another wallet.
+`MEMBERSHIP_CANCELLATION_STALE`, `MEMBERSHIP_PRICE_UPDATE_STALE`, and
+`MEMBERSHIP_PURCHASE_EXISTS` follow the same retry rules as `MEMBERSHIP_OFFER_STALE`
+and the other `409`s.
+
 ## Referrals
 
 Any post or creator page can be shared with a `?ref=<wallet>` query parameter.

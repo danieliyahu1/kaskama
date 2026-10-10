@@ -21,6 +21,21 @@ Each network has its own fee recipient: `PLATFORM_FEE_ADDRESS_TESTNET_10` for lo
 
 Every post and creator page can be shared with a `?ref=<wallet>` query parameter. The visitor's browser keeps that wallet in a `kaskama_ref` cookie for 24 hours, and a purchase in that window credits it. The credit is paid as its own output in the same transaction, out of the platform fee: the referrer receives half the fee and the platform keeps the other half, so the creator's payout is never reduced. Because the fee is only charged once it reaches 1 KAS, a referral is paid only when both halves are at least 1 KAS; an address that is not valid on the configured network is ignored. Attribution lives in the payment's own payload, so the split is verifiable from the chain with no accounts, balances, or payout system. A headless client names the wallet as `referrer` when preparing a post payment.
 
+## Subscriptions
+
+Creators can sell a 30-day subscription as well as one-off posts. The creator
+sets the price; the chain enforces the terms, so a minimum price and a 1%
+platform fee with a floor hold for every client, not only the app. The covenant
+`backend/contracts/membership.sil` is the single source: its constants are
+generated into `shared/src/covenant.ts` with `pnpm generate:covenant`.
+
+Every creator gets a checkout page at `/checkout/<creator-address>`. It is a
+merchant's counter, not a marketplace page, so it carries no site header or
+footer. The owner sees a live preview there and can start, reprice, or close the
+offer; a buyer sees the creator's identity and subscribes. The page is one
+client of the membership API — the endpoints and rules for agents are in
+[`docs/agent-guide.md`](docs/agent-guide.md) and `/api/openapi.json`.
+
 ## Networks
 
 The server owns the network identity. `KASPA_NETWORK` is the single source of truth: it selects the address prefix used for validation, the platform fee wallet, the default `KASPA_NODE_URL`, contract address derivation, transaction mass, and the wRPC relay network. The browser learns the network from `GET /api/config` and switches the wallet to it; it never selects a chain itself.

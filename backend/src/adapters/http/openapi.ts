@@ -1,10 +1,14 @@
 import {
   AGENT_GUIDE_PATH,
   API_DOCS_PATH,
+  MAX_MEMBERSHIP_PRICE_SOMPI,
   MEDIA_TYPES,
+  MIN_MEMBERSHIP_FEE_SOMPI,
+  MIN_MEMBERSHIP_PRICE_SOMPI,
   OPENAPI_PATH,
 } from "@kaskama/shared";
 import { MEDIA_ERROR_CATEGORIES } from "../media/media.js";
+import { formatKasSompi } from "./api-copy.js";
 
 /**
  * The public HTTP contract. This is the product surface: the browser app, an
@@ -69,6 +73,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     summary: string,
     options: {
       security?: boolean | Record<string, unknown>[];
+      description?: string;
       body?: Record<string, unknown>;
       /** When false, a request body may be omitted entirely. */
       bodyRequired?: boolean;
@@ -77,6 +82,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     },
   ) => ({
     summary,
+    ...(options.description ? { description: options.description } : {}),
     parameters: [idempotencyHeader, ...(options.parameters ?? [])],
     ...securityField(options.security),
     ...(options.body
@@ -104,12 +110,14 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     summary: string,
     options: {
       security?: boolean | Record<string, unknown>[];
+      description?: string;
       response: { status: string; schema: Record<string, unknown> | { $ref: string } };
       parameters?: Record<string, unknown>[];
       binary?: boolean;
     },
   ) => ({
     summary,
+    ...(options.description ? { description: options.description } : {}),
     ...(options.parameters ? { parameters: options.parameters } : {}),
     ...securityField(options.security),
     responses: {
@@ -145,8 +153,13 @@ export function openApiDocument(origin: string): Record<string, unknown> {
   // A finalize answers with the money outcome, not the generic error envelope:
   // 201 confirmed, 202 submitted-but-unconfirmed (do not pay again), 422
   // rejected with nothing charged. 409 still uses the error envelope.
-  const finalizeSubmission = (summary: string, idDescription: string) => ({
+  const finalizeSubmission = (
+    summary: string,
+    idDescription: string,
+    description?: string,
+  ) => ({
     summary,
+    ...(description ? { description } : {}),
     parameters: [idempotencyHeader, pathParam("id", idDescription)],
     requestBody: { required: true, content: json(tokenBody) },
     responses: {
@@ -165,6 +178,19 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       },
     },
   });
+
+  // The subscription rules are stated once and reused across the membership
+  // operations. The numbers come from the covenant through the generated
+  // constants, so the contract cannot drift from the chain.
+  const membershipPricing =
+    "A 30-day subscription the creator prices and a buyer pays once. The chain " +
+    `enforces a minimum price of ${formatKasSompi(MIN_MEMBERSHIP_PRICE_SOMPI)} KAS ` +
+    `(at most ${formatKasSompi(MAX_MEMBERSHIP_PRICE_SOMPI)} KAS) and a platform fee ` +
+    `of 1%, never below ${formatKasSompi(MIN_MEMBERSHIP_FEE_SOMPI)} KAS; the creator keeps the rest.`;
+  const membershipSigning =
+    "Sign only the inputs listed in `signInputs`; the server already signed the covenant inputs.";
+  const membershipPrice =
+    `The subscription price in KAS, up to 8 decimals; from ${formatKasSompi(MIN_MEMBERSHIP_PRICE_SOMPI)} to ${formatKasSompi(MAX_MEMBERSHIP_PRICE_SOMPI)} KAS.`;
 
   return {
     openapi: "3.1.0",
@@ -265,12 +291,36 @@ export function openApiDocument(origin: string): Record<string, unknown> {
             isOwner: { type: "boolean" },
             membership: {
               type: "object",
+              description:
+                "The creator's subscription. `offered` is a server row, `available` is a live on-chain check, and `active` is this caller's own access; the three can disagree.",
               properties: {
-                offered: { type: "boolean" },
-                canceled: { type: "boolean" },
-                active: { type: "boolean" },
-                priceSompi: { type: ["string", "null"] },
+                offered: {
+                  type: "boolean",
+                  description: "The server has a subscription offer for this creator.",
+                },
+                available: {
+                  type: "boolean",
+                  description:
+                    "The offer is live on chain right now. An offer can be listed while the chain cannot serve it, so re-check before paying.",
+                },
+                canceled: {
+                  type: "boolean",
+                  description: "The creator closed the offer.",
+                },
+                active: {
+                  type: "boolean",
+                  description:
+                    "The wallet making this request holds an unexpired membership.",
+                },
+                priceSompi: {
+                  type: ["string", "null"],
+                  description: "The 30-day price in sompi.",
+                },
                 durationDays: { type: "integer" },
+                covenantId: {
+                  type: ["string", "null"],
+                  description: "The on-chain covenant family id of the offer.",
+                },
               },
             },
             posts: { type: "array", items: ref("Post") },
@@ -489,6 +539,8 @@ export function openApiDocument(origin: string): Record<string, unknown> {
       },
       "/api/creators/{address}": {
         get: get("Creator, posts, membership and unlocks.", {
+          description:
+            "A creator's public page and, when signed in, their own access. `membership.available` is a live chain check; treat a false value as 'do not pay'.",
           security: optionalAuth,
           parameters: [pathParam("address", "Creator wallet address.")],
           response: { status: "200", schema: ref("Creator") },
@@ -587,33 +639,38 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         ),
       },
       "/api/membership/{creator}/prepare": {
-        post: post("Prepare a subscription.", {
+        post: post("Subscribe to a creator.", {
+          description: `${membershipPricing} ${membershipSigning} The offer must be live on chain: check \`available\` on GET /api/creators/{address} first.`,
           parameters: [pathParam("creator", "Creator wallet address.")],
           response: { status: "201", schema: ref("PreparedMembership") },
         }),
       },
       "/api/membership/offers/prepare": {
-        post: post("Prepare a creator offer.", {
+        post: post("Create the creator's subscription offer.", {
+          description: `${membershipPricing} Only the creator can open their own offer.`,
           body: {
             type: "object",
             required: ["price"],
-            properties: { price: { type: "string" } },
+            properties: { price: { type: "string", description: membershipPrice } },
           },
           response: { status: "201", schema: ref("PreparedMembership") },
         }),
       },
       "/api/membership/price/prepare": {
-        post: post("Prepare a subscription price change.", {
+        post: post("Change a creator's subscription price.", {
+          description: `Prepare a new price for an existing offer. ${membershipPricing}`,
           body: {
             type: "object",
             required: ["price"],
-            properties: { price: { type: "string" } },
+            properties: { price: { type: "string", description: membershipPrice } },
           },
           response: { status: "201", schema: ref("PreparedMembership") },
         }),
       },
       "/api/membership/cancel/prepare": {
-        post: post("Prepare a subscription cancellation.", {
+        post: post("Close a creator's subscription offer.", {
+          description:
+            "Prepare to close the offer permanently. Subscriptions already minted stay valid until they expire; the creator can open a new offer afterwards.",
           response: { status: "201", schema: ref("PreparedMembership") },
         }),
       },
@@ -621,24 +678,28 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         post: finalizeSubmission(
           "Submit the signed offer.",
           "Prepared offer id.",
+          "Confirms the creator's offer on chain. The creator must sign.",
         ),
       },
       "/api/membership/purchases/{id}/finalize": {
         post: finalizeSubmission(
           "Submit the signed subscription.",
           "Prepared purchase id.",
+          `Submits the buyer's payment and records the subscription once the member output verifies on chain. ${membershipSigning}`,
         ),
       },
       "/api/membership/price/{id}/finalize": {
         post: finalizeSubmission(
           "Submit the signed price change.",
           "Prepared price update id.",
+          "Applies the new price to the offer on chain.",
         ),
       },
       "/api/membership/cancel/{id}/finalize": {
         post: finalizeSubmission(
           "Submit the signed cancellation.",
           "Prepared cancellation id.",
+          "Closes the offer on chain. Existing subscriptions are unaffected.",
         ),
       },
       "/api/verify/membership/address/{address}": {

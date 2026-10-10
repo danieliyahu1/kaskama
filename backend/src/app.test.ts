@@ -2144,6 +2144,34 @@ describe("API contract", () => {
     expect(actual.status).toBe(200);
     expect(Object.keys(actual.body).sort()).toEqual(documented);
   });
+
+  it("documents every field the creator membership response serves", async () => {
+    const store = new MemoryStore();
+    const creator = `kaspatest:${"c".repeat(60)}`;
+    await store.createSession({
+      id: "creator-shape",
+      address: creator,
+      expiresAt: Date.now() + 60_000,
+    });
+    await store.saveCreatorCovenant({
+      creator,
+      covenantId: "a".repeat(64),
+      priceSompi: "1000000000",
+    });
+    const { app } = testApp(store);
+
+    const spec = await request(app).get("/api/openapi.json");
+    const documented = Object.keys(
+      spec.body.components.schemas.Creator.properties.membership.properties,
+    );
+
+    const actual = await request(app)
+      .get(`/api/creators/${encodeURIComponent(creator)}`)
+      .set("Cookie", "kaskama_session=creator-shape");
+    expect(actual.status).toBe(200);
+    for (const key of Object.keys(actual.body.membership))
+      expect(documented).toContain(key);
+  });
 });
 
 describe("agent and browser clients are served alike", () => {

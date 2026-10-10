@@ -4,8 +4,8 @@ import {
   type MembershipPriceProblem,
 } from "@kaskama/shared";
 
-/** Whole KAS, grouped, for the price-range copy. Derived, never retyped. */
-function kas(sompi: bigint): string {
+/** Whole KAS, grouped, for human copy. Derived from sompi, never retyped. */
+export function formatKasSompi(sompi: bigint): string {
   return (sompi / 100_000_000n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
@@ -15,8 +15,8 @@ export const API_COPY = {
   verificationFailed: "Kaskama could not verify this wallet. Try again.",
   membershipPriceEmpty: "Enter a monthly subscription price.",
   membershipPriceFormat: "Enter the price in digits only, with up to 8 decimal places.",
-  membershipPriceBelowMin: `The monthly subscription price must be at least ${kas(MIN_MEMBERSHIP_PRICE_SOMPI)} KAS.`,
-  membershipPriceAboveMax: `The monthly subscription price can be at most ${kas(MAX_MEMBERSHIP_PRICE_SOMPI)} KAS.`,
+  membershipPriceBelowMin: `The monthly subscription price must be at least ${formatKasSompi(MIN_MEMBERSHIP_PRICE_SOMPI)} KAS.`,
+  membershipPriceAboveMax: `The monthly subscription price can be at most ${formatKasSompi(MAX_MEMBERSHIP_PRICE_SOMPI)} KAS.`,
   membershipStale:
     "This subscription changed while you were confirming it. Nothing was charged - submit again.",
   membershipSubmissionFailed: "Something went wrong. You weren't charged. Try again.",

@@ -5,7 +5,7 @@ These are the files that describe the app to an agent, and where each one is
 served. Read them to understand the app; they are also what to update when the
 app changes.
 
-- **`docs/agent-guide.md`** — signing, the two-step payment, publishing, and error codes. Served at `/docs/agent-guide.md`.
+- **`docs/agent-guide.md`** — signing, the two-step payment, subscriptions and the checkout flow, publishing, and error codes. Served at `/docs/agent-guide.md`.
 - **`backend/src/adapters/http/openapi.ts`** — every endpoint, schema, and error description. Served at `/api/openapi.json`, `/openapi.json`, `/.well-known/openapi.json`, and rendered at `/docs/api`.
 - **`backend/src/adapters/http/llms.ts`** — the entry point. Served at `/llms.txt`.
 - **`shared/src/media.ts`** — the media registry: accepted types, categories, and size limits.
