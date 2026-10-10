@@ -1,4 +1,5 @@
 import type { MembershipCheck } from "./domain/models.js";
+import type { MembershipContract } from "./domain/models.js";
 import type { MembershipVerifier, TransactionEvidenceStore } from "./application/ports.js";
 import { XOnlyPublicKey } from "@kluster/kaspa-wasm";
 import { DEFAULT_NETWORK, networkDefinition, type NetworkId } from "@kaskama/shared";
@@ -6,6 +7,7 @@ import { logger as defaultLogger, type Logger } from "./observability.js";
 import { defaultMetrics, type Metrics } from "./metrics.js";
 import {
   addressPublicKey,
+  currentMembershipContract,
   decodeMembershipRedeemScript,
   MEMBERSHIP_INDEX_VALUE,
   membershipAddress,
@@ -65,6 +67,7 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
     expectedOwner?: string,
     expectedCovenantId?: string,
     expectedCreator?: string,
+    contract: MembershipContract = currentMembershipContract(),
   ): Promise<MembershipCheck[]> {
     const [utxos, currentDaa] = await Promise.all([this.utxos(address), this.currentDaa()]);
     const pointers = utxos.filter((utxo) => bigintOrNull(utxo.utxoEntry.amount) === MEMBERSHIP_INDEX_VALUE);
@@ -78,6 +81,7 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
         expectedOwner ?? address,
         expectedCovenantId,
         expectedCreator,
+        contract,
       );
     }));
   }
@@ -86,6 +90,7 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
     owner: string,
     creator: string,
     expectedCovenantId?: string,
+    contract: MembershipContract = currentMembershipContract(),
   ): Promise<MembershipCheck | null> {
     const [utxos, currentDaa] = await Promise.all([this.utxos(owner), this.currentDaa()]);
     const pointers = utxos.filter((utxo) => bigintOrNull(utxo.utxoEntry.amount) === MEMBERSHIP_INDEX_VALUE);
@@ -99,6 +104,7 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
         owner,
         expectedCovenantId,
         creator,
+        contract,
       );
       if (check.status === "VALID") return check;
     }
@@ -111,6 +117,7 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
     expectedOwner?: string,
     expectedCovenantId?: string,
     expectedCreator?: string,
+    contract: MembershipContract = currentMembershipContract(),
   ): Promise<MembershipCheck> {
     const [transaction, currentDaa] = await Promise.all([
       this.transaction(transactionId),
@@ -124,6 +131,7 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
       expectedOwner,
       expectedCovenantId,
       expectedCreator,
+      contract,
     );
   }
 
@@ -135,11 +143,12 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
     expectedOwner?: string,
     expectedCovenantId?: string,
     expectedCreator?: string,
+    contract: MembershipContract = currentMembershipContract(),
   ): Promise<MembershipCheck> {
     const output = transaction.outputs?.[outputIndex];
     const covenantId = outputCovenantId(output);
     const payload = parseMembershipPayloadDetails(transaction.payload);
-    const state = payload ? decodeMembershipRedeemScript(payload.memberRedeemScript) : null;
+    const state = payload ? decodeMembershipRedeemScript(payload.memberRedeemScript, contract) : null;
     if (
       !transaction.is_accepted ||
       transaction.version !== 1 ||
@@ -149,7 +158,7 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
       !payload ||
       !state ||
       state.isMinter ||
-      outputScript(output) !== membershipScript(state) ||
+      outputScript(output) !== membershipScript(state, contract) ||
       outputAuthorizingInput(output) !== 0 ||
       (expectedCovenantId !== undefined && covenantId !== expectedCovenantId)
     ) return notMembership(transactionId, outputIndex, covenantId);
@@ -162,7 +171,7 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
       return membership(transactionId, outputIndex, covenantId, owner, creator, platformAddress, payload.metadata.createdAtDaa, state.expiresAtDaa, currentDaa, "OWNER_MISMATCH", this.now);
     if (state.creator !== addressPublicKey(creator))
       return notMembership(transactionId, outputIndex, covenantId);
-    if (!(await this.isUnspent(membershipAddress(state, this.network), transactionId, outputIndex)))
+    if (!(await this.isUnspent(membershipAddress(state, this.network, contract), transactionId, outputIndex)))
       return notMembership(transactionId, outputIndex, covenantId);
 
     const status = state.expiresAtDaa > currentDaa ? "VALID" : "EXPIRED";

@@ -356,6 +356,20 @@ export const migrations: Migration[] = [
         ON creator_covenants (creator) WHERE status = 'ACTIVE'`,
     ],
   },
+  {
+    version: 19,
+    name: "covenant_contract",
+    statements: [
+      // The contract code a covenant was created with, split around its state
+      // span. Persisting it makes an offer's on-chain identity data, so a later
+      // contract change cannot orphan offers made before it. Nullable: rows
+      // written before this migration carry no contract.
+      "ALTER TABLE creator_covenants ADD COLUMN contract_prefix TEXT",
+      "ALTER TABLE creator_covenants ADD COLUMN contract_suffix TEXT",
+      "ALTER TABLE prepared_memberships ADD COLUMN contract_prefix TEXT",
+      "ALTER TABLE prepared_memberships ADD COLUMN contract_suffix TEXT",
+    ],
+  },
 ];
 
 export async function applyMigrations(client: Client): Promise<void> {

@@ -50,6 +50,7 @@ import {
   membershipPriceMessage,
 } from "./adapters/http/api-copy.js";
 import type { CreatorCovenant, Post, Profile, Session } from "./domain/models.js";
+import { currentMembershipContract } from "./membership-contract.js";
 import {
   MembershipStateChangedError,
   MembershipSubmissionError,
@@ -182,7 +183,12 @@ export function createApp(d: AppDependencies) {
     // A read that fails is not proof the offer is dead: keep serving rather than
     // declaring a live subscription unavailable because a node blipped.
     return gateway
-      .offerAvailable(covenant.creator, covenant.covenantId, covenant.priceSompi)
+      .offerAvailable(
+        covenant.creator,
+        covenant.covenantId,
+        covenant.priceSompi,
+        covenant.contract ?? currentMembershipContract(),
+      )
       .catch(() => true);
   }
   // A submit can fail for two reasons: the covenant moved under the caller (a
@@ -1028,6 +1034,7 @@ export function createApp(d: AppDependencies) {
         creator: value.creator,
         covenantId: value.covenantId,
         priceSompi: value.priceSompi!,
+        contract: value.contract ?? currentMembershipContract(),
       };
       const outcome = await d.store.finalizeOffer(id, mapping);
       await d.store.saveMembershipWorkflow({
@@ -1069,6 +1076,7 @@ export function createApp(d: AppDependencies) {
           creator,
           mapping.covenantId,
           mapping.priceSompi,
+          mapping.contract ?? currentMembershipContract(),
         );
       } catch (error) {
         const mapped = membershipGatewayError(res, error);
@@ -1173,6 +1181,7 @@ export function createApp(d: AppDependencies) {
           mapping.covenantId,
           mapping.priceSompi,
           priceSompi.toString(),
+          mapping.contract ?? currentMembershipContract(),
         );
       } catch (error) {
         const mapped = membershipGatewayError(res, error);
@@ -1224,6 +1233,7 @@ export function createApp(d: AppDependencies) {
           buyer,
           mapping.covenantId,
           mapping.priceSompi,
+          mapping.contract ?? currentMembershipContract(),
         );
       } catch (error) {
         const mapped = membershipGatewayError(res, error);

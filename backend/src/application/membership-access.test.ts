@@ -4,10 +4,11 @@ import type {
   MembershipPurchaseRepository,
   MembershipVerifier,
 } from "./ports.js";
-import type { MembershipCheck, MembershipPurchase } from "../domain/models.js";
+import type { MembershipCheck, MembershipContract, MembershipPurchase } from "../domain/models.js";
 
 const buyer = "kaspatest:buyer";
 const creator = "kaspatest:creator";
+const storedContract: MembershipContract = { prefix: "6b", suffix: "51" };
 
 function check(
   transactionId: string,
@@ -50,7 +51,12 @@ function harness(options: {
   const covenants: CovenantRepository = {
     getCreatorCovenant: async () =>
       options.covenantId
-        ? { creator, covenantId: options.covenantId, priceSompi: "1000000000" }
+        ? {
+            creator,
+            covenantId: options.covenantId,
+            priceSompi: "1000000000",
+            contract: storedContract,
+          }
         : null,
     saveCreatorCovenant: async () => "CREATED",
     finalizeOffer: async () => "CREATED",
@@ -81,7 +87,14 @@ describe("MembershipAccess", () => {
     });
 
     await expect(access.isActive(buyer, creator)).resolves.toBe(true);
-    expect(verifyUtxo).toHaveBeenCalledWith("tx-1", 1, buyer, "covenant-1", creator);
+    expect(verifyUtxo).toHaveBeenCalledWith(
+      "tx-1",
+      1,
+      buyer,
+      "covenant-1",
+      creator,
+      storedContract,
+    );
     expect(findMembership).not.toHaveBeenCalled();
   });
 
@@ -92,7 +105,12 @@ describe("MembershipAccess", () => {
     });
 
     await expect(access.isActive(buyer, creator)).resolves.toBe(true);
-    expect(findMembership).toHaveBeenCalledWith(buyer, creator, "covenant-1");
+    expect(findMembership).toHaveBeenCalledWith(
+      buyer,
+      creator,
+      "covenant-1",
+      storedContract,
+    );
     expect(saved).toEqual([
       { transactionId: "tx-scan", buyer, creator, covenantId: "covenant-1" },
     ]);
@@ -107,7 +125,12 @@ describe("MembershipAccess", () => {
     });
 
     await expect(access.isActive(buyer, creator)).resolves.toBe(true);
-    expect(findMembership).toHaveBeenCalledWith(buyer, creator, "covenant-1");
+    expect(findMembership).toHaveBeenCalledWith(
+      buyer,
+      creator,
+      "covenant-1",
+      storedContract,
+    );
   });
 
   it("denies a self-minted membership when the creator has no registered offer", async () => {

@@ -69,11 +69,25 @@ export interface PaymentSubmission {
   rejection: string | null;
 }
 
+/**
+ * The immutable contract code a covenant was created with, split around the
+ * state span. Persisted with the covenant so an offer's on-chain identity is
+ * data, not a recomputation from whatever contract artifact happens to be
+ * compiled into the running server.
+ */
+export interface MembershipContract {
+  /** Contract bytecode before the state span, hex. */
+  prefix: string;
+  /** Contract bytecode after the state span, hex. */
+  suffix: string;
+}
+
 export interface CreatorCovenant {
   creator: string;
   covenantId: string;
   priceSompi: string;
   status?: "ACTIVE" | "CANCELED";
+  contract?: MembershipContract;
 }
 
 export interface MembershipPurchase {
@@ -90,6 +104,7 @@ export interface PreparedMembershipTransaction {
   signInputs: number[];
   memberOutputIndex: number | null;
   priceSompi?: string | undefined;
+  contract?: MembershipContract;
 }
 
 export interface PreparedPaymentRecord {
@@ -128,6 +143,7 @@ export interface PreparedMembershipRecord {
   kind: "offer" | "purchase" | "update" | "cancel";
   expiresAt: number;
   priceSompi?: string | undefined;
+  contract?: MembershipContract;
 }
 
 export type MembershipWorkflowState = "SUBMITTED" | "CONFIRMED" | "REJECTED";

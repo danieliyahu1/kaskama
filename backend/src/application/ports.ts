@@ -2,6 +2,7 @@ import type {
   Challenge,
   CreatorCovenant,
   MembershipCheck,
+  MembershipContract,
   MembershipPurchase,
   Post,
   PreparedMembershipRecord,
@@ -223,17 +224,20 @@ export interface MembershipGateway {
     buyer: string,
     covenantId: string,
     priceSompi: string,
+    contract: MembershipContract,
   ): Promise<PreparedMembershipTransaction>;
   preparePriceUpdate(
     creator: string,
     covenantId: string,
     currentPriceSompi: string,
     newPriceSompi: string,
+    contract: MembershipContract,
   ): Promise<PreparedMembershipTransaction>;
   prepareCancellation(
     creator: string,
     covenantId: string,
     priceSompi: string,
+    contract: MembershipContract,
   ): Promise<PreparedMembershipTransaction>;
   submit(
     prepared: PreparedMembershipTransaction,
@@ -248,6 +252,7 @@ export interface MembershipGateway {
     creator: string,
     covenantId: string,
     priceSompi: string,
+    contract: MembershipContract,
   ): Promise<boolean>;
   /**
    * Reports whether the chain has accepted a previously submitted transaction.
@@ -290,11 +295,13 @@ export interface MembershipVerifier {
     expectedOwner?: string,
     expectedCovenantId?: string,
     expectedCreator?: string,
+    contract?: MembershipContract,
   ): Promise<MembershipCheck[]>;
   findMembership(
     owner: string,
     creator: string,
     expectedCovenantId?: string,
+    contract?: MembershipContract,
   ): Promise<MembershipCheck | null>;
   verifyUtxo(
     transactionId: string,
@@ -302,6 +309,7 @@ export interface MembershipVerifier {
     expectedOwner?: string,
     expectedCovenantId?: string,
     expectedCreator?: string,
+    contract?: MembershipContract,
   ): Promise<MembershipCheck>;
 }
 

@@ -329,6 +329,7 @@ export class MemoryStore implements Repositories {
       covenantId: value.covenantId,
       priceSompi: value.priceSompi,
       ...(value.status === "CANCELED" ? { status: "CANCELED" as const } : {}),
+      ...(value.contract ? { contract: value.contract } : {}),
     };
   }
   async saveCreatorCovenant(v: CreatorCovenant): Promise<DuplicateOutcome> {

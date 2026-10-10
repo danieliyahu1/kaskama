@@ -21,6 +21,10 @@ export class MembershipAccess {
         : [];
     const covenantIds = new Set(known.map((value) => value.covenantId));
     if (current) covenantIds.add(current.covenantId);
+    const contracts = new Map(
+      known.map((value) => [value.covenantId, value.contract] as const),
+    );
+    if (current) contracts.set(current.covenantId, current.contract);
     for (const receipt of await this.receipts.membershipReceipts(buyer, creator)) {
       const ids = receipt.covenantId ? [receipt.covenantId] : [...covenantIds];
       for (const covenantId of ids) {
@@ -30,6 +34,7 @@ export class MembershipAccess {
           buyer,
           covenantId,
           creator,
+          contracts.get(covenantId),
         );
         if (check.status === "VALID") return true;
       }
@@ -39,7 +44,12 @@ export class MembershipAccess {
     // and must not grant access, so there is no unbound scan.
     const ids = [...covenantIds];
     for (const covenantId of ids) {
-      const found = await this.verifier.findMembership(buyer, creator, covenantId);
+      const found = await this.verifier.findMembership(
+        buyer,
+        creator,
+        covenantId,
+        contracts.get(covenantId),
+      );
       if (!found) continue;
       try {
         await this.receipts.createMembershipPurchase({

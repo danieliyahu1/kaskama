@@ -1,4 +1,5 @@
 import { Transaction } from "@kluster/kaspa-wasm";
+import { DEFAULT_NETWORK } from "@kaskama/shared";
 import { MembershipSubmissionError } from "./application/ports.js";
 import {
   KaspaMembershipGateway,
@@ -7,6 +8,7 @@ import {
 import {
   addressPublicKey,
   addressScript,
+  currentMembershipContract,
   MEMBERSHIP_OUTPUT_VALUE,
   membershipAddress,
   membershipScript,
@@ -122,6 +124,7 @@ describe("KaspaMembershipGateway", () => {
       buyer,
       offer.covenantId,
       "1000000000",
+      currentMembershipContract(),
     );
     const mintTransaction = Transaction.deserializeFromSafeJSON(mint.transaction);
     expect(mint.signInputs).toEqual([1]);
@@ -180,7 +183,7 @@ describe("KaspaMembershipGateway", () => {
     const gateway = new KaspaMembershipGateway(platformFeeAddress, "https://node.test");
 
     await expect(
-      gateway.offerAvailable(creator, "55".repeat(32), "1000000000"),
+      gateway.offerAvailable(creator, "55".repeat(32), "1000000000", currentMembershipContract()),
     ).resolves.toBe(true);
   });
 
@@ -210,7 +213,62 @@ describe("KaspaMembershipGateway", () => {
     const gateway = new KaspaMembershipGateway(platformFeeAddress, "https://node.test");
 
     await expect(
-      gateway.offerAvailable(creator, "55".repeat(32), "1000000000"),
+      gateway.offerAvailable(creator, "55".repeat(32), "1000000000", currentMembershipContract()),
+    ).resolves.toBe(false);
+  });
+
+  it("reads an offer under the contract it was created with, not the current one", async () => {
+    // The offer predates a contract change, so its output lives at the address
+    // derived from the older contract. The current artifact derives a different
+    // address; only the stored contract can find the live output.
+    const storedContract = { ...currentMembershipContract(), suffix: "6a" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (
+          url.includes(
+            encodeURIComponent(membershipAddress(minter, DEFAULT_NETWORK, storedContract)),
+          )
+        )
+          return Response.json([
+            {
+              outpoint: { transactionId: "33".repeat(32), index: 0 },
+              utxoEntry: {
+                amount: MEMBERSHIP_OUTPUT_VALUE.toString(),
+                scriptPublicKey: {
+                  scriptPublicKey: membershipScript(minter, storedContract).slice(4),
+                },
+                blockDaaScore: "100",
+                isCoinbase: false,
+              },
+            },
+          ]);
+        if (url.endsWith(`/transactions/${"33".repeat(32)}`))
+          return Response.json({
+            version: 1,
+            is_accepted: true,
+            outputs: [
+              {
+                amount: MEMBERSHIP_OUTPUT_VALUE.toString(),
+                script_public_key: membershipScript(minter, storedContract).slice(4),
+                covenant_authorizing_input: 0,
+                covenant_id: "55".repeat(32),
+              },
+            ],
+          });
+        if (url.includes("/utxos")) return Response.json([]);
+        return new Response("not found", { status: 404 });
+      }),
+    );
+    const gateway = new KaspaMembershipGateway(platformFeeAddress, "https://node.test");
+
+    await expect(
+      gateway.offerAvailable(creator, "55".repeat(32), "1000000000", storedContract),
+    ).resolves.toBe(true);
+    // The must-not-happen: the current contract cannot see the old offer.
+    await expect(
+      gateway.offerAvailable(creator, "55".repeat(32), "1000000000", currentMembershipContract()),
     ).resolves.toBe(false);
   });
 

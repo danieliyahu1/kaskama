@@ -9,6 +9,7 @@ import {
 import type {
   Challenge,
   CreatorCovenant,
+  MembershipContract,
   MembershipPurchase,
   Post,
   PreparedMembershipRecord,
@@ -232,7 +233,7 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
   }
   async savePreparedMembership(v: PreparedMembershipRecord) {
     await this.execute({
-      sql: `INSERT INTO prepared_memberships (id,transaction_json,fingerprint,covenant_id,sign_inputs,member_output_index,creator,buyer,kind,expires_at,price_sompi,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      sql: `INSERT INTO prepared_memberships (id,transaction_json,fingerprint,covenant_id,sign_inputs,member_output_index,creator,buyer,kind,expires_at,price_sompi,version,contract_prefix,contract_suffix) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       args: [
         v.id,
         v.transaction,
@@ -246,6 +247,8 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
         v.expiresAt,
         v.priceSompi ?? null,
         1,
+        v.contract?.prefix ?? null,
+        v.contract?.suffix ?? null,
       ],
     });
   }
@@ -598,8 +601,14 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
   ): Promise<DuplicateOutcome> {
     try {
       await run({
-        sql: `INSERT INTO creator_covenants (creator,covenant_id,price_sompi,status) VALUES (?,?,?,'ACTIVE')`,
-        args: [value.creator, value.covenantId, value.priceSompi],
+        sql: `INSERT INTO creator_covenants (creator,covenant_id,price_sompi,status,contract_prefix,contract_suffix) VALUES (?,?,?,'ACTIVE',?,?)`,
+        args: [
+          value.creator,
+          value.covenantId,
+          value.priceSompi,
+          value.contract?.prefix ?? null,
+          value.contract?.suffix ?? null,
+        ],
       });
       return "CREATED";
     } catch (error) {
@@ -802,6 +811,7 @@ const creatorCovenantFromRow = (r: Record<string, unknown>): CreatorCovenant => 
   covenantId: text(r.covenant_id),
   priceSompi: text(r.price_sompi),
   ...(r.status === "CANCELED" ? { status: "CANCELED" as const } : {}),
+  ...contractField(r),
 });
 const membershipPurchaseFromRow = (r: Record<string, unknown>): MembershipPurchase => ({
   transactionId: text(r.transaction_id),
@@ -837,7 +847,15 @@ const preparedMembershipFromRow = (
   kind: membershipKind(text(r.kind)),
   expiresAt: number(r.expires_at),
   priceSompi: text(r.price_sompi),
+  ...contractField(r),
 });
+/** The covenant's stored contract, absent when the row predates the column. */
+const contractField = (
+  r: Record<string, unknown>,
+): { contract?: MembershipContract } =>
+  typeof r.contract_prefix === "string" && typeof r.contract_suffix === "string"
+    ? { contract: { prefix: r.contract_prefix, suffix: r.contract_suffix } }
+    : {};
 const validatedJson = (value: string) => {
   try {
     JSON.parse(value);

@@ -1,10 +1,12 @@
 import {
   addressPublicKey,
+  currentMembershipContract,
   decodeMembershipRedeemScript,
   MEMBERSHIP_DURATION_DAA,
   membershipMintSignatureScript,
   membershipUpdateSignatureScript,
   membershipPayload,
+  membershipScript,
   parseMembershipPayloadDetails,
   membershipRedeemScript,
   type MembershipState,
@@ -37,6 +39,26 @@ describe("membership contract codec", () => {
     };
 
     expect(decodeMembershipRedeemScript(membershipRedeemScript(state))).toEqual(state);
+  });
+
+  it("keeps a covenant's on-chain identity tied to its own contract", () => {
+    const state: MembershipState = {
+      creator: addressPublicKey(creator),
+      platform: addressPublicKey(platformFeeAddress),
+      owner: addressPublicKey(creator),
+      expiresAtDaa: 0n,
+      priceSompi: 1_000_000_000n,
+      isMinter: true,
+    };
+    const otherContract = { ...currentMembershipContract(), suffix: "6a" };
+    const otherRedeem = membershipRedeemScript(state, otherContract);
+
+    // The state round-trips under the contract it was encoded with...
+    expect(decodeMembershipRedeemScript(otherRedeem, otherContract)).toEqual(state);
+    // ...and the running server's contract must not claim it.
+    expect(decodeMembershipRedeemScript(otherRedeem)).toBeNull();
+    // A different contract is a different on-chain script.
+    expect(membershipScript(state, otherContract)).not.toBe(membershipScript(state));
   });
 
   it("preserves the fixed-width true state encoding", () => {

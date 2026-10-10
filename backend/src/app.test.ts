@@ -726,7 +726,12 @@ describe("subscription recognition", () => {
       covenantId: "covenant-1",
     });
     expect(creatorResponse.body.posts[0].canView).toBe(true);
-    expect(findMembership).toHaveBeenCalledWith(viewer, creator, "covenant-1");
+    expect(findMembership).toHaveBeenCalledWith(
+      viewer,
+      creator,
+      "covenant-1",
+      undefined,
+    );
     expect(await store.membershipReceipts(viewer, creator)).toHaveLength(1);
 
     const postResponse = await request(app)
@@ -1896,6 +1901,59 @@ describe("membership state changes", () => {
       message: staleMessage,
     });
     expect(await store.getPreparedMembership("prepared-1", Date.now())).toBeNull();
+  });
+
+  it("cancels an offer under the contract it was created with", async () => {
+    const store = new MemoryStore();
+    const creator = await creatorSession(store);
+    const contract = { prefix: "6b", suffix: "6a" };
+    await store.savePreparedMembership({
+      id: "prepared-1",
+      transaction: "{}",
+      fingerprint: "fp",
+      covenantId,
+      signInputs: [],
+      memberOutputIndex: null,
+      creator,
+      buyer: creator,
+      kind: "offer",
+      expiresAt: Date.now() + 60_000,
+      priceSompi: "1000000000",
+      contract,
+    });
+    const prepareCancellation = vi.fn(async () => ({
+      transaction: "{}",
+      fingerprint: "fp",
+      covenantId,
+      signInputs: [],
+      memberOutputIndex: null,
+      contract,
+    }));
+    const gateway: MembershipGateway = {
+      ...gatewayThatConfirms(),
+      prepareCancellation,
+    };
+    const { app } = appWithGateway(store, gateway);
+
+    await request(app)
+      .post("/api/membership/offers/prepared-1/finalize")
+      .set("Cookie", "kaskama_session=creator-session")
+      .send({ signedTransaction: "aa01" });
+
+    // Finalizing the offer persists the contract it was created with...
+    expect((await store.getCreatorCovenant(creator))?.contract).toEqual(contract);
+
+    await request(app)
+      .post("/api/membership/cancel/prepare")
+      .set("Cookie", "kaskama_session=creator-session");
+
+    // ...and cancelling reuses that stored contract, not the running server's.
+    expect(prepareCancellation).toHaveBeenCalledWith(
+      creator,
+      covenantId,
+      "1000000000",
+      contract,
+    );
   });
 
   it.each([

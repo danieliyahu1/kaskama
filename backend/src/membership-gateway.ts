@@ -27,6 +27,7 @@ import {
 import {
   addressPublicKey,
   addressScript,
+  currentMembershipContract,
   MEMBERSHIP_DURATION_DAA,
   MEMBERSHIP_INDEX_VALUE,
   MEMBERSHIP_OUTPUT_VALUE,
@@ -39,6 +40,7 @@ import {
   membershipScript,
   type MembershipState,
 } from "./membership-contract.js";
+import type { MembershipContract } from "./domain/models.js";
 import { logger as defaultLogger, safeError, type Logger } from "./observability.js";
 import { defaultMetrics, type Metrics } from "./metrics.js";
 
@@ -156,8 +158,9 @@ export class KaspaMembershipGateway implements MembershipGateway {
     priceSompi: string,
   ): Promise<PreparedMembershipTransaction> {
     const state = minterState(creator, this.platformFeeAddress, BigInt(priceSompi));
+    const contract = currentMembershipContract();
     const [utxos, rate] = await Promise.all([this.utxos(creator), this.feeRate()]);
-    const redeemScript = membershipRedeemScript(state);
+    const redeemScript = membershipRedeemScript(state, contract);
     const contractOutput = new TransactionOutput(
       MEMBERSHIP_OUTPUT_VALUE,
       payToScriptHashScript(redeemScript),
@@ -165,7 +168,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
     const provisionalOutputs: PreparedOutput[] = [
       {
         value: MEMBERSHIP_OUTPUT_VALUE.toString(),
-        scriptPublicKey: membershipScript(state),
+        scriptPublicKey: membershipScript(state, contract),
         covenant: { authorizingInput: 0, covenantId: "0".repeat(64) },
       },
       { value: "0", scriptPublicKey: addressScript(creator), covenant: null },
@@ -184,7 +187,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
     const outputs: PreparedOutput[] = [
       {
         value: MEMBERSHIP_OUTPUT_VALUE.toString(),
-        scriptPublicKey: membershipScript(state),
+        scriptPublicKey: membershipScript(state, contract),
         covenant: { authorizingInput: 0, covenantId: id },
       },
     ];
@@ -202,6 +205,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
       null,
     );
     result.priceSompi = priceSompi;
+    result.contract = contract;
     this.logger.debug("membership_transaction_prepared", {
       kind: "offer",
       inputCount: selected.length,
@@ -218,10 +222,18 @@ export class KaspaMembershipGateway implements MembershipGateway {
     buyer: string,
     covenantIdHex: string,
     priceSompi: string,
+    contract: MembershipContract,
   ): Promise<PreparedMembershipTransaction> {
     const minter = minterState(creator, this.platformFeeAddress, BigInt(priceSompi));
-    const minterUtxos = await this.utxos(membershipAddress(minter, this.network));
-    const minterUtxo = await this.findMinterUtxo(minterUtxos, minter, covenantIdHex);
+    const minterUtxos = await this.utxos(
+      membershipAddress(minter, this.network, contract),
+    );
+    const minterUtxo = await this.findMinterUtxo(
+      minterUtxos,
+      minter,
+      covenantIdHex,
+      contract,
+    );
     if (!minterUtxo) throw new MembershipStateChangedError();
     const [{ virtualDaaScore }, buyerUtxos, rate] = await Promise.all([
       this.request<{ virtualDaaScore: string }>(
@@ -246,12 +258,12 @@ export class KaspaMembershipGateway implements MembershipGateway {
     const outputs: PreparedOutput[] = [
       {
         value: MEMBERSHIP_OUTPUT_VALUE.toString(),
-        scriptPublicKey: membershipScript(minter),
+        scriptPublicKey: membershipScript(minter, contract),
         covenant,
       },
       {
         value: MEMBERSHIP_OUTPUT_VALUE.toString(),
-        scriptPublicKey: membershipScript(member),
+        scriptPublicKey: membershipScript(member, contract),
         covenant,
       },
       {
@@ -277,7 +289,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
       sigOpCount: 0,
       computeBudget: COVENANT_COMPUTE_BUDGET,
       signatureScript: membershipMintSignatureScript(
-        membershipRedeemScript(minter),
+        membershipRedeemScript(minter, contract),
         minter,
         member,
         1,
@@ -287,7 +299,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
       ),
       utxo: serializableUtxo(minterUtxo, covenantIdHex),
     };
-    const payload = membershipPayload(membershipRedeemScript(member), {
+    const payload = membershipPayload(membershipRedeemScript(member, contract), {
       platformAddress: this.platformFeeAddress,
       createdAtDaa: BigInt(virtualDaaScore),
       expiresAtDaa: member.expiresAtDaa,
@@ -326,6 +338,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
       1,
     );
     result.priceSompi = priceSompi;
+    result.contract = contract;
     try {
       this.logger.debug("membership_preflight", {
         kind: "purchase",
@@ -338,6 +351,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
           inputs,
           outputs,
           virtualDaaScore,
+          contract,
         ),
       });
     } catch {
@@ -359,6 +373,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
     covenantIdHex: string,
     currentPriceSompi: string,
     newPriceSompi: string,
+    contract: MembershipContract,
   ): Promise<PreparedMembershipTransaction> {
     const current = minterState(
       creator,
@@ -371,16 +386,21 @@ export class KaspaMembershipGateway implements MembershipGateway {
       BigInt(newPriceSompi),
     );
     const [minterUtxos, creatorUtxos, rate] = await Promise.all([
-      this.utxos(membershipAddress(current, this.network)),
+      this.utxos(membershipAddress(current, this.network, contract)),
       this.utxos(creator),
       this.feeRate(),
     ]);
-    const minterUtxo = await this.findMinterUtxo(minterUtxos, current, covenantIdHex);
+    const minterUtxo = await this.findMinterUtxo(
+      minterUtxos,
+      current,
+      covenantIdHex,
+      contract,
+    );
     if (!minterUtxo) throw new MembershipStateChangedError();
     const provisionalOutputs: PreparedOutput[] = [
       {
         value: MEMBERSHIP_OUTPUT_VALUE.toString(),
-        scriptPublicKey: membershipScript(updated),
+        scriptPublicKey: membershipScript(updated, contract),
         covenant: { authorizingInput: 0, covenantId: covenantIdHex },
       },
       { value: "0", scriptPublicKey: addressScript(creator), covenant: null },
@@ -392,7 +412,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
       sigOpCount: 0,
       computeBudget: COVENANT_COMPUTE_BUDGET,
       signatureScript: membershipUpdateSignatureScript(
-        membershipRedeemScript(current),
+        membershipRedeemScript(current, contract),
         BigInt(newPriceSompi),
         1,
       ),
@@ -426,6 +446,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
       null,
     );
     result.priceSompi = newPriceSompi;
+    result.contract = contract;
     return result;
   }
 
@@ -433,20 +454,26 @@ export class KaspaMembershipGateway implements MembershipGateway {
     creator: string,
     covenantIdHex: string,
     priceSompi: string,
+    contract: MembershipContract,
   ): Promise<PreparedMembershipTransaction> {
     const current = minterState(creator, this.platformFeeAddress, BigInt(priceSompi));
     const canceled = { ...current, isMinter: false };
     const [minterUtxos, creatorUtxos, rate] = await Promise.all([
-      this.utxos(membershipAddress(current, this.network)),
+      this.utxos(membershipAddress(current, this.network, contract)),
       this.utxos(creator),
       this.feeRate(),
     ]);
-    const minterUtxo = await this.findMinterUtxo(minterUtxos, current, covenantIdHex);
+    const minterUtxo = await this.findMinterUtxo(
+      minterUtxos,
+      current,
+      covenantIdHex,
+      contract,
+    );
     if (!minterUtxo) throw new MembershipStateChangedError();
     const provisionalOutputs: PreparedOutput[] = [
       {
         value: MEMBERSHIP_OUTPUT_VALUE.toString(),
-        scriptPublicKey: membershipScript(canceled),
+        scriptPublicKey: membershipScript(canceled, contract),
         covenant: { authorizingInput: 0, covenantId: covenantIdHex },
       },
       { value: "0", scriptPublicKey: addressScript(creator), covenant: null },
@@ -458,7 +485,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
       sigOpCount: 0,
       computeBudget: COVENANT_COMPUTE_BUDGET,
       signatureScript: membershipCancelSignatureScript(
-        membershipRedeemScript(current),
+        membershipRedeemScript(current, contract),
         1,
       ),
       utxo: serializableUtxo(minterUtxo, covenantIdHex),
@@ -491,6 +518,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
       null,
     );
     result.priceSompi = priceSompi;
+    result.contract = contract;
     return result;
   }
 
@@ -503,10 +531,18 @@ export class KaspaMembershipGateway implements MembershipGateway {
     creator: string,
     covenantIdHex: string,
     priceSompi: string,
+    contract: MembershipContract,
   ): Promise<boolean> {
     const minter = minterState(creator, this.platformFeeAddress, BigInt(priceSompi));
-    const minterUtxos = await this.utxos(membershipAddress(minter, this.network));
-    const found = await this.findMinterUtxo(minterUtxos, minter, covenantIdHex);
+    const minterUtxos = await this.utxos(
+      membershipAddress(minter, this.network, contract),
+    );
+    const found = await this.findMinterUtxo(
+      minterUtxos,
+      minter,
+      covenantIdHex,
+      contract,
+    );
     return found !== undefined;
   }
 
@@ -681,8 +717,9 @@ export class KaspaMembershipGateway implements MembershipGateway {
     utxos: Utxo[],
     minter: MembershipState,
     covenantIdHex: string,
+    contract: MembershipContract,
   ): Promise<Utxo | undefined> {
-    const expectedScript = membershipScript(minter).slice(4);
+    const expectedScript = membershipScript(minter, contract).slice(4);
     const candidates = utxos.filter(
       (utxo) =>
         BigInt(utxo.utxoEntry.amount) === MEMBERSHIP_OUTPUT_VALUE &&
@@ -1039,6 +1076,7 @@ function membershipPreflight(
   inputs: TransactionInputShape[],
   outputs: PreparedOutput[],
   daa: string,
+  contract: MembershipContract,
 ) {
   const creatorLock = addressScript(creator);
   const buyerLock = addressScript(buyer);
@@ -1103,10 +1141,10 @@ function membershipPreflight(
     minterOutputPresent: { pass: Boolean(minterOutput?.covenant) },
     memberOutputPresent: { pass: Boolean(memberOutput?.covenant) },
     minterOutputScript: {
-      pass: minterOutput?.scriptPublicKey === membershipScript(minter),
+      pass: minterOutput?.scriptPublicKey === membershipScript(minter, contract),
     },
     memberOutputScript: {
-      pass: memberOutput?.scriptPublicKey === membershipScript(member),
+      pass: memberOutput?.scriptPublicKey === membershipScript(member, contract),
     },
     covenantAuthorizingInput: {
       pass:

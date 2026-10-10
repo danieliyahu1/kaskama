@@ -381,6 +381,40 @@ describe.each([
     expect(await store.getPreparedMembership("prepared-cancel", now)).toBeNull();
   });
 
+  it("round-trips a covenant's contract through persistence", async () => {
+    const contract = { prefix: "6b", suffix: "6a" };
+    await store.saveCreatorCovenant({
+      creator,
+      covenantId: "covenant-contract",
+      priceSompi: "1000000000",
+      contract,
+    });
+
+    expect((await store.getCreatorCovenant(creator))?.contract).toEqual(contract);
+  });
+
+  it("round-trips a prepared membership's contract through persistence", async () => {
+    const contract = { prefix: "6b", suffix: "6a" };
+    await store.savePreparedMembership({
+      id: "prepared-contract",
+      transaction: "{}",
+      fingerprint: "fingerprint",
+      covenantId: "covenant-1",
+      signInputs: [0],
+      memberOutputIndex: null,
+      creator,
+      buyer: creator,
+      kind: "offer",
+      expiresAt: now + 1_000,
+      priceSompi: "1000000000",
+      contract,
+    });
+
+    expect(
+      (await store.getPreparedMembership("prepared-contract", now))?.contract,
+    ).toEqual(contract);
+  });
+
   it("derives the current offer from one table that keeps every covenant", async () => {
     await store.saveCreatorCovenant({
       creator,

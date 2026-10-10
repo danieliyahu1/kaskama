@@ -4,6 +4,7 @@ import {
   ScriptBuilder,
 } from "@kluster/kaspa-wasm";
 import { DEFAULT_NETWORK, type NetworkId } from "@kaskama/shared";
+import type { MembershipContract } from "./domain/models.js";
 import artifact from "./contracts/membership.json" with { type: "json" };
 
 export {
@@ -73,13 +74,27 @@ export function addressScript(address: string): string {
   return `000020${hex(Uint8Array.from(bytes.slice(1)))}ac`;
 }
 
-export function membershipRedeemScript(state: MembershipState): string {
-  const encoded = encodeState(state);
-  return hex(concat(prefix, encoded, suffix));
+/** The contract code compiled into this server, as a persistable value. */
+export function currentMembershipContract(): MembershipContract {
+  return { prefix: hex(prefix), suffix: hex(suffix) };
 }
 
-export function membershipScript(state: MembershipState): string {
-  const value = payToScriptHashScript(membershipRedeemScript(state)).toJSON() as {
+export function membershipRedeemScript(
+  state: MembershipState,
+  contract: MembershipContract = currentMembershipContract(),
+): string {
+  return hex(
+    concat(hexToBytes(contract.prefix), encodeState(state), hexToBytes(contract.suffix)),
+  );
+}
+
+export function membershipScript(
+  state: MembershipState,
+  contract: MembershipContract = currentMembershipContract(),
+): string {
+  const value = payToScriptHashScript(
+    membershipRedeemScript(state, contract),
+  ).toJSON() as {
     script: string;
     version: number;
   };
@@ -89,8 +104,9 @@ export function membershipScript(state: MembershipState): string {
 export function membershipAddress(
   state: MembershipState,
   network: NetworkId = DEFAULT_NETWORK,
+  contract: MembershipContract = currentMembershipContract(),
 ): string {
-  const script = payToScriptHashScript(membershipRedeemScript(state));
+  const script = payToScriptHashScript(membershipRedeemScript(state, contract));
   const address = addressFromScriptPublicKey(script, network);
   if (!address) throw new Error("MEMBERSHIP_SCRIPT_ADDRESS_FAILED");
   return address.toString();
@@ -98,16 +114,16 @@ export function membershipAddress(
 
 export function decodeMembershipRedeemScript(
   scriptHex: string,
+  contract: MembershipContract = currentMembershipContract(),
 ): MembershipState | null {
   if (!/^[0-9a-f]+$/i.test(scriptHex) || scriptHex.length % 2 !== 0) return null;
   const script = Uint8Array.from(Buffer.from(scriptHex, "hex"));
-  if (script.length !== bytecode.length) return null;
-  if (
-    !equal(script.slice(0, offset), prefix) ||
-    !equal(script.slice(offset + len), suffix)
-  )
-    return null;
-  const pushes = parsePushes(script.slice(offset, offset + len));
+  const prefixBytes = hexToBytes(contract.prefix);
+  const suffixBytes = hexToBytes(contract.suffix);
+  if (script.length < prefixBytes.length + suffixBytes.length) return null;
+  if (!startsWith(script, prefixBytes) || !endsWith(script, suffixBytes)) return null;
+  const state = script.slice(prefixBytes.length, script.length - suffixBytes.length);
+  const pushes = parsePushes(state);
   if (!pushes || pushes.length !== 6) return null;
   const [creator, platform, owner, expiry, price, minter] = pushes;
   if (
@@ -337,12 +353,19 @@ function concat(...values: Uint8Array[]): Uint8Array {
   return result;
 }
 
-function equal(left: Uint8Array, right: Uint8Array): boolean {
-  return (
-    left.length === right.length && left.every((value, index) => value === right[index])
-  );
-}
-
 function hex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("hex");
+}
+
+function hexToBytes(value: string): Uint8Array {
+  return Uint8Array.from(Buffer.from(value, "hex"));
+}
+
+function startsWith(value: Uint8Array, prefix: Uint8Array): boolean {
+  return value.length >= prefix.length && prefix.every((byte, index) => value[index] === byte);
+}
+
+function endsWith(value: Uint8Array, suffix: Uint8Array): boolean {
+  const offset = value.length - suffix.length;
+  return offset >= 0 && suffix.every((byte, index) => value[offset + index] === byte);
 }
