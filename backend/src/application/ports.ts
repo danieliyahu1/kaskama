@@ -213,6 +213,18 @@ export class MembershipStateChangedError extends Error {
   }
 }
 
+/**
+ * The network refused to take a signed transaction: an upstream node fault, not
+ * a mistake the caller made and not a state change. Nothing was charged, so the
+ * only honest thing to say is that it went wrong and can be tried again.
+ */
+export class MembershipSubmissionError extends Error {
+  constructor() {
+    super("MEMBERSHIP_SUBMISSION_FAILED");
+    this.name = "MembershipSubmissionError";
+  }
+}
+
 export interface MembershipGateway {
   prepareOffer(
     creator: string,

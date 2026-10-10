@@ -1,5 +1,5 @@
 import { Transaction } from "@kluster/kaspa-wasm";
-import { MembershipStateChangedError } from "./application/ports.js";
+import { MembershipSubmissionError } from "./application/ports.js";
 import {
   KaspaMembershipGateway,
   submitMembershipTransactionOverWrpc,
@@ -356,7 +356,7 @@ describe("KaspaMembershipGateway", () => {
     return { offer, signedJson: JSON.stringify(signed) };
   }
 
-  it("treats a rejected relay as a state change to retry", async () => {
+  it("reports a refused relay as a submission failure, not a state change", async () => {
     stubOfferSources();
     const relay = vi.fn(async () => {
       throw new Error("already spent");
@@ -370,7 +370,7 @@ describe("KaspaMembershipGateway", () => {
     const { offer, signedJson } = await signedOffer(gateway);
 
     await expect(gateway.submit(offer, signedJson)).rejects.toBeInstanceOf(
-      MembershipStateChangedError,
+      MembershipSubmissionError,
     );
   });
 

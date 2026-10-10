@@ -20,6 +20,7 @@ import { TestStorage } from "./test-storage.js";
 import { MEDIA_ERROR_CATEGORIES, type VerifiedMedia } from "./adapters/media/media.js";
 import {
   MembershipStateChangedError,
+  MembershipSubmissionError,
   type MembershipGateway,
   type MembershipVerifier,
   type ObjectStorage,
@@ -1550,6 +1551,7 @@ describe("membership price validation", () => {
 describe("membership state changes", () => {
   const staleMessage =
     "This subscription changed while you were confirming it. Nothing was charged - submit again.";
+  const submissionMessage = "Something went wrong. You weren't charged. Try again.";
   const covenantId = "a".repeat(64);
 
   function gatewayThatThrows(error: Error): MembershipGateway {
@@ -1892,6 +1894,67 @@ describe("membership state changes", () => {
       error: "MEMBERSHIP_OFFER_STALE",
       retry: "AFTER_REFRESH",
       message: staleMessage,
+    });
+    expect(await store.getPreparedMembership("prepared-1", Date.now())).toBeNull();
+  });
+
+  it.each([
+    ["update", "/api/membership/price/prepared-1/finalize"],
+    ["cancel", "/api/membership/cancel/prepared-1/finalize"],
+  ] as const)(
+    "tells the user something went wrong when the relay refuses a %s",
+    async (kind, path) => {
+      const store = new MemoryStore();
+      const creator = await creatorSession(store);
+      await store.saveCreatorCovenant({ creator, covenantId, priceSompi: "1000000000" });
+      await seedPrepared(store, creator, kind);
+      const { app } = appWithGateway(
+        store,
+        gatewayThatThrows(new MembershipSubmissionError()),
+      );
+
+      const response = await request(app)
+        .post(path)
+        .set("Cookie", "kaskama_session=creator-session")
+        .send({ signedTransaction: "aa01" });
+
+      expect(response.status).toBe(502);
+      expect(response.body).toMatchObject({
+        error: "MEMBERSHIP_SUBMISSION_FAILED",
+        message: submissionMessage,
+      });
+      expect(response.body.retry).toBeUndefined();
+      expect(await store.getPreparedMembership("prepared-1", Date.now())).toBeNull();
+    },
+  );
+
+  it("tells the buyer something went wrong when the relay refuses a purchase", async () => {
+    const store = new MemoryStore();
+    await seedPurchase(store);
+    const verifier: MembershipVerifier = {
+      verifyAddress: async () => [],
+      findMembership: async () => null,
+      verifyUtxo: async () => check("VALID"),
+    };
+    const { app } = testApp(
+      store,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      verifier,
+      gatewayThatThrows(new MembershipSubmissionError()),
+    );
+
+    const response = await request(app)
+      .post("/api/membership/purchases/prepared-1/finalize")
+      .set("Cookie", "kaskama_session=creator-session")
+      .send({ signedTransaction: "{}" });
+
+    expect(response.status).toBe(502);
+    expect(response.body).toMatchObject({
+      error: "MEMBERSHIP_SUBMISSION_FAILED",
+      message: submissionMessage,
     });
     expect(await store.getPreparedMembership("prepared-1", Date.now())).toBeNull();
   });

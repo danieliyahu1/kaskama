@@ -19,6 +19,7 @@ export const API_COPY = {
   membershipPriceAboveMax: `The monthly subscription price can be at most ${kas(MAX_MEMBERSHIP_PRICE_SOMPI)} KAS.`,
   membershipStale:
     "This subscription changed while you were confirming it. Nothing was charged - submit again.",
+  membershipSubmissionFailed: "Something went wrong. You weren't charged. Try again.",
   membershipOfferExists: "This subscription is already live.",
   membershipCancellationStale: "This subscription already changed. Submit again.",
   membershipPurchaseExists: "You already have this subscription.",

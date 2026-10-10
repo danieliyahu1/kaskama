@@ -52,6 +52,7 @@ import {
 import type { CreatorCovenant, Post, Profile, Session } from "./domain/models.js";
 import {
   MembershipStateChangedError,
+  MembershipSubmissionError,
   type MembershipGateway,
   type MembershipVerifier,
   type ObjectStorage,
@@ -183,6 +184,34 @@ export function createApp(d: AppDependencies) {
     return gateway
       .offerAvailable(covenant.creator, covenant.covenantId, covenant.priceSompi)
       .catch(() => true);
+  }
+  // A submit can fail for two reasons: the covenant moved under the caller (a
+  // competing spend), or the network would not take the signed transaction at
+  // all. In both cases the prepared record is spent and nothing was charged, so
+  // the caller is told the truth - retry against fresh state, or that something
+  // went wrong - and never a cause they cannot act on.
+  async function membershipSubmitFailure(
+    res: Response,
+    id: string,
+    error: unknown,
+  ): Promise<Response | undefined> {
+    if (
+      !(
+        error instanceof MembershipStateChangedError ||
+        error instanceof MembershipSubmissionError
+      )
+    )
+      return undefined;
+    await d.store.deleteMembershipWorkflow(id);
+    await d.store.deletePreparedMembership(id);
+    return error instanceof MembershipStateChangedError
+      ? membershipStale(res)
+      : apiError(
+          res,
+          502,
+          "MEMBERSHIP_SUBMISSION_FAILED",
+          COPY.membershipSubmissionFailed,
+        );
   }
   const publishPost = createPublishPostUseCase({
     posts: d.store,
@@ -1002,11 +1031,8 @@ export function createApp(d: AppDependencies) {
       try {
         submission = await d.membershipGateway.submit(value, body.signedTransaction);
       } catch (error) {
-        if (error instanceof MembershipStateChangedError) {
-          await d.store.deleteMembershipWorkflow(id);
-          await d.store.deletePreparedMembership(id);
-          return membershipStale(res);
-        }
+        const failure = await membershipSubmitFailure(res, id, error);
+        if (failure) return failure;
         throw error;
       }
       if (submission.isAccepted !== true || !submission.transactionId) {
@@ -1113,11 +1139,8 @@ export function createApp(d: AppDependencies) {
       try {
         submission = await d.membershipGateway.submit(value, body.signedTransaction);
       } catch (error) {
-        if (error instanceof MembershipStateChangedError) {
-          await d.store.deleteMembershipWorkflow(id);
-          await d.store.deletePreparedMembership(id);
-          return membershipStale(res);
-        }
+        const failure = await membershipSubmitFailure(res, id, error);
+        if (failure) return failure;
         throw error;
       }
       if (submission.isAccepted !== true || !submission.transactionId) {
@@ -1282,11 +1305,8 @@ export function createApp(d: AppDependencies) {
       try {
         submission = await d.membershipGateway.submit(value, body.signedTransaction);
       } catch (error) {
-        if (error instanceof MembershipStateChangedError) {
-          await d.store.deleteMembershipWorkflow(id);
-          await d.store.deletePreparedMembership(id);
-          return membershipStale(res);
-        }
+        const failure = await membershipSubmitFailure(res, id, error);
+        if (failure) return failure;
         throw error;
       }
       if (submission.isAccepted !== true || !submission.transactionId) {
@@ -1366,11 +1386,8 @@ export function createApp(d: AppDependencies) {
             body.signedTransaction,
           );
         } catch (error) {
-          if (error instanceof MembershipStateChangedError) {
-            await d.store.deleteMembershipWorkflow(id);
-            await d.store.deletePreparedMembership(id);
-            return membershipStale(res);
-          }
+          const failure = await membershipSubmitFailure(res, id, error);
+          if (failure) return failure;
           throw error;
         }
         // The relay refused the transaction outright: nothing was charged.

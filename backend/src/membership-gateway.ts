@@ -12,6 +12,7 @@ import {
 } from "@kluster/kaspa-wasm";
 import {
   MembershipStateChangedError,
+  MembershipSubmissionError,
   type MembershipGateway,
   type PaymentSubmission,
   type PreparedMembershipTransaction,
@@ -543,7 +544,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
       this.logger.error("membership_transaction_relay_failed", {
         error: safeError(error),
       });
-      throw new MembershipStateChangedError();
+      throw new MembershipSubmissionError();
     }
     this.logger.info("membership_transaction_relayed", {
       txIdPrefix: transactionId.slice(0, 12),

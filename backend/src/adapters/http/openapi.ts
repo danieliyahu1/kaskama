@@ -38,6 +38,10 @@ export function openApiDocument(origin: string): Record<string, unknown> {
     404: { description: "Not found.", content: json(ref("Error")) },
     409: { description: "Conflict or stale state.", content: json(ref("Error")) },
     422: { description: "Rejected.", content: json(ref("Error")) },
+    502: {
+      description: "The network refused the signed transaction.",
+      content: json(ref("Error")),
+    },
     503: { description: "Upstream unavailable.", content: json(ref("Error")) },
   };
 
