@@ -106,8 +106,11 @@ export class KaspaPaymentGateway implements PaymentGateway {
     if (!referrer) return null;
     if (!networkDefinition(this.network).addressPattern.test(referrer)) return null;
     try {
-      scriptFor(referrer);
-      return referrer;
+      const script = scriptFor(referrer);
+      // scriptFor drops the checksum, so only a canonical round-trip proves
+      // the address we would store is the one the payout script actually pays.
+      // A checksum typo decodes to a different address and is dropped here.
+      return this.addressOf(script) === referrer ? referrer : null;
     } catch {
       return null;
     }

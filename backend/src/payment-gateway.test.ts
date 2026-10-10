@@ -91,6 +91,20 @@ describe("KaspaPaymentGateway preparation", () => {
     expect(transaction.outputs.some((output) => output.value === "200000000" && output.scriptPublicKey === addressScript(feeAddress))).toBe(true);
   });
 
+  it("ignores a referrer whose checksum does not match its payload", async () => {
+    stubNode([funding("200000000000", "88".repeat(32))]);
+    const gateway = new KaspaPaymentGateway(feeAddress, "https://node.test", undefined, undefined, undefined);
+    const typo = `${referrer.slice(0, -1)}9`;
+    const prepared = await gateway.prepare({
+      id: "post-1", creator, caption: "", priceSompi: "20000000000", mediaType: "image/jpeg",
+      mediaSize: 1, mediaDigest: "a".repeat(64), mediaKey: "key", publishedAt: 0,
+    }, buyer, typo);
+    const transaction = JSON.parse(prepared.transaction) as { payload: string; outputs: { value: string; scriptPublicKey: string }[] };
+    expect(parsePpvPayload(transaction.payload)?.referrer).toBeNull();
+    expect(transaction.outputs.some((output) => output.scriptPublicKey === addressScript(referrer))).toBe(false);
+    expect(transaction.outputs.some((output) => output.value === "200000000" && output.scriptPublicKey === addressScript(feeAddress))).toBe(true);
+  });
+
   it("prefers the smallest sufficient UTXO to limit transaction storage mass", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
