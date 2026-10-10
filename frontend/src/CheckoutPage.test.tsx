@@ -97,7 +97,7 @@ describe("CheckoutPage", () => {
       method: "POST",
       body: JSON.stringify({ signedTransaction: "signed" }),
     });
-    expect(await screen.findByText("Subscribed")).toBeVisible();
+    expect(await screen.findByText("You're subscribed.")).toBeVisible();
   });
 
   it("signs a signed-out visitor in before subscribing", async () => {
@@ -118,14 +118,14 @@ describe("CheckoutPage", () => {
       `/api/membership/${encodeURIComponent(creatorAddress)}/prepare`,
       { method: "POST" },
     );
-    expect(await screen.findByText("Subscribed")).toBeVisible();
+    expect(await screen.findByText("You're subscribed.")).toBeVisible();
   });
 
   it("shows a subscriber their status without a renewal action", async () => {
     vi.mocked(api).mockResolvedValueOnce(creator(false, true, true));
     renderCheckout(consumerAddress);
 
-    expect(await screen.findByText("Subscribed")).toBeVisible();
+    expect(await screen.findByText("You're subscribed.")).toBeVisible();
     expect(
       screen.queryByRole("button", { name: /renew/i }),
     ).not.toBeInTheDocument();

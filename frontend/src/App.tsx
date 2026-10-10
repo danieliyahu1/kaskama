@@ -204,41 +204,17 @@ export function App() {
       <div className="shell">
         <ScrollReset target={mainRef} />
         <ReferralCapture />
-        <nav>
-          <Link to="/" className="brand">
-            KAS<span>KAMA</span>
-          </Link>
-          <div className="nav-group">
-            <GlobalSearch />
-            <Link to="/creators" className="nav-link">
-              Creators
-            </Link>
-            <Link to="/publish" className="nav-link">
-              Publish
-            </Link>
-            {address ? (
-              <AccountMenu
-                address={address}
-                displayName={profile?.displayName ?? null}
-                avatarUrl={profile?.avatarUrl ?? null}
-                loading={loadingProfile}
-                error={profileError}
-                onSignOut={() => void signOut()}
-              />
-            ) : (
-              <button
-                className="nav-link"
-                disabled={signingIn || checkingSession}
-                onClick={() => void signIn()}
-                aria-label="Sign in with Kasware"
-                title="Sign in with Kasware"
-              >
-                {(signingIn || checkingSession) && <Spinner />}
-                {signInLabel(checkingSession, signingIn)}
-              </button>
-            )}
-          </div>
-        </nav>
+        <SiteNav
+          address={address}
+          displayName={profile?.displayName ?? null}
+          avatarUrl={profile?.avatarUrl ?? null}
+          profileLoading={loadingProfile}
+          profileError={profileError}
+          signIn={signIn}
+          signingIn={signingIn}
+          checkingSession={checkingSession}
+          onSignOut={() => void signOut()}
+        />
         <Toast toast={toast} onDismiss={dismissToast} />
         <main ref={mainRef}>
           <Routes>
@@ -303,25 +279,104 @@ export function App() {
             <Route path="*" element={<MessageNotFound />} />
           </Routes>
         </main>
-        <footer>
-          <nav className="legal-links" aria-label="Legal">
-            {PUBLIC_PAGES.map((page) => (
-              <Link key={page.path} to={page.path}>
-                {page.navLabel}
-              </Link>
-            ))}
-          </nav>
-          <div className="footer-links">
-            {/* A server-rendered page, so a full navigation rather than a client route. */}
-            <a className="footer-link" href={API_DOCS_PATH}>
-              API
-            </a>
-            <SocialLinks />
-            <FeedbackButton />
-          </div>
-        </footer>
+        <SiteFooter />
       </div>
     </BrowserRouter>
+  );
+}
+
+/** The checkout is a counter for a merchant's customers, not a Kaskama page. */
+function isCheckoutPath(pathname: string): boolean {
+  return pathname.startsWith("/checkout/");
+}
+
+type SiteNavProps = {
+  address: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  profileLoading: boolean;
+  profileError: string | null;
+  signIn: () => Promise<string | null>;
+  signingIn: boolean;
+  checkingSession: boolean;
+  onSignOut: () => void;
+};
+
+/** The marketplace header, absent on the checkout, which serves a merchant's buyers. */
+function SiteNav({
+  address,
+  displayName,
+  avatarUrl,
+  profileLoading,
+  profileError,
+  signIn,
+  signingIn,
+  checkingSession,
+  onSignOut,
+}: SiteNavProps) {
+  const { pathname } = useLocation();
+  if (isCheckoutPath(pathname)) return null;
+  return (
+    <nav>
+      <Link to="/" className="brand">
+        KAS<span>KAMA</span>
+      </Link>
+      <div className="nav-group">
+        <GlobalSearch />
+        <Link to="/creators" className="nav-link">
+          Creators
+        </Link>
+        <Link to="/publish" className="nav-link">
+          Publish
+        </Link>
+        {address ? (
+          <AccountMenu
+            address={address}
+            displayName={displayName}
+            avatarUrl={avatarUrl}
+            loading={profileLoading}
+            error={profileError}
+            onSignOut={onSignOut}
+          />
+        ) : (
+          <button
+            className="nav-link"
+            disabled={signingIn || checkingSession}
+            onClick={() => void signIn()}
+            aria-label="Sign in with Kasware"
+            title="Sign in with Kasware"
+          >
+            {(signingIn || checkingSession) && <Spinner />}
+            {signInLabel(checkingSession, signingIn)}
+          </button>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+/** The marketplace footer, absent on the checkout for the same reason as the header. */
+function SiteFooter() {
+  const { pathname } = useLocation();
+  if (isCheckoutPath(pathname)) return null;
+  return (
+    <footer>
+      <nav className="legal-links" aria-label="Legal">
+        {PUBLIC_PAGES.map((page) => (
+          <Link key={page.path} to={page.path}>
+            {page.navLabel}
+          </Link>
+        ))}
+      </nav>
+      <div className="footer-links">
+        {/* A server-rendered page, so a full navigation rather than a client route. */}
+        <a className="footer-link" href={API_DOCS_PATH}>
+          API
+        </a>
+        <SocialLinks />
+        <FeedbackButton />
+      </div>
+    </footer>
   );
 }
 

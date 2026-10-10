@@ -105,6 +105,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete window.kasware;
+  window.history.pushState({}, "", "/");
 });
 
 describe("session and wallet reconciliation", () => {
@@ -302,6 +303,45 @@ describe("session and wallet reconciliation", () => {
       expect(apiMock).toHaveBeenCalledWith("/api/auth/logout", expect.anything()),
     );
     expect(reloadMock).toHaveBeenCalled();
+  });
+});
+
+describe("checkout surface", () => {
+  it("carries no marketplace chrome on the checkout", async () => {
+    const routeAddress = `kaspatest:${"q".repeat(60)}`;
+    window.history.pushState({}, "", `/checkout/${routeAddress}`);
+    apiMock.mockImplementation(async (path: string) => {
+      if (path === "/api/auth/session") throw new Error("AUTH_REQUIRED");
+      if (path.startsWith("/api/creators/"))
+        return {
+          address: routeAddress,
+          displayAddress: "kaspatest:qqq...qqq",
+          displayName: "Acme",
+          bio: null,
+          avatarUrl: null,
+          isPublic: true,
+          isOwner: false,
+          membership: {
+            offered: true,
+            active: false,
+            priceSompi: "1000000000",
+            durationDays: 30,
+          },
+          posts: [],
+        };
+      return [];
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: "Subscribe" })).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: "Creators" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Publish" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "API" })).not.toBeInTheDocument();
   });
 });
 

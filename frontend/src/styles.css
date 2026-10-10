@@ -110,6 +110,10 @@ textarea:focus-visible {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
+/* The checkout carries no header or footer, so its one row fills the shell. */
+.shell:not(:has(> nav)) {
+  grid-template-rows: minmax(0, 1fr);
+}
 
 /* Header and footer */
 
@@ -1708,6 +1712,22 @@ button.visibility-badge:focus-visible {
   color: var(--muted);
   font-size: 0.95rem;
   line-height: 1.55;
+}
+.checkout-active {
+  margin-top: 1.5rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.checkout-active-title {
+  margin: 0;
+  color: var(--paper);
+  font-size: 1.05rem;
+}
+.checkout-active-note {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 .checkout-share {
   display: flex;

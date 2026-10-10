@@ -51,16 +51,15 @@ export const COPY = {
   checkoutSubscribe: "Subscribe",
   checkoutPreparing: "Preparing...",
   checkoutConfirming: "Confirming...",
-  checkoutSubscribed: "Subscribed",
   checkoutCopyLink: "Copy checkout link",
   checkoutLinkCopied: "Checkout link copied.",
   checkoutLinkLabel: "Checkout page",
   checkoutPreview:
     "This is your checkout page. Share this link so readers can subscribe.",
   checkoutSellerMissing: "This seller isn't available.",
-  checkoutUnavailable: "This creator hasn't set up checkout yet.",
+  checkoutUnavailable: "This merchant hasn't set up checkout yet.",
   checkoutSubscriptionUnavailable:
-    "This creator's subscription isn't available right now.",
+    "This merchant's subscription isn't available right now.",
   checkoutOfferNotServiceable: "Your subscription isn't available right now.",
   checkoutOfferNotServiceableNote:
     "Kaskama can't verify it on-chain yet, so checkout is paused.",

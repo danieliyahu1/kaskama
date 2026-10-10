@@ -288,11 +288,9 @@ export function CheckoutPage({ address, signIn, signingIn }: WalletProps) {
   function buyerControls() {
     if (seller!.membership.active)
       return (
-        <div className="checkout-offer">
-          <p className="access-facts">{priceLabel}</p>
-          <div className="access-actions">
-            <span className="access-status">{COPY.checkoutSubscribed}</span>
-          </div>
+        <div className="checkout-active">
+          <p className="checkout-active-title">You're subscribed.</p>
+          <p className="checkout-active-note">{durationDays} days of access.</p>
         </div>
       );
     const label =
