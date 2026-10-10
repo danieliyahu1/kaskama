@@ -625,6 +625,7 @@ h2 {
 .secondary:hover:not(:disabled),
 .secondary:focus-visible {
   border-color: var(--acid);
+  color: var(--acid);
 }
 .icon-button {
   display: inline-grid;
