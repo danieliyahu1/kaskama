@@ -329,6 +329,33 @@ export const migrations: Migration[] = [
     name: "drop_idempotency_keys",
     statements: ["DROP TABLE IF EXISTS idempotency_keys"],
   },
+  {
+    version: 18,
+    name: "single_covenant_table",
+    statements: [
+      // A creator's offers lived in two places: the current one in
+      // creator_covenants (keyed by creator) and every one, current included,
+      // in creator_covenant_history (keyed by creator and covenant). The
+      // current offer was therefore stored twice. Keep one table holding every
+      // offer, and let a partial index keep at most one active offer per
+      // creator, so the current offer is derived instead of duplicated.
+      `CREATE TABLE creator_covenants_v2 (
+        creator TEXT NOT NULL,
+        covenant_id TEXT NOT NULL,
+        price_sompi TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'CANCELED')),
+        PRIMARY KEY (creator, covenant_id),
+        UNIQUE (covenant_id)
+      )`,
+      `INSERT INTO creator_covenants_v2 (creator,covenant_id,price_sompi,status)
+        SELECT creator,covenant_id,price_sompi,status FROM creator_covenant_history`,
+      `DROP TABLE creator_covenants`,
+      `DROP TABLE creator_covenant_history`,
+      `ALTER TABLE creator_covenants_v2 RENAME TO creator_covenants`,
+      `CREATE UNIQUE INDEX creator_covenants_one_active
+        ON creator_covenants (creator) WHERE status = 'ACTIVE'`,
+    ],
+  },
 ];
 
 export async function applyMigrations(client: Client): Promise<void> {
@@ -373,7 +400,6 @@ export async function resetDatabase(client: Client): Promise<void> {
     "prepared_payments",
     "membership_purchases",
     "creator_covenants",
-    "creator_covenant_history",
     "purchases",
     "posts",
     "profiles",

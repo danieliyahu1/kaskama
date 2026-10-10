@@ -380,6 +380,43 @@ describe.each([
     expect(await store.getCreatorCovenant(creator)).toBeNull();
     expect(await store.getPreparedMembership("prepared-cancel", now)).toBeNull();
   });
+
+  it("derives the current offer from one table that keeps every covenant", async () => {
+    await store.saveCreatorCovenant({
+      creator,
+      covenantId: "covenant-1",
+      priceSompi: "1000000000",
+    });
+    const finalize = store.finalizeCancellation?.bind(store);
+    if (!finalize) throw new Error("finalizeCancellation is unavailable");
+    expect(
+      await finalize("prepared-cancel", { creator, covenantId: "covenant-1" }),
+    ).toBe("CREATED");
+
+    expect(
+      await store.saveCreatorCovenant({
+        creator,
+        covenantId: "covenant-2",
+        priceSompi: "2000000000",
+      }),
+    ).toBe("CREATED");
+    expect(await store.getCreatorCovenant(creator)).toEqual({
+      creator,
+      covenantId: "covenant-2",
+      priceSompi: "2000000000",
+    });
+    expect(await store.listCreatorCovenants!(creator)).toEqual(
+      expect.arrayContaining([
+        {
+          creator,
+          covenantId: "covenant-1",
+          priceSompi: "1000000000",
+          status: "CANCELED",
+        },
+        { creator, covenantId: "covenant-2", priceSompi: "2000000000" },
+      ]),
+    );
+  });
 });
 
 function post(id: string, postCreator: string, publishedAt: number): Post {

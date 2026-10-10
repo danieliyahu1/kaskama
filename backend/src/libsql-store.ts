@@ -4,6 +4,7 @@ import {
   type Client,
   type InStatement,
   type ResultSet,
+  type Transaction,
 } from "@libsql/client";
 import type {
   Challenge,
@@ -568,7 +569,7 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
   }
   async listCreatorCovenants(creator: string) {
     const r = await this.execute({
-      sql: `SELECT * FROM creator_covenant_history WHERE creator=?`,
+      sql: `SELECT * FROM creator_covenants WHERE creator=?`,
       args: [creator],
     });
     return r.rows.map(creatorCovenantFromRow);
@@ -583,14 +584,44 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
     return r.rows.map(creatorCovenantFromRow);
   }
   async saveCreatorCovenant(v: CreatorCovenant): Promise<DuplicateOutcome> {
+    return this.insertActiveCovenant(v, (statement) => this.execute(statement));
+  }
+  /**
+   * Inserts a new active offer. The table's unique keys make a creator's
+   * second active offer, or a reused covenant id, a duplicate instead of an
+   * overwrite, so the invariant lives in the schema rather than in a
+   * read-then-write check.
+   */
+  private async insertActiveCovenant(
+    value: CreatorCovenant,
+    run: (statement: InStatement) => Promise<ResultSet>,
+  ): Promise<DuplicateOutcome> {
     try {
-      await this.execute({
+      await run({
         sql: `INSERT INTO creator_covenants (creator,covenant_id,price_sompi,status) VALUES (?,?,?,'ACTIVE')`,
-        args: [v.creator, v.covenantId, v.priceSompi],
+        args: [value.creator, value.covenantId, value.priceSompi],
       });
       return "CREATED";
     } catch (error) {
       if (isUniqueConstraint(error)) return "DUPLICATE";
+      throw error;
+    }
+  }
+  /**
+   * Runs work in one write transaction, committing on success and rolling back
+   * on any failure, so a covenant change and the prepared record it consumes
+   * move together.
+   */
+  private async inWriteTransaction<T>(
+    work: (transaction: Transaction) => Promise<T>,
+  ): Promise<T> {
+    const transaction = await this.client.transaction("write");
+    try {
+      const result = await work(transaction);
+      await transaction.commit();
+      return result;
+    } catch (error) {
+      await transaction.rollback();
       throw error;
     }
   }
@@ -622,114 +653,48 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
     );
   }
   async finalizeOffer(id: string, value: CreatorCovenant): Promise<DuplicateOutcome> {
-    const transaction = await this.client.transaction("write");
-    try {
-      const current = await transaction.execute({
-        sql: `SELECT status FROM creator_covenants WHERE creator=?`,
-        args: [value.creator],
-      });
-      if (current.rows[0] && current.rows[0].status !== "CANCELED") {
-        await transaction.execute({
-          sql: "DELETE FROM prepared_memberships WHERE id=?",
-          args: [id],
-        });
-        await transaction.commit();
-        return "DUPLICATE";
-      }
-      try {
-        await transaction.execute({
-          sql: `INSERT INTO creator_covenants (creator,covenant_id,price_sompi,status) VALUES (?,?,?,'ACTIVE') ON CONFLICT(creator) DO UPDATE SET covenant_id=excluded.covenant_id,price_sompi=excluded.price_sompi,status='ACTIVE'`,
-          args: [value.creator, value.covenantId, value.priceSompi],
-        });
-        await transaction.execute({
-          sql: `INSERT INTO creator_covenant_history (creator,covenant_id,price_sompi,status) VALUES (?,?,?,'ACTIVE')`,
-          args: [value.creator, value.covenantId, value.priceSompi],
-        });
-      } catch (error) {
-        if (!isUniqueConstraint(error)) throw error;
-        await transaction.execute({
-          sql: "DELETE FROM prepared_memberships WHERE id=?",
-          args: [id],
-        });
-        await transaction.commit();
-        return "DUPLICATE";
-      }
+    return this.inWriteTransaction(async (transaction) => {
+      const outcome = await this.insertActiveCovenant(value, (statement) =>
+        transaction.execute(statement),
+      );
       await transaction.execute({
         sql: "DELETE FROM prepared_memberships WHERE id=?",
         args: [id],
       });
-      await transaction.commit();
-      return "CREATED";
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
-    }
+      return outcome;
+    });
   }
   async finalizePriceUpdate(
     id: string,
     value: CreatorCovenant,
   ): Promise<DuplicateOutcome> {
-    const transaction = await this.client.transaction("write");
-    try {
+    return this.inWriteTransaction(async (transaction) => {
       const result = await transaction.execute({
-        sql: `UPDATE creator_covenants SET price_sompi=?,status='ACTIVE' WHERE creator=? AND covenant_id=? AND status<>'CANCELED'`,
-        args: [value.priceSompi, value.creator, value.covenantId],
-      });
-      if (result.rowsAffected !== 1) {
-        await transaction.execute({
-          sql: "DELETE FROM prepared_memberships WHERE id=?",
-          args: [id],
-        });
-        await transaction.commit();
-        return "DUPLICATE";
-      }
-      await transaction.execute({
-        sql: `UPDATE creator_covenant_history SET price_sompi=?,status='ACTIVE' WHERE creator=? AND covenant_id=?`,
+        sql: `UPDATE creator_covenants SET price_sompi=? WHERE creator=? AND covenant_id=? AND status<>'CANCELED'`,
         args: [value.priceSompi, value.creator, value.covenantId],
       });
       await transaction.execute({
         sql: "DELETE FROM prepared_memberships WHERE id=?",
         args: [id],
       });
-      await transaction.commit();
-      return "CREATED";
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
-    }
+      return result.rowsAffected === 1 ? "CREATED" : "DUPLICATE";
+    });
   }
   async finalizeCancellation(
     id: string,
     value: Pick<CreatorCovenant, "creator" | "covenantId">,
   ): Promise<DuplicateOutcome> {
-    const transaction = await this.client.transaction("write");
-    try {
+    return this.inWriteTransaction(async (transaction) => {
       const result = await transaction.execute({
         sql: `UPDATE creator_covenants SET status='CANCELED' WHERE creator=? AND covenant_id=? AND status<>'CANCELED'`,
-        args: [value.creator, value.covenantId],
-      });
-      if (result.rowsAffected !== 1) {
-        await transaction.execute({
-          sql: "DELETE FROM prepared_memberships WHERE id=?",
-          args: [id],
-        });
-        await transaction.commit();
-        return "DUPLICATE";
-      }
-      await transaction.execute({
-        sql: `UPDATE creator_covenant_history SET status='CANCELED' WHERE creator=? AND covenant_id=?`,
         args: [value.creator, value.covenantId],
       });
       await transaction.execute({
         sql: "DELETE FROM prepared_memberships WHERE id=?",
         args: [id],
       });
-      await transaction.commit();
-      return "CREATED";
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
-    }
+      return result.rowsAffected === 1 ? "CREATED" : "DUPLICATE";
+    });
   }
   async finalizeMembershipPurchase(
     id: string,

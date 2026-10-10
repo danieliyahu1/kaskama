@@ -21,8 +21,8 @@ export class MemoryStore implements Repositories {
   readonly posts = new Map<string, Post>();
   readonly pendingPosts = new Map<string, { post: Post; expiresAt: number }>();
   readonly purchases = new Map<string, Purchase>();
-  readonly creatorCovenants = new Map<string, CreatorCovenant>();
-  readonly creatorCovenantHistory = new Map<string, CreatorCovenant>();
+  /** Every covenant, keyed by covenant id; at most one is ACTIVE per creator. */
+  readonly covenants = new Map<string, CreatorCovenant>();
   readonly membershipPurchaseRecords = new Map<string, MembershipPurchase>();
   readonly preparedPaymentRecords = new Map<string, PreparedPaymentRecord>();
   readonly paymentWorkflows = new Map<string, PaymentWorkflow>();
@@ -308,36 +308,39 @@ export class MemoryStore implements Repositories {
       .map((v) => structuredClone(v));
   }
   async getCreatorCovenant(creator: string) {
-    const v = this.creatorCovenants.get(creator);
-    return !v || v.status === "CANCELED"
-      ? null
-      : { creator: v.creator, covenantId: v.covenantId, priceSompi: v.priceSompi };
+    const active = this.activeFor(creator);
+    return active ? this.present(active) : null;
   }
   async listCreatorCovenants(creator: string) {
-    return [...this.creatorCovenantHistory.values()]
+    return [...this.covenants.values()]
       .filter((v) => v.creator === creator)
-      .map((v) => structuredClone(v));
+      .map((v) => this.present(v));
   }
   async activeCovenants(creators: string[]) {
     const wanted = new Set(creators);
-    return [...this.creatorCovenants.values()]
-      .filter((v) => wanted.has(v.creator) && v.status !== "CANCELED")
-      .map((v) => ({
-        creator: v.creator,
-        covenantId: v.covenantId,
-        priceSompi: v.priceSompi,
-      }));
+    return [...this.covenants.values()]
+      .filter((v) => wanted.has(v.creator) && isActiveCovenant(v))
+      .map((v) => this.present(v));
+  }
+  /** Mirrors the stored-row shape: status appears only when canceled. */
+  private present(value: CreatorCovenant): CreatorCovenant {
+    return {
+      creator: value.creator,
+      covenantId: value.covenantId,
+      priceSompi: value.priceSompi,
+      ...(value.status === "CANCELED" ? { status: "CANCELED" as const } : {}),
+    };
   }
   async saveCreatorCovenant(v: CreatorCovenant): Promise<DuplicateOutcome> {
-    if (
-      this.creatorCovenants.has(v.creator) ||
-      [...this.creatorCovenants.values()].some((x) => x.covenantId === v.covenantId)
-    )
+    if (this.activeFor(v.creator) || this.covenants.has(v.covenantId))
       return "DUPLICATE";
-    const value = { ...v, status: "ACTIVE" as const };
-    this.creatorCovenants.set(v.creator, value);
-    this.creatorCovenantHistory.set(v.covenantId, value);
+    this.covenants.set(v.covenantId, { ...v, status: "ACTIVE" });
     return "CREATED";
+  }
+  private activeFor(creator: string): CreatorCovenant | undefined {
+    return [...this.covenants.values()].find(
+      (v) => v.creator === creator && isActiveCovenant(v),
+    );
   }
   async createMembershipPurchase(v: MembershipPurchase): Promise<DuplicateOutcome> {
     if (this.membershipPurchaseRecords.has(v.transactionId)) return "DUPLICATE";
@@ -355,11 +358,7 @@ export class MemoryStore implements Repositories {
     return outcome;
   }
   async finalizeOffer(id: string, value: CreatorCovenant): Promise<DuplicateOutcome> {
-    const current = this.creatorCovenants.get(value.creator);
-    const outcome =
-      current?.status === "CANCELED"
-        ? this.saveNewCovenant(value)
-        : await this.saveCreatorCovenant(value);
+    const outcome = await this.saveCreatorCovenant(value);
     this.preparedMembershipRecords.delete(id);
     return outcome;
   }
@@ -367,47 +366,36 @@ export class MemoryStore implements Repositories {
     id: string,
     value: CreatorCovenant,
   ): Promise<DuplicateOutcome> {
-    const existing = this.creatorCovenants.get(value.creator);
-    if (!existing || existing.covenantId !== value.covenantId) {
+    const active = this.activeByCovenant(value.creator, value.covenantId);
+    if (!active) {
       this.preparedMembershipRecords.delete(id);
       return "DUPLICATE";
     }
-    const updated = { ...value, status: "ACTIVE" as const };
-    this.creatorCovenants.set(value.creator, updated);
-    this.creatorCovenantHistory.set(value.covenantId, updated);
+    this.covenants.set(value.covenantId, { ...value, status: "ACTIVE" });
     this.preparedMembershipRecords.delete(id);
     return "CREATED";
   }
   async finalizeCancellation(
     id: string,
     value: Pick<CreatorCovenant, "creator" | "covenantId">,
-  ) {
-    const existing = this.creatorCovenants.get(value.creator);
-    if (
-      !existing ||
-      existing.covenantId !== value.covenantId ||
-      existing.status === "CANCELED"
-    ) {
+  ): Promise<DuplicateOutcome> {
+    const active = this.activeByCovenant(value.creator, value.covenantId);
+    if (!active) {
       this.preparedMembershipRecords.delete(id);
-      return "DUPLICATE" as const;
-    }
-    const canceled = { ...existing, status: "CANCELED" as const };
-    this.creatorCovenants.set(value.creator, canceled);
-    this.creatorCovenantHistory.set(value.covenantId, canceled);
-    this.preparedMembershipRecords.delete(id);
-    return "CREATED" as const;
-  }
-  private saveNewCovenant(value: CreatorCovenant): DuplicateOutcome {
-    if (
-      [...this.creatorCovenantHistory.values()].some(
-        (x) => x.covenantId === value.covenantId,
-      )
-    )
       return "DUPLICATE";
-    const active = { ...value, status: "ACTIVE" as const };
-    this.creatorCovenants.set(value.creator, active);
-    this.creatorCovenantHistory.set(value.covenantId, active);
+    }
+    this.covenants.set(value.covenantId, { ...active, status: "CANCELED" });
+    this.preparedMembershipRecords.delete(id);
     return "CREATED";
+  }
+  private activeByCovenant(
+    creator: string,
+    covenantId: string,
+  ): CreatorCovenant | undefined {
+    const value = this.covenants.get(covenantId);
+    return value && value.creator === creator && isActiveCovenant(value)
+      ? value
+      : undefined;
   }
   async finalizeMembershipPurchase(
     id: string,
@@ -418,3 +406,6 @@ export class MemoryStore implements Repositories {
     return outcome;
   }
 }
+
+/** A covenant offering access; a canceled one no longer counts as current. */
+const isActiveCovenant = (value: CreatorCovenant) => value.status !== "CANCELED";
