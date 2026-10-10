@@ -7,6 +7,7 @@ import type {
   Post,
   MembershipAttempt,
   PreparedMembershipTransaction,
+  MembershipSubmission,
   MembershipAttemptStatus,
   MembershipAttemptState,
   PaymentAttempt,
@@ -242,10 +243,24 @@ export interface MembershipGateway {
     priceSompi: string,
     contract: MembershipContract,
   ): Promise<PreparedMembershipTransaction>;
+  /**
+   * Put the signed transaction on the network. Transport only: it reports
+   * whether the node took it (a transaction id) or refused it, and nothing
+   * about whether it has taken effect on the ledger.
+   */
   submit(
     prepared: PreparedMembershipTransaction,
     signedTransaction: string,
-  ): Promise<PaymentSubmission>;
+  ): Promise<MembershipSubmission>;
+  /**
+   * Whether the prepared transaction's covenant output has taken effect on the
+   * ledger — the fact a reader pays into. Callers that must report "confirmed"
+   * ask this after submit; a purchase settles by its member output instead.
+   */
+  confirm(
+    prepared: PreparedMembershipTransaction,
+    transactionId: string,
+  ): Promise<boolean>;
   /**
    * Whether the creator's offer can currently be served: its covenant output
    * is on chain and the transaction that created it is readable. A stored
@@ -316,4 +331,8 @@ export interface MembershipVerifier {
   ): Promise<MembershipCheck>;
 }
 
-export type { PaymentSubmission, PreparedMembershipTransaction };
+export type {
+  PaymentSubmission,
+  MembershipSubmission,
+  PreparedMembershipTransaction,
+};

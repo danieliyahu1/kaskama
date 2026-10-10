@@ -58,7 +58,7 @@ import {
   type MembershipVerifier,
   type ObjectStorage,
   type PaymentGateway,
-  type PaymentSubmission,
+  type PreparedMembershipTransaction,
   type Repositories,
   type WalletVerifier,
 } from "./application/ports.js";
@@ -217,6 +217,62 @@ export function createApp(d: AppDependencies) {
           "MEMBERSHIP_SUBMISSION_FAILED",
           COPY.membershipSubmissionFailed,
         );
+  }
+  /**
+   * Relay a signed offer, price, or cancel transaction and confirm its covenant
+   * output. A confirmed outcome carries the transaction id; otherwise the
+   * response to send is returned. One place, so the three finalizers cannot
+   * drift apart, and a purchase — which settles by its member output — never
+   * takes this path.
+   */
+  async function relayAndConfirm(
+    kind: "offer" | "update" | "cancel",
+    id: string,
+    value: PreparedMembershipTransaction,
+    signedTransaction: string,
+    res: Response,
+  ): Promise<
+    | { confirmed: true; transactionId: string }
+    | { confirmed: false; response: Response }
+  > {
+    let relayed: Awaited<ReturnType<MembershipGateway["submit"]>>;
+    try {
+      relayed = await d.membershipGateway!.submit(value, signedTransaction);
+    } catch (error) {
+      const failure = await membershipSubmitFailure(res, id, error);
+      if (failure) return { confirmed: false, response: failure };
+      throw error;
+    }
+    if (!relayed.transactionId) {
+      await d.store.deleteMembershipAttempt(id);
+      metrics.membershipFinalizeAttempt(kind, "rejected");
+      return {
+        confirmed: false,
+        response: res.status(422).json({
+          state: "REJECTED",
+          transactionId: relayed.transactionId,
+          rejection: relayed.rejection,
+        }),
+      };
+    }
+    if (!(await d.membershipGateway!.confirm(value, relayed.transactionId))) {
+      await d.store.markMembershipSubmitted({
+        preparedMembershipId: id,
+        state: "SUBMITTED",
+        transactionId: relayed.transactionId,
+        rejection: null,
+      });
+      metrics.membershipFinalizeAttempt(kind, "pending");
+      return {
+        confirmed: false,
+        response: res.status(202).json({
+          state: "PENDING",
+          transactionId: relayed.transactionId,
+          rejection: null,
+        }),
+      };
+    }
+    return { confirmed: true, transactionId: relayed.transactionId };
   }
   const publishPost = createPublishPostUseCase({
     posts: d.store,
@@ -998,49 +1054,28 @@ export function createApp(d: AppDependencies) {
         requestId: req.requestId,
         kind: "offer",
       });
-      let submission: PaymentSubmission;
-      try {
-        submission = await d.membershipGateway.submit(value, body.signedTransaction);
-      } catch (error) {
-        const failure = await membershipSubmitFailure(res, id, error);
-        if (failure) return failure;
-        throw error;
-      }
-      if (submission.isAccepted !== true || !submission.transactionId) {
-        if (submission.isAccepted === null && submission.transactionId) {
-          await d.store.markMembershipSubmitted({
-            preparedMembershipId: id,
-            state: "SUBMITTED",
-            transactionId: submission.transactionId,
-            rejection: null,
-          });
-        } else {
-          await d.store.deleteMembershipAttempt(id);
-        }
-        metrics.membershipFinalizeAttempt(
-          "offer",
-          submission.isAccepted === null ? "pending" : "rejected",
-        );
-        return res.status(submission.isAccepted === null ? 202 : 422).json({
-          state: submission.isAccepted === null ? "PENDING" : "REJECTED",
-          transactionId: submission.transactionId,
-          rejection: submission.rejection,
-        });
-      }
+      const outcome = await relayAndConfirm(
+        "offer",
+        id,
+        value,
+        body.signedTransaction,
+        res,
+      );
+      if (!outcome.confirmed) return outcome.response;
       const mapping: CreatorCovenant = {
         creator: value.creator,
         covenantId: value.covenantId,
         priceSompi: value.priceSompi!,
         contract: value.contract ?? currentMembershipContract(),
       };
-      const outcome = await d.store.finalizeOffer(id, mapping);
+      const result = await d.store.finalizeOffer(id, mapping);
       await d.store.markMembershipSubmitted({
         preparedMembershipId: id,
         state: "CONFIRMED",
-        transactionId: submission.transactionId,
+        transactionId: outcome.transactionId,
         rejection: null,
       });
-      if (outcome === "DUPLICATE") {
+      if (result === "DUPLICATE") {
         await d.store.deleteMembershipAttempt(id);
         return apiError(res, 409, "MEMBERSHIP_OFFER_EXISTS", COPY.membershipOfferExists, {
           retry: RETRY_AFTER_REFRESH,
@@ -1050,7 +1085,7 @@ export function createApp(d: AppDependencies) {
       metrics.membershipFinalizeAttempt("offer", "confirmed");
       res.status(201).json({
         state: "CONFIRMED",
-        transactionId: submission.transactionId,
+        transactionId: outcome.transactionId,
         covenantId: value.covenantId,
       });
     }),
@@ -1107,31 +1142,14 @@ export function createApp(d: AppDependencies) {
           retry: RETRY_AFTER_REFRESH,
         });
       const body = z.object({ signedTransaction: z.string().min(1) }).parse(req.body);
-      let submission: PaymentSubmission;
-      try {
-        submission = await d.membershipGateway.submit(value, body.signedTransaction);
-      } catch (error) {
-        const failure = await membershipSubmitFailure(res, id, error);
-        if (failure) return failure;
-        throw error;
-      }
-      if (submission.isAccepted !== true || !submission.transactionId) {
-        if (submission.isAccepted === null && submission.transactionId) {
-          await d.store.markMembershipSubmitted({
-            preparedMembershipId: id,
-            state: "SUBMITTED",
-            transactionId: submission.transactionId,
-            rejection: null,
-          });
-        } else {
-          await d.store.deleteMembershipAttempt(id);
-        }
-        return res.status(submission.isAccepted === null ? 202 : 422).json({
-          state: submission.isAccepted === null ? "PENDING" : "REJECTED",
-          transactionId: submission.transactionId,
-          rejection: submission.rejection,
-        });
-      }
+      const relayed = await relayAndConfirm(
+        "cancel",
+        id,
+        value,
+        body.signedTransaction,
+        res,
+      );
+      if (!relayed.confirmed) return relayed.response;
       const outcome = await d.store.finalizeCancellation(id, {
         creator: value.creator,
         covenantId: value.covenantId,
@@ -1143,7 +1161,7 @@ export function createApp(d: AppDependencies) {
         });
       res.status(201).json({
         state: "CONFIRMED",
-        transactionId: submission.transactionId,
+        transactionId: relayed.transactionId,
         covenantId: value.covenantId,
       });
     }),
@@ -1274,31 +1292,14 @@ export function createApp(d: AppDependencies) {
           retry: RETRY_AFTER_REFRESH,
         });
       const body = z.object({ signedTransaction: z.string().min(1) }).parse(req.body);
-      let submission: PaymentSubmission;
-      try {
-        submission = await d.membershipGateway.submit(value, body.signedTransaction);
-      } catch (error) {
-        const failure = await membershipSubmitFailure(res, id, error);
-        if (failure) return failure;
-        throw error;
-      }
-      if (submission.isAccepted !== true || !submission.transactionId) {
-        if (submission.isAccepted === null && submission.transactionId) {
-          await d.store.markMembershipSubmitted({
-            preparedMembershipId: id,
-            state: "SUBMITTED",
-            transactionId: submission.transactionId,
-            rejection: null,
-          });
-        } else {
-          await d.store.deleteMembershipAttempt(id);
-        }
-        return res.status(submission.isAccepted === null ? 202 : 422).json({
-          state: submission.isAccepted === null ? "PENDING" : "REJECTED",
-          transactionId: submission.transactionId,
-          rejection: submission.rejection,
-        });
-      }
+      const relayed = await relayAndConfirm(
+        "update",
+        id,
+        value,
+        body.signedTransaction,
+        res,
+      );
+      if (!relayed.confirmed) return relayed.response;
       const outcome = await d.store.finalizePriceUpdate(id, {
         creator: value.creator,
         covenantId: value.covenantId,
@@ -1311,7 +1312,7 @@ export function createApp(d: AppDependencies) {
         });
       res.status(201).json({
         state: "CONFIRMED",
-        transactionId: submission.transactionId,
+        transactionId: relayed.transactionId,
         covenantId: value.covenantId,
         priceSompi: value.priceSompi,
       });
@@ -1351,7 +1352,7 @@ export function createApp(d: AppDependencies) {
           requestId: req.requestId,
           kind: "purchase",
         });
-        let submission: PaymentSubmission;
+        let submission: Awaited<ReturnType<MembershipGateway["submit"]>>;
         try {
           submission = await d.membershipGateway.submit(
             value,

@@ -14,6 +14,7 @@ import {
   MembershipStateChangedError,
   MembershipSubmissionError,
   type MembershipGateway,
+  type MembershipSubmission,
   type PaymentSubmission,
   type PreparedMembershipTransaction,
   type TransactionEvidenceStore,
@@ -549,7 +550,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
   async submit(
     preparedValue: PreparedMembershipTransaction,
     signedTransaction: string,
-  ): Promise<PaymentSubmission> {
+  ): Promise<MembershipSubmission> {
     let original: TransactionShape;
     let signed: TransactionShape;
     try {
@@ -593,12 +594,25 @@ export class KaspaMembershipGateway implements MembershipGateway {
         transaction: signedTransaction,
         acceptedAt: Date.now(),
       });
-    // Confirm by the transaction's effect on the ledger rather than by asking
-    // the node for the transaction id. A node's transaction index is an
-    // implementation detail of the chain that the payment rules must not depend
-    // on: the public REST node does not serve v1 transactions at all, yet the
-    // ledger still records their effect.
-    const accepted = await this.confirmByEffect(
+    return { transactionId, rejection: null };
+  }
+
+  /**
+   * Whether the prepared transaction's covenant output has taken effect on the
+   * ledger: the fact a reader pays into. Callers that must report "confirmed"
+   * ask this after submit; a purchase settles by its member output instead.
+   *
+   * Confirmation reads the transaction's effect on the ledger rather than
+   * asking the node for the transaction id: a node's transaction index is an
+   * implementation detail of the chain the payment rules must not depend on
+   * (the public REST node does not serve v1 transactions at all, yet the ledger
+   * still records their effect).
+   */
+  async confirm(
+    preparedValue: PreparedMembershipTransaction,
+    transactionId: string,
+  ): Promise<boolean> {
+    const accepted = await this.confirmCovenantOutput(
       preparedValue.transaction,
       transactionId,
     );
@@ -606,12 +620,12 @@ export class KaspaMembershipGateway implements MembershipGateway {
       this.logger.warn("membership_transaction_pending", {
         txIdPrefix: transactionId.slice(0, 12),
       });
-      return { isAccepted: null, transactionId, rejection: null };
+      return false;
     }
     this.logger.info("membership_transaction_confirmed", {
       txIdPrefix: transactionId.slice(0, 12),
     });
-    return { isAccepted: true, transactionId, rejection: null };
+    return true;
   }
 
   async status(transactionId: string): Promise<PaymentSubmission> {
@@ -624,20 +638,30 @@ export class KaspaMembershipGateway implements MembershipGateway {
   }
 
   /**
-   * Whether the transaction has taken effect on the ledger: at least one of its
-   * outputs is now a spendable UTXO at the address named by that output's
-   * script. This proves acceptance from a fact the chain itself reports, so it
-   * holds on any node regardless of that node's transaction index.
+   * Whether the transaction's covenant output has taken effect on the ledger:
+   * that output is now a spendable UTXO at the address named by its script.
+   * Confirmation waits on the covenant output specifically, never on a plain
+   * wallet output (change), so "confirmed" means the same fact a reader pays
+   * into - the covenant is on chain. This proves acceptance from a fact the
+   * chain itself reports, so it holds on any node regardless of that node's
+   * transaction index.
    */
-  private async confirmByEffect(
+  private async confirmCovenantOutput(
     transactionJson: string,
     transactionId: string,
   ): Promise<boolean> {
     const targets: { index: number; address: string }[] = [];
     const outputs =
-      (JSON.parse(transactionJson) as { outputs?: { scriptPublicKey?: string }[] })
-        .outputs ?? [];
+      (
+        JSON.parse(transactionJson) as {
+          outputs?: { scriptPublicKey?: string; covenant?: unknown }[];
+        }
+      ).outputs ?? [];
     outputs.forEach((output, index) => {
+      // A wallet output (change) is indexed before the covenant address is, so
+      // waiting on it would report "confirmed" for an offer a reader cannot yet
+      // find. Only the covenant output is the fact being confirmed.
+      if (!output.covenant) return;
       try {
         const address = addressFromScriptPublicKey(
           output.scriptPublicKey ?? "",
@@ -1159,6 +1183,6 @@ function membershipPreflight(
 function rejected(
   rejection: string,
   transactionId: string | null = null,
-): PaymentSubmission {
-  return { isAccepted: false, transactionId, rejection };
+): MembershipSubmission {
+  return { transactionId, rejection };
 }

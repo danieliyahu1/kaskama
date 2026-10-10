@@ -97,6 +97,9 @@ const membershipGateway: MembershipGateway = {
   submit: async () => {
     throw new Error("not used");
   },
+  confirm: async () => {
+    throw new Error("not used");
+  },
   status: async () => pending("unused"),
 };
 

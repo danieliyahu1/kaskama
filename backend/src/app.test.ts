@@ -763,6 +763,9 @@ describe("subscription recognition", () => {
       submit: async () => {
         throw new Error("unused");
       },
+      confirm: async () => {
+        throw new Error("unused");
+      },
       offerAvailable: async () => false,
     };
     const { app } = testApp(
@@ -808,6 +811,9 @@ describe("subscription recognition", () => {
         throw new Error("unused");
       },
       submit: async () => {
+        throw new Error("unused");
+      },
+      confirm: async () => {
         throw new Error("unused");
       },
       offerAvailable,
@@ -1576,28 +1582,25 @@ describe("membership state changes", () => {
       submit: async () => {
         throw error;
       },
+      confirm: async () => {
+        throw error;
+      },
     };
   }
 
   function gatewayThatConfirms(): MembershipGateway {
     return {
       ...gatewayThatThrows(new Error("unused")),
-      submit: async () => ({
-        isAccepted: true,
-        transactionId: "tx-1",
-        rejection: null,
-      }),
+      submit: async () => ({ transactionId: "tx-1", rejection: null }),
+      confirm: async () => true,
     };
   }
 
   function gatewayThatPends(): MembershipGateway {
     return {
       ...gatewayThatThrows(new Error("unused")),
-      submit: async () => ({
-        isAccepted: null,
-        transactionId: "tx-1",
-        rejection: null,
-      }),
+      submit: async () => ({ transactionId: "tx-1", rejection: null }),
+      confirm: async () => false,
     };
   }
 

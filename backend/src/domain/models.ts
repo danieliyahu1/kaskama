@@ -70,6 +70,16 @@ export interface PaymentSubmission {
 }
 
 /**
+ * The result of putting a signed membership transaction on the network. It is
+ * transport only: a transaction id means the node took the transaction, and
+ * says nothing about whether it has taken effect on the ledger.
+ */
+export interface MembershipSubmission {
+  transactionId: string | null;
+  rejection: string | null;
+}
+
+/**
  * The immutable contract code a covenant was created with, split around the
  * state span. Persisted with the covenant so an offer's on-chain identity is
  * data, not a recomputation from whatever contract artifact happens to be
