@@ -19,7 +19,7 @@ import { defaultMetrics, type Metrics } from "../metrics.js";
  * stops waiting for it. A transaction that never lands on chain is not a
  * payment; leaving it pending forever would hide that from the operator.
  */
-const STALE_WORKFLOW_MS = 24 * 60 * 60 * 1_000;
+const STALE_WORKFLOW_MS = 15 * 60 * 1_000;
 const DEFAULT_BATCH = 100;
 
 export interface WorkflowReconcilerDependencies {

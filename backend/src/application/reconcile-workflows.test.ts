@@ -170,7 +170,7 @@ describe("WorkflowReconciler", () => {
     await store.publishPost(post("paid-post"));
     await savePayment({
       transactionId: "tx-1",
-      submittedAt: now - 2 * 24 * 60 * 60 * 1_000,
+      submittedAt: now - 16 * 60 * 1_000,
     });
 
     const reconciler = new WorkflowReconciler({
