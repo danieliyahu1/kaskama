@@ -1,3 +1,9 @@
+import {
+  AGENT_GUIDE_PATH,
+  LLMS_TXT_PATH,
+  OPENAPI_PATH,
+} from "@kaskama/shared";
+
 export interface HomeCopy {
   headline: string;
   lede: string;
@@ -10,6 +16,8 @@ export interface HomeCopy {
   exampleCreatorAddresses: { mainnet: string; "testnet-10": string };
   fanHeading: string;
   fanLede: string;
+  agentsHeading: string;
+  agentsLede: string;
 }
 
 /**
@@ -52,6 +60,15 @@ export function homeFallbackHtml(copy: HomeCopy): string {
     '<section class="home-section">' +
     `<h2 class="home-section-title">${escapeHtml(copy.fanHeading)}</h2>` +
     `<p class="home-lede">${escapeHtml(copy.fanLede)}</p>` +
+    "</section>" +
+    '<section class="home-section">' +
+    `<h2 class="home-section-title">${escapeHtml(copy.agentsHeading)}</h2>` +
+    `<p class="home-lede">${escapeHtml(copy.agentsLede)}</p>` +
+    '<ul class="fan-creators">' +
+    `<li><a href="${LLMS_TXT_PATH}">${LLMS_TXT_PATH}</a></li>` +
+    `<li><a href="${AGENT_GUIDE_PATH}">${AGENT_GUIDE_PATH}</a></li>` +
+    `<li><a href="${OPENAPI_PATH}">${OPENAPI_PATH}</a></li>` +
+    "</ul>" +
     "</section>" +
     "</div>" +
     "</noscript>"

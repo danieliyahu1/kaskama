@@ -2410,6 +2410,7 @@ const INDEX_HTML = `<!doctype html>
       content="Kaskama lets creators publish paid photos and videos."
     />
     <link rel="canonical" href="https://kaskama.com/" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" />
     <meta property="og:title" content="Kaskama" />
     <meta property="og:description" content="Publish paid photos and videos." />
     <meta property="og:url" content="https://kaskama.com/" />
@@ -2459,6 +2460,8 @@ describe("Server-rendered public pages", () => {
     expect(response.text).toContain(`href="${origin}/creators"`);
     expect(response.text).toContain("Browse creators selling access");
     expect(response.text).toContain('<div id="root"><noscript>');
+    // The head's agent entry point survives the per-route rewrite.
+    expect(response.text).toContain('href="/llms.txt"');
     expect(response.text).toContain(
       'The same creators are available as data at <a href="/api/creators/public">',
     );

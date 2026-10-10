@@ -15,4 +15,10 @@ describe("index.html", () => {
     expect(html).toContain('name="twitter:card"');
     expect(html).toContain('type="application/ld+json"');
   });
+
+  it("points an agent at the machine-readable contract", () => {
+    expect(html).toContain('href="/llms.txt"');
+    expect(html).toContain('href="/docs/agent-guide.md"');
+    expect(html).toContain('href="/api/openapi.json"');
+  });
 });
