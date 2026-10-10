@@ -241,7 +241,7 @@ describe("EditProfilePage subscription", () => {
         path: "/api/membership/price/prepare",
         error: new ApiError(
           "INVALID_MEMBERSHIP_PRICE",
-          "Enter a monthly subscription price from 1 to 1,000,000 KAS.",
+          "Enter a monthly subscription price from 2 to 1,000,000 KAS.",
           400,
         ),
       },
@@ -261,7 +261,7 @@ describe("EditProfilePage subscription", () => {
     });
     expect(
       await screen.findByText(
-        "Enter a monthly subscription price from 1 to 1,000,000 KAS.",
+        "Enter a monthly subscription price from 2 to 1,000,000 KAS.",
       ),
     ).toBeVisible();
   });

@@ -258,23 +258,17 @@ export class KaspaMembershipGateway implements MembershipGateway {
         scriptPublicKey: addressScript(creator),
         covenant: null,
       },
-      ...(platformFee > 0n
-        ? [
-            {
-              value: platformFee.toString(),
-              scriptPublicKey: addressScript(this.platformFeeAddress),
-              covenant: null,
-            },
-          ]
-        : []),
+      {
+        value: platformFee.toString(),
+        scriptPublicKey: addressScript(this.platformFeeAddress),
+        covenant: null,
+      },
       {
         value: MEMBERSHIP_INDEX_VALUE.toString(),
         scriptPublicKey: addressScript(buyer),
         covenant: null,
       },
     ];
-    const platformOutputIndex = platformFee > 0n ? 3 : 2;
-    const ownerIndexOutputIndex = platformFee > 0n ? 4 : 3;
     const minterInput = {
       transactionId: minterUtxo.outpoint.transactionId,
       index: minterUtxo.outpoint.index,
@@ -287,8 +281,8 @@ export class KaspaMembershipGateway implements MembershipGateway {
         member,
         1,
         2,
-        platformOutputIndex,
-        ownerIndexOutputIndex,
+        3,
+        4,
       ),
       utxo: serializableUtxo(minterUtxo, covenantIdHex),
     };
@@ -1052,8 +1046,8 @@ function membershipPreflight(
   const memberOutput = outputs[1];
   const paymentOutput = outputs[2];
   const platformFee = membershipFeeSompi(member.priceSompi);
-  const platformOutput = platformFee > 0n ? outputs[3] : undefined;
-  const ownerOutput = outputs[platformFee > 0n ? 4 : 3];
+  const platformOutput = outputs[3];
+  const ownerOutput = outputs[4];
   const fundingInput = inputs[1];
   const memberExpiry = member.expiresAtDaa;
   const currentDaa = BigInt(daa);
@@ -1091,25 +1085,19 @@ function membershipPreflight(
       expectedScriptLength: creatorLock.length,
     },
     paymentOutputValue: {
-      pass:
-        paymentOutput?.value ===
-        (member.priceSompi - membershipFeeSompi(member.priceSompi)).toString(),
+      pass: paymentOutput?.value === (member.priceSompi - platformFee).toString(),
       actual: paymentOutput?.value,
-      expected: (member.priceSompi - membershipFeeSompi(member.priceSompi)).toString(),
+      expected: (member.priceSompi - platformFee).toString(),
     },
     platformOutputUsesPlatformLock: {
-      pass:
-        membershipFeeSompi(member.priceSompi) === 0n ||
-        platformOutput?.scriptPublicKey === platformLock,
+      pass: platformOutput?.scriptPublicKey === platformLock,
       actualScriptLength: platformOutput?.scriptPublicKey.length,
       expectedScriptLength: platformLock.length,
     },
     platformOutputValue: {
-      pass:
-        membershipFeeSompi(member.priceSompi) === 0n ||
-        platformOutput?.value === membershipFeeSompi(member.priceSompi).toString(),
+      pass: platformOutput?.value === platformFee.toString(),
       actual: platformOutput?.value,
-      expected: membershipFeeSompi(member.priceSompi).toString(),
+      expected: platformFee.toString(),
     },
     minterOutputPresent: { pass: Boolean(minterOutput?.covenant) },
     memberOutputPresent: { pass: Boolean(memberOutput?.covenant) },

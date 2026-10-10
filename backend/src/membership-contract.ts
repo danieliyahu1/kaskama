@@ -6,9 +6,11 @@ import {
 import { DEFAULT_NETWORK, type NetworkId } from "@kaskama/shared";
 import artifact from "./contracts/membership.json" with { type: "json" };
 
-export const MEMBERSHIP_DURATION_DAA = 25_920_000n;
-export const MEMBERSHIP_INDEX_VALUE = 50_000_000n;
-export const MEMBERSHIP_OUTPUT_VALUE = 50_000_000n;
+export {
+  MEMBERSHIP_DURATION_DAA,
+  MEMBERSHIP_INDEX_VALUE,
+  MEMBERSHIP_OUTPUT_VALUE,
+} from "@kaskama/shared";
 export const MEMBERSHIP_PROTOCOL = "kaskama";
 export const MEMBERSHIP_METADATA_VERSION = 1;
 

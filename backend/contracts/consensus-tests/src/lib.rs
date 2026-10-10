@@ -18,12 +18,21 @@ mod tests {
     use silverscript_lang::ast::Expr;
     use silverscript_lang::compiler::{CompileOptions, CompiledContract, compile_contract};
 
-const DEPOSIT: u64 = 50_000_000;
+    const DEPOSIT: u64 = 50_000_000;
     const PRICE: u64 = 1_000_000_000;
+    const MIN_PRICE: i64 = 200_000_000;
+    const MIN_FEE: i64 = 100_000_000;
     const DAA: u64 = 500_000;
     const EXPIRY: i64 = 26_420_000;
     const COMPUTE_BUDGET: u16 = 50;
     const COVENANT_ID: Hash = Hash::from_bytes(*b"kaskama-membership-test-family-1");
+
+    /// Mirrors the covenant's fee rule: 1% of the price, rounded, never below
+    /// the 1 KAS floor.
+    fn platform_fee(price: i64) -> i64 {
+        let fee = (price + 50) / 100;
+        if fee < MIN_FEE { MIN_FEE } else { fee }
+    }
 
     fn key(seed: u8) -> Keypair {
         Keypair::from_secret_key(
@@ -39,7 +48,7 @@ const DEPOSIT: u64 = 50_000_000;
         ScriptPublicKey::new(0, script.into())
     }
 
-fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
+    fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
         let source = include_str!("../../membership.sil");
         compile_contract(
             source,
@@ -87,18 +96,19 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
         creator: &[u8],
         platform: &[u8],
         member: &[u8],
+        price: i64,
     ) -> Vec<u8> {
         let mut builder = ScriptBuilder::with_flags(EngineFlags { covenants_enabled: true, ..Default::default() });
         builder.add_data(&[creator, creator].concat()).unwrap();
         builder.add_data(&[platform, platform].concat()).unwrap();
         builder.add_data(&[creator, member].concat()).unwrap();
         builder.add_data(&[0i64.to_le_bytes(), EXPIRY.to_le_bytes()].concat()).unwrap();
-        builder.add_data(&[PRICE.to_le_bytes(), PRICE.to_le_bytes()].concat()).unwrap();
+        builder.add_data(&[price.to_le_bytes(), price.to_le_bytes()].concat()).unwrap();
         builder.add_data(&[1, 0]).unwrap();
         builder.add_data(&[1]).unwrap();
         builder.add_data(&[2]).unwrap();
         builder.add_data(&[3]).unwrap();
-        builder.add_data(&[3]).unwrap();
+        builder.add_data(&[4]).unwrap();
         builder.add_data(compiled.dispatch_tags.get("mint").expect("mint dispatch tag")).unwrap();
         builder.add_data(current).unwrap();
         builder.drain()
@@ -165,6 +175,7 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
         let minter = state(&compiled, &creator_key, &platform_key, &creator_key, 0, PRICE as i64, true);
         let member = state(&compiled, &creator_key, &platform_key, &buyer_key, EXPIRY, PRICE as i64, false);
         let buyer_spk = p2pk(&buyer_key);
+        let fee = platform_fee(PRICE as i64) as u64;
         let entries = vec![
             UtxoEntry::new(DEPOSIT, pay_to_script_hash_script(&minter), 1, false, Some(COVENANT_ID)),
             UtxoEntry::new(1_200_000_000, buyer_spk.clone(), 1, false, None),
@@ -174,7 +185,7 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
             vec![
                 TransactionInput::new_with_compute_budget(
                     TransactionOutpoint { transaction_id: TransactionId::from_bytes([1; 32]), index: 0 },
-                    covenant_signature_script(&compiled, &minter, &creator_key, &platform_key, &buyer_key),
+                    covenant_signature_script(&compiled, &minter, &creator_key, &platform_key, &buyer_key, PRICE as i64),
                     0,
                     COMPUTE_BUDGET,
                 ),
@@ -188,7 +199,8 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
             vec![
                 TransactionOutput { value: DEPOSIT, script_public_key: pay_to_script_hash_script(&minter), covenant: Some(CovenantBinding { authorizing_input: 0, covenant_id: COVENANT_ID }) },
                 TransactionOutput { value: DEPOSIT, script_public_key: pay_to_script_hash_script(&member), covenant: Some(CovenantBinding { authorizing_input: 0, covenant_id: COVENANT_ID }) },
-                TransactionOutput { value: PRICE, script_public_key: p2pk(&creator_key), covenant: None },
+                TransactionOutput { value: PRICE - fee, script_public_key: p2pk(&creator_key), covenant: None },
+                TransactionOutput { value: fee, script_public_key: p2pk(&platform_key), covenant: None },
                 TransactionOutput { value: DEPOSIT, script_public_key: buyer_spk.clone(), covenant: None },
                 TransactionOutput { value: 100_000_000, script_public_key: buyer_spk, covenant: None },
             ],
@@ -261,6 +273,52 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
     }
 
     #[test]
+    fn membership_price_update_rejects_a_price_below_the_floor() {
+        let creator = key(1);
+        let platform = key(3);
+        let creator_key = creator.x_only_public_key().0.serialize();
+        let platform_key = platform.x_only_public_key().0.serialize();
+        let compiled = compile(&creator_key, &platform_key);
+        let current = state(&compiled, &creator_key, &platform_key, &creator_key, 0, PRICE as i64, true);
+        let below_floor = state(&compiled, &creator_key, &platform_key, &creator_key, 0, MIN_PRICE - 1, true);
+        let creator_spk = p2pk(&creator_key);
+        let entries = vec![
+            UtxoEntry::new(DEPOSIT, pay_to_script_hash_script(&current), 1, false, Some(COVENANT_ID)),
+            UtxoEntry::new(1_000_000_000, creator_spk.clone(), 1, false, None),
+        ];
+        let unsigned = Transaction::new(
+            1,
+            vec![
+                TransactionInput::new_with_compute_budget(
+                    TransactionOutpoint { transaction_id: TransactionId::from_bytes([7; 32]), index: 0 },
+                    update_signature_script(&compiled, &current, MIN_PRICE - 1),
+                    0,
+                    COMPUTE_BUDGET,
+                ),
+                TransactionInput::new_with_compute_budget(
+                    TransactionOutpoint { transaction_id: TransactionId::from_bytes([8; 32]), index: 0 },
+                    vec![],
+                    0,
+                    COMPUTE_BUDGET,
+                ),
+            ],
+            vec![
+                TransactionOutput { value: DEPOSIT, script_public_key: pay_to_script_hash_script(&below_floor), covenant: Some(CovenantBinding { authorizing_input: 0, covenant_id: COVENANT_ID }) },
+                TransactionOutput { value: 900_000_000, script_public_key: creator_spk, covenant: None },
+            ],
+            DAA,
+            Default::default(),
+            0,
+            vec![],
+        );
+        let mut inputs = unsigned.inputs.clone();
+        inputs[1].signature_script = buyer_signature(&unsigned, &entries, &creator);
+        let tx = Transaction::new(1, inputs, unsigned.outputs, DAA, Default::default(), 0, vec![]);
+
+        assert_eq!(execute(&tx, &entries, 0), Err(TxScriptError::VerifyError));
+    }
+
+    #[test]
     fn membership_cancellation_disables_the_minter_and_requires_creator_input() {
         let creator = key(1);
         let platform = key(3);
@@ -306,6 +364,7 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
         compiled: &CompiledContract,
         minter: &[u8],
         _member: &[u8],
+        price: i64,
         entries: &[UtxoEntry],
         outputs: Vec<TransactionOutput>,
     ) -> Transaction {
@@ -317,7 +376,7 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
             vec![
                 TransactionInput::new_with_compute_budget(
                     TransactionOutpoint { transaction_id: TransactionId::from_bytes([1; 32]), index: 0 },
-                    covenant_signature_script(compiled, minter, &creator_key, &platform_key, &buyer_key),
+                    covenant_signature_script(compiled, minter, &creator_key, &platform_key, &buyer_key, price),
                     0,
                     COMPUTE_BUDGET,
                 ),
@@ -354,14 +413,17 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
         (compiled, minter, member, entries)
     }
 
-    fn valid_mint_outputs(minter: &[u8], member: &[u8]) -> Vec<TransactionOutput> {
+    fn valid_mint_outputs(minter: &[u8], member: &[u8], price: i64) -> Vec<TransactionOutput> {
         let creator_key = key(1).x_only_public_key().0.serialize();
+        let platform_key = key(3).x_only_public_key().0.serialize();
         let buyer_key = key(2).x_only_public_key().0.serialize();
         let buyer_spk = p2pk(&buyer_key);
+        let fee = platform_fee(price) as u64;
         vec![
             TransactionOutput { value: DEPOSIT, script_public_key: pay_to_script_hash_script(minter), covenant: Some(CovenantBinding { authorizing_input: 0, covenant_id: COVENANT_ID }) },
             TransactionOutput { value: DEPOSIT, script_public_key: pay_to_script_hash_script(member), covenant: Some(CovenantBinding { authorizing_input: 0, covenant_id: COVENANT_ID }) },
-            TransactionOutput { value: PRICE, script_public_key: p2pk(&creator_key), covenant: None },
+            TransactionOutput { value: price as u64 - fee, script_public_key: p2pk(&creator_key), covenant: None },
+            TransactionOutput { value: fee, script_public_key: p2pk(&platform_key), covenant: None },
             TransactionOutput { value: DEPOSIT, script_public_key: buyer_spk.clone(), covenant: None },
             TransactionOutput { value: 100_000_000, script_public_key: buyer_spk, covenant: None },
         ]
@@ -370,10 +432,66 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
     #[test]
     fn mint_rejects_underpayment_to_the_creator() {
         let (compiled, minter, member, entries) = mint_fixture();
-        let mut outputs = valid_mint_outputs(&minter, &member);
-        outputs[2].value = PRICE - 1;
+        let mut outputs = valid_mint_outputs(&minter, &member, PRICE as i64);
+        outputs[2].value = PRICE - platform_fee(PRICE as i64) as u64 - 1;
         assert_eq!(
-            execute(&mint_transaction(&compiled, &minter, &member, &entries, outputs), &entries, 0),
+            execute(&mint_transaction(&compiled, &minter, &member, PRICE as i64, &entries, outputs), &entries, 0),
+            Err(TxScriptError::VerifyError),
+        );
+    }
+
+    #[test]
+    fn mint_rejects_a_waived_platform_fee() {
+        let (compiled, minter, member, entries) = mint_fixture();
+        let mut outputs = valid_mint_outputs(&minter, &member, PRICE as i64);
+        // The 1% fee at PRICE is 0.1 KAS, below the floor. The covenant must
+        // still charge the 1 KAS minimum instead of waiving it.
+        outputs[3].value = 0;
+        assert_eq!(
+            execute(&mint_transaction(&compiled, &minter, &member, PRICE as i64, &entries, outputs), &entries, 0),
+            Err(TxScriptError::VerifyError),
+        );
+    }
+
+    #[test]
+    fn mint_charges_the_minimum_fee_at_the_price_floor() {
+        let creator_key = key(1).x_only_public_key().0.serialize();
+        let platform_key = key(3).x_only_public_key().0.serialize();
+        let buyer_key = key(2).x_only_public_key().0.serialize();
+        let compiled = compile(&creator_key, &platform_key);
+        let minter = state(&compiled, &creator_key, &platform_key, &creator_key, 0, MIN_PRICE, true);
+        let member = state(&compiled, &creator_key, &platform_key, &buyer_key, EXPIRY, MIN_PRICE, false);
+        let entries = vec![
+            UtxoEntry::new(DEPOSIT, pay_to_script_hash_script(&minter), 1, false, Some(COVENANT_ID)),
+            UtxoEntry::new(1_200_000_000, p2pk(&buyer_key), 1, false, None),
+        ];
+        let outputs = valid_mint_outputs(&minter, &member, MIN_PRICE);
+        // At the 2 KAS floor the 1% fee is 0.02 KAS, so the creator keeps 1 KAS
+        // and the platform is paid the 1 KAS minimum.
+        assert_eq!(outputs[2].value, 100_000_000);
+        assert_eq!(outputs[3].value, 100_000_000);
+        assert_eq!(
+            execute(&mint_transaction(&compiled, &minter, &member, MIN_PRICE, &entries, outputs), &entries, 0),
+            Ok(()),
+        );
+    }
+
+    #[test]
+    fn mint_rejects_a_minter_priced_below_the_floor() {
+        let creator_key = key(1).x_only_public_key().0.serialize();
+        let platform_key = key(3).x_only_public_key().0.serialize();
+        let buyer_key = key(2).x_only_public_key().0.serialize();
+        let compiled = compile(&creator_key, &platform_key);
+        let low_price = MIN_PRICE - 1;
+        let minter = state(&compiled, &creator_key, &platform_key, &creator_key, 0, low_price, true);
+        let member = state(&compiled, &creator_key, &platform_key, &buyer_key, EXPIRY, low_price, false);
+        let entries = vec![
+            UtxoEntry::new(DEPOSIT, pay_to_script_hash_script(&minter), 1, false, Some(COVENANT_ID)),
+            UtxoEntry::new(1_200_000_000, p2pk(&buyer_key), 1, false, None),
+        ];
+        let outputs = valid_mint_outputs(&minter, &member, low_price);
+        assert_eq!(
+            execute(&mint_transaction(&compiled, &minter, &member, low_price, &entries, outputs), &entries, 0),
             Err(TxScriptError::VerifyError),
         );
     }
@@ -382,10 +500,10 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
     fn mint_rejects_payment_sent_to_the_wrong_key() {
         let (compiled, minter, member, entries) = mint_fixture();
         let attacker_key = key(9).x_only_public_key().0.serialize();
-        let mut outputs = valid_mint_outputs(&minter, &member);
+        let mut outputs = valid_mint_outputs(&minter, &member, PRICE as i64);
         outputs[2].script_public_key = p2pk(&attacker_key);
         assert_eq!(
-            execute(&mint_transaction(&compiled, &minter, &member, &entries, outputs), &entries, 0),
+            execute(&mint_transaction(&compiled, &minter, &member, PRICE as i64, &entries, outputs), &entries, 0),
             Err(TxScriptError::VerifyError),
         );
     }
@@ -393,13 +511,13 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
     #[test]
     fn mint_rejects_an_output_that_is_not_the_member_output() {
         let (compiled, minter, member, entries) = mint_fixture();
-        let mut outputs = valid_mint_outputs(&minter, &member);
+        let mut outputs = valid_mint_outputs(&minter, &member, PRICE as i64);
         // A member-shaped output at a non-designated index must not satisfy the
         // covenant; only the contract-selected member output carries the state.
-        outputs[4].script_public_key = pay_to_script_hash_script(&member);
-        outputs[4].covenant = Some(CovenantBinding { authorizing_input: 0, covenant_id: COVENANT_ID });
+        outputs[5].script_public_key = pay_to_script_hash_script(&member);
+        outputs[5].covenant = Some(CovenantBinding { authorizing_input: 0, covenant_id: COVENANT_ID });
         assert_eq!(
-            execute(&mint_transaction(&compiled, &minter, &member, &entries, outputs), &entries, 0),
+            execute(&mint_transaction(&compiled, &minter, &member, PRICE as i64, &entries, outputs), &entries, 0),
             Err(TxScriptError::VerifyError),
         );
     }
@@ -413,7 +531,7 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
         let mut swapped = entries.clone();
         swapped[0] = UtxoEntry::new(DEPOSIT, pay_to_script_hash_script(&non_minter), 1, false, Some(COVENANT_ID));
         assert!(
-            execute(&mint_transaction(&compiled, &minter, &member, &swapped, valid_mint_outputs(&minter, &member)), &swapped, 0).is_err(),
+            execute(&mint_transaction(&compiled, &minter, &member, PRICE as i64, &swapped, valid_mint_outputs(&minter, &member, PRICE as i64)), &swapped, 0).is_err(),
             "a non-minter state must not authorize a mint",
         );
     }
@@ -427,7 +545,7 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
         // Expiry beyond DAA + lifetime is not a valid mint window.
         let overlong = state(&compiled, &creator_key, &platform_key, &buyer_key, DAA as i64 + 26_420_000 + 1, PRICE as i64, false);
         assert_eq!(
-            execute(&mint_transaction(&compiled, &minter, &overlong, &entries, valid_mint_outputs(&minter, &overlong)), &entries, 0),
+            execute(&mint_transaction(&compiled, &minter, &overlong, PRICE as i64, &entries, valid_mint_outputs(&minter, &overlong, PRICE as i64)), &entries, 0),
             Err(TxScriptError::VerifyError),
         );
     }
@@ -446,7 +564,7 @@ fn compile(creator: &[u8], platform: &[u8]) -> CompiledContract<'static> {
             UtxoEntry::new(DEPOSIT, pay_to_script_hash_script(&forged), 1, false, Some(COVENANT_ID)),
             UtxoEntry::new(1_000_000_000, p2pk(&buyer_key), 1, false, None),
         ];
-        let tx = mint_transaction(&compiled, &forged, &forged, &entries, valid_mint_outputs(&forged, &forged));
+        let tx = mint_transaction(&compiled, &forged, &forged, PRICE as i64, &entries, valid_mint_outputs(&forged, &forged, PRICE as i64));
         assert!(
             execute(&tx, &entries, 0).is_err(),
             "a forged member state must not be spendable as a minter",

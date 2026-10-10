@@ -1,5 +1,6 @@
 import {
   MAX_MEMBERSHIP_PRICE_SOMPI,
+  MIN_MEMBERSHIP_FEE_SOMPI,
   MIN_MEMBERSHIP_PRICE_SOMPI,
   membershipFeeSompi,
   membershipPriceProblem,
@@ -16,14 +17,14 @@ import {
 
 describe("membership pricing", () => {
   it.each([
-    ["1", MIN_MEMBERSHIP_PRICE_SOMPI],
+    ["2", MIN_MEMBERSHIP_PRICE_SOMPI],
     ["1000000", MAX_MEMBERSHIP_PRICE_SOMPI],
     ["99.9999995", 9_999_999_950n],
   ])("accepts %s KAS", (value, expected) => {
     expect(parseMembershipPrice(value)).toBe(expected);
   });
 
-  it.each(["0.99999999", "1000000.00000001", "1.000000001", "invalid"])(
+  it.each(["0.99999999", "1.99999999", "1000000.00000001", "1.000000001", "invalid"])(
     "rejects %s",
     (value) => expect(parseMembershipPrice(value)).toBeNull(),
   );
@@ -33,21 +34,23 @@ describe("membership pricing", () => {
     ["1,000", "FORMAT"],
     ["12.", "FORMAT"],
     ["1.000000001", "FORMAT"],
+    ["1", "BELOW_MIN"],
     ["0.5", "BELOW_MIN"],
     ["1000001", "ABOVE_MAX"],
   ])("explains why %s is rejected", (value, problem) => {
     expect(membershipPriceProblem(value)).toBe(problem);
   });
 
-  it.each(["1", "1000000", "99.9999995"])("finds no problem with %s", (value) =>
+  it.each(["2", "1000000", "99.9999995"])("finds no problem with %s", (value) =>
     expect(membershipPriceProblem(value)).toBeNull(),
   );
 
-  it("waives the fee below 100 KAS and charges exactly 1 KAS at the threshold", () => {
-    expect(membershipFeeSompi(50n * 100_000_000n)).toBe(0n);
-    expect(membershipFeeSompi(9_999_999_949n)).toBe(0n);
-    expect(membershipFeeSompi(9_999_999_950n)).toBe(100_000_000n);
-    expect(membershipFeeSompi(100n * 100_000_000n)).toBe(100_000_000n);
+  it("charges the 1 KAS floor whenever one percent is below it", () => {
+    expect(membershipFeeSompi(2n * 100_000_000n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
+    expect(membershipFeeSompi(50n * 100_000_000n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
+    expect(membershipFeeSompi(9_999_999_949n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
+    expect(membershipFeeSompi(9_999_999_950n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
+    expect(membershipFeeSompi(100n * 100_000_000n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
   });
 
   it("rounds the one percent fee to the nearest sompi", () => {

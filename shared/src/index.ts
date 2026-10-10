@@ -1,5 +1,11 @@
 import { MEDIA_COPY, type MediaType } from "./media.js";
+import {
+  MAX_MEMBERSHIP_PRICE_SOMPI,
+  MIN_MEMBERSHIP_FEE_SOMPI,
+  MIN_MEMBERSHIP_PRICE_SOMPI,
+} from "./covenant.js";
 
+export * from "./covenant.js";
 export * from "./public-pages.js";
 export * from "./media.js";
 export * from "./social-links.js";
@@ -67,9 +73,6 @@ export interface NetworkConfigResponse {
 }
 
 export const FEEDBACK_MAX_MESSAGE = 1500;
-export const MIN_MEMBERSHIP_PRICE_SOMPI = 100_000_000n;
-export const MAX_MEMBERSHIP_PRICE_SOMPI = 100_000_000_000_000n;
-export const MEMBERSHIP_DURATION_DAA = 25_920_000n;
 
 /**
  * A generic, client-agnostic hint attached to a failed response. It tells any
@@ -242,9 +245,14 @@ export function parseMembershipPrice(value: string): bigint | null {
   return parseKasToSompi(value);
 }
 
+/**
+ * The platform fee for a membership: 1% of the price, rounded to the nearest
+ * sompi, never below the 1 KAS floor. The covenant charges the same amount, so
+ * a low-priced membership is never free and the floor is never waived.
+ */
 export function membershipFeeSompi(priceSompi: bigint): bigint {
   const fee = (priceSompi + 50n) / 100n;
-  return fee >= 100_000_000n ? fee : 0n;
+  return fee >= MIN_MEMBERSHIP_FEE_SOMPI ? fee : MIN_MEMBERSHIP_FEE_SOMPI;
 }
 
 export function parsePostPrice(value: string): bigint | null {

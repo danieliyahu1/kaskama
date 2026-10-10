@@ -141,7 +141,7 @@ describe("KaspaMembershipGateway", () => {
       (sum, output) => sum + output.value,
       0n,
     );
-    expect(inputValue - outputValue).toBe(1_748_900n);
+    expect(inputValue - outputValue).toBe(1_791_300n);
   });
 
   it("reports an offer available when its covenant output is readable", async () => {

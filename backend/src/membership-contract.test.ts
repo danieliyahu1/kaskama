@@ -20,9 +20,9 @@ const platformFeeAddress =
 describe("membership contract codec", () => {
   it("exposes minting and creator-authorized price updates", () => {
     expect(Object.keys(artifact.contracts.Membership.entries)).toEqual([
+      "__covenant_entrypoint_auth_cancelMembership",
       "__covenant_entrypoint_auth_updateMembership",
       "mint",
-      "__covenant_entrypoint_auth_cancelMembership",
     ]);
   });
 

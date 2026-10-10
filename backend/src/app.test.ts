@@ -1518,7 +1518,8 @@ describe("membership price validation", () => {
   it.each([
     ["", "Enter a monthly subscription price."],
     ["1,000", "Enter the price in digits only, with up to 8 decimal places."],
-    ["0.5", "The monthly subscription price must be at least 1 KAS."],
+    ["0.5", "The monthly subscription price must be at least 2 KAS."],
+    ["1", "The monthly subscription price must be at least 2 KAS."],
     ["1000001", "The monthly subscription price can be at most 1,000,000 KAS."],
   ])("explains why %s is rejected", async (price, message) => {
     const store = new MemoryStore();
