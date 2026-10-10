@@ -12,10 +12,10 @@ import type {
   MembershipContract,
   MembershipPurchase,
   Post,
-  PreparedMembershipRecord,
-  PreparedPaymentRecord,
-  PaymentWorkflow,
-  MembershipWorkflow,
+  MembershipAttempt,
+  PaymentAttempt,
+  PaymentAttemptStatus,
+  MembershipAttemptStatus,
   Profile,
   Purchase,
   Session,
@@ -130,9 +130,9 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
       args: [now],
     });
   }
-  async savePreparedPayment(v: PreparedPaymentRecord) {
+  async savePaymentAttempt(v: PaymentAttempt) {
     await this.execute({
-      sql: `INSERT INTO prepared_payments (id,transaction_json,fingerprint,amount_sompi,creator,post_id,buyer,expires_at) VALUES (?,?,?,?,?,?,?,?)`,
+      sql: `INSERT INTO payment_attempts (id,transaction_json,fingerprint,amount_sompi,creator,post_id,buyer,expires_at) VALUES (?,?,?,?,?,?,?,?)`,
       args: [
         v.id,
         v.transaction,
@@ -145,19 +145,26 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
       ],
     });
   }
-  async getPreparedPayment(id: string, now: number) {
+  async getPaymentAttempt(id: string, now: number) {
     const r = await this.execute({
-      sql: `SELECT * FROM prepared_payments WHERE id=? AND expires_at>?`,
+      sql: `SELECT * FROM payment_attempts WHERE id=? AND expires_at>?`,
       args: [id, now],
     });
-    return r.rows[0] ? preparedPaymentFromRow(r.rows[0]) : null;
+    return r.rows[0] ? paymentAttemptFromRow(r.rows[0]) : null;
   }
-  async deletePreparedPayment(id: string) {
-    await this.execute({ sql: `DELETE FROM prepared_payments WHERE id=?`, args: [id] });
+  async getPaymentAttemptForSettlement(id: string) {
+    const r = await this.execute({
+      sql: `SELECT * FROM payment_attempts WHERE id=?`,
+      args: [id],
+    });
+    return r.rows[0] ? paymentAttemptFromRow(r.rows[0]) : null;
   }
-  async prunePreparedPayments(now: number) {
+  async prunePaymentAttempts(now: number) {
+    // Only an attempt that was never submitted may be pruned by age. A
+    // submitted one is owned by the reconciler until it reaches a terminal
+    // state; expiring it early is what made a live transaction look missing.
     await this.execute({
-      sql: `DELETE FROM prepared_payments WHERE expires_at<=?`,
+      sql: `DELETE FROM payment_attempts WHERE expires_at<=? AND state='PREPARED'`,
       args: [now],
     });
   }
@@ -180,60 +187,58 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
         }
       : null;
   }
-  async savePaymentWorkflow(v: PaymentWorkflow) {
+  async markPaymentSubmitted(v: PaymentAttemptStatus) {
     await this.execute({
-      sql: `INSERT INTO payment_workflows (prepared_payment_id,state,transaction_id,rejection,submitted_at) VALUES (?,?,?,?,?)
-        ON CONFLICT(prepared_payment_id) DO UPDATE SET
-          state=excluded.state,
-          transaction_id=excluded.transaction_id,
-          rejection=excluded.rejection,
-          submitted_at=COALESCE(payment_workflows.submitted_at, excluded.submitted_at)`,
+      sql: `UPDATE payment_attempts SET
+          state=?, transaction_id=?, rejection=?,
+          submitted_at=COALESCE(submitted_at, ?)
+        WHERE id=?`,
       args: [
-        v.preparedPaymentId,
         v.state,
         v.transactionId,
         v.rejection,
         v.submittedAt ?? Date.now(),
+        v.preparedPaymentId,
       ],
     });
   }
-  async getPaymentWorkflow(id: string) {
+  async getPaymentSubmission(id: string) {
     const r = await this.execute({
-      sql: `SELECT * FROM payment_workflows WHERE prepared_payment_id=?`,
+      sql: `SELECT * FROM payment_attempts WHERE id=? AND state<>'PREPARED'`,
       args: [id],
     });
-    return r.rows[0] ? paymentWorkflowFromRow(r.rows[0]) : null;
+    return r.rows[0] ? paymentAttemptStatusFromRow(r.rows[0]) : null;
   }
-  async deletePaymentWorkflow(id: string) {
+  async deletePaymentAttempt(id: string) {
     await this.execute({
-      sql: `DELETE FROM payment_workflows WHERE prepared_payment_id=?`,
+      sql: `DELETE FROM payment_attempts WHERE id=?`,
       args: [id],
     });
   }
-  async claimPaymentWorkflowTerminal(
+  async claimPaymentAttemptTerminal(
     id: string,
     state: "CONFIRMED" | "REJECTED",
     now: number,
     rejection: string | null = null,
   ) {
     const r = await this.execute({
-      sql: `UPDATE payment_workflows SET state=?, rejection=?, finalized_at=?
-        WHERE prepared_payment_id=? AND finalized_at IS NULL
+      sql: `UPDATE payment_attempts SET state=?, rejection=?, finalized_at=?
+        WHERE id=? AND state='SUBMITTED' AND finalized_at IS NULL
         RETURNING finalized_at`,
       args: [state, rejection, now, id],
     });
     return r.rows[0] ? number(r.rows[0].finalized_at) : null;
   }
-  async pendingPaymentWorkflows(limit: number) {
+  async pendingPaymentAttempts(limit: number) {
     const r = await this.execute({
-      sql: `SELECT * FROM payment_workflows WHERE state='SUBMITTED' ORDER BY prepared_payment_id LIMIT ?`,
+      sql: `SELECT * FROM payment_attempts WHERE state='SUBMITTED' ORDER BY id LIMIT ?`,
       args: [limit],
     });
-    return r.rows.map(paymentWorkflowFromRow);
+    return r.rows.map(paymentAttemptStatusFromRow);
   }
-  async savePreparedMembership(v: PreparedMembershipRecord) {
+  async saveMembershipAttempt(v: MembershipAttempt) {
     await this.execute({
-      sql: `INSERT INTO prepared_memberships (id,transaction_json,fingerprint,covenant_id,sign_inputs,member_output_index,creator,buyer,kind,expires_at,price_sompi,version,contract_prefix,contract_suffix) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      sql: `INSERT INTO membership_attempts (id,transaction_json,fingerprint,covenant_id,sign_inputs,member_output_index,creator,buyer,kind,expires_at,price_sompi,version,contract_prefix,contract_suffix) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       args: [
         v.id,
         v.transaction,
@@ -252,75 +257,76 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
       ],
     });
   }
-  async getPreparedMembership(id: string, now: number) {
+  async getMembershipAttempt(id: string, now: number) {
     const r = await this.execute({
-      sql: `SELECT * FROM prepared_memberships WHERE id=? AND expires_at>?`,
+      sql: `SELECT * FROM membership_attempts WHERE id=? AND expires_at>?`,
       args: [id, now],
     });
-    return r.rows[0] ? preparedMembershipFromRow(r.rows[0]) : null;
+    return r.rows[0] ? membershipAttemptFromRow(r.rows[0]) : null;
   }
-  async deletePreparedMembership(id: string) {
-    await this.execute({
-      sql: `DELETE FROM prepared_memberships WHERE id=?`,
+  async getMembershipAttemptForSettlement(id: string) {
+    const r = await this.execute({
+      sql: `SELECT * FROM membership_attempts WHERE id=?`,
       args: [id],
     });
+    return r.rows[0] ? membershipAttemptFromRow(r.rows[0]) : null;
   }
-  async prunePreparedMemberships(now: number) {
+  async pruneMembershipAttempts(now: number) {
+    // Only an attempt that was never submitted may be pruned by age; a
+    // submitted one belongs to the reconciler until it reaches a terminal state.
     await this.execute({
-      sql: `DELETE FROM prepared_memberships WHERE expires_at<=?`,
+      sql: `DELETE FROM membership_attempts WHERE expires_at<=? AND state='PREPARED'`,
       args: [now],
     });
   }
-  async saveMembershipWorkflow(v: MembershipWorkflow) {
+  async markMembershipSubmitted(v: MembershipAttemptStatus) {
     await this.execute({
-      sql: `INSERT INTO membership_workflows (prepared_membership_id,state,transaction_id,rejection,submitted_at) VALUES (?,?,?,?,?)
-        ON CONFLICT(prepared_membership_id) DO UPDATE SET
-          state=excluded.state,
-          transaction_id=excluded.transaction_id,
-          rejection=excluded.rejection,
-          submitted_at=COALESCE(membership_workflows.submitted_at, excluded.submitted_at)`,
+      sql: `UPDATE membership_attempts SET
+          state=?, transaction_id=?, rejection=?,
+          submitted_at=COALESCE(submitted_at, ?)
+        WHERE id=?`,
       args: [
-        v.preparedMembershipId,
         v.state,
         v.transactionId,
         v.rejection,
         v.submittedAt ?? Date.now(),
+        v.preparedMembershipId,
       ],
     });
   }
-  async getMembershipWorkflow(id: string) {
+  async getMembershipSubmission(id: string) {
     const r = await this.execute({
-      sql: `SELECT * FROM membership_workflows WHERE prepared_membership_id=?`,
+      sql: `SELECT * FROM membership_attempts WHERE id=? AND state<>'PREPARED'`,
       args: [id],
     });
-    return r.rows[0] ? membershipWorkflowFromRow(r.rows[0]) : null;
+    return r.rows[0] ? membershipAttemptStatusFromRow(r.rows[0]) : null;
   }
-  async deleteMembershipWorkflow(id: string) {
+  async deleteMembershipAttempt(id: string) {
     await this.execute({
-      sql: `DELETE FROM membership_workflows WHERE prepared_membership_id=?`,
+      sql: `DELETE FROM membership_attempts WHERE id=?`,
       args: [id],
     });
   }
-  async claimMembershipWorkflowTerminal(
+  async claimMembershipAttemptTerminal(
     id: string,
     state: "CONFIRMED" | "REJECTED",
     now: number,
     rejection: string | null = null,
   ) {
     const r = await this.execute({
-      sql: `UPDATE membership_workflows SET state=?, rejection=?, finalized_at=?
-        WHERE prepared_membership_id=? AND finalized_at IS NULL
+      sql: `UPDATE membership_attempts SET state=?, rejection=?, finalized_at=?
+        WHERE id=? AND state='SUBMITTED' AND finalized_at IS NULL
         RETURNING finalized_at`,
       args: [state, rejection, now, id],
     });
     return r.rows[0] ? number(r.rows[0].finalized_at) : null;
   }
-  async pendingMembershipWorkflows(limit: number) {
+  async pendingMembershipAttempts(limit: number) {
     const r = await this.execute({
-      sql: `SELECT * FROM membership_workflows WHERE state='SUBMITTED' ORDER BY prepared_membership_id LIMIT ?`,
+      sql: `SELECT * FROM membership_attempts WHERE state='SUBMITTED' ORDER BY id LIMIT ?`,
       args: [limit],
     });
-    return r.rows.map(membershipWorkflowFromRow);
+    return r.rows.map(membershipAttemptStatusFromRow);
   }
   async createSession(v: Session) {
     await this.execute({
@@ -656,7 +662,7 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
   async finalizePurchase(id: string, value: Purchase): Promise<DuplicateOutcome> {
     return this.transactionalFinalize(
       id,
-      "prepared_payments",
+      "payment_attempts",
       `INSERT INTO purchases (post_id,buyer,transaction_id) VALUES (?,?,?)`,
       [value.postId, value.buyer, value.transactionId],
     );
@@ -667,7 +673,7 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
         transaction.execute(statement),
       );
       await transaction.execute({
-        sql: "DELETE FROM prepared_memberships WHERE id=?",
+        sql: "DELETE FROM membership_attempts WHERE id=?",
         args: [id],
       });
       return outcome;
@@ -683,7 +689,7 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
         args: [value.priceSompi, value.creator, value.covenantId],
       });
       await transaction.execute({
-        sql: "DELETE FROM prepared_memberships WHERE id=?",
+        sql: "DELETE FROM membership_attempts WHERE id=?",
         args: [id],
       });
       return result.rowsAffected === 1 ? "CREATED" : "DUPLICATE";
@@ -699,7 +705,7 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
         args: [value.creator, value.covenantId],
       });
       await transaction.execute({
-        sql: "DELETE FROM prepared_memberships WHERE id=?",
+        sql: "DELETE FROM membership_attempts WHERE id=?",
         args: [id],
       });
       return result.rowsAffected === 1 ? "CREATED" : "DUPLICATE";
@@ -711,7 +717,7 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
   ): Promise<DuplicateOutcome> {
     return this.transactionalFinalize(
       id,
-      "prepared_memberships",
+      "membership_attempts",
       `INSERT INTO membership_purchases (transaction_id,buyer,creator,covenant_id) VALUES (?,?,?,?)`,
       [value.transactionId, value.buyer, value.creator, value.covenantId ?? null],
     );
@@ -790,19 +796,23 @@ const purchaseFromRow = (r: Record<string, unknown>): Purchase => ({
 });
 const nullableNumber = (value: unknown): number | null =>
   value === null || value === undefined ? null : number(value);
-const paymentWorkflowFromRow = (r: Record<string, unknown>): PaymentWorkflow => ({
-  preparedPaymentId: text(r.prepared_payment_id),
-  state: paymentWorkflowState(text(r.state)),
-  transactionId: text(r.transaction_id),
-  rejection: r.rejection === null ? null : text(r.rejection),
+const paymentAttemptStatusFromRow = (
+  r: Record<string, unknown>,
+): PaymentAttemptStatus => ({
+  preparedPaymentId: text(r.id),
+  state: paymentAttemptState(text(r.state)),
+  transactionId: r.transaction_id == null ? "" : text(r.transaction_id),
+  rejection: r.rejection == null ? null : text(r.rejection),
   submittedAt: nullableNumber(r.submitted_at),
   finalizedAt: nullableNumber(r.finalized_at),
 });
-const membershipWorkflowFromRow = (r: Record<string, unknown>): MembershipWorkflow => ({
-  preparedMembershipId: text(r.prepared_membership_id),
-  state: membershipWorkflowState(text(r.state)),
-  transactionId: text(r.transaction_id),
-  rejection: r.rejection === null ? null : text(r.rejection),
+const membershipAttemptStatusFromRow = (
+  r: Record<string, unknown>,
+): MembershipAttemptStatus => ({
+  preparedMembershipId: text(r.id),
+  state: membershipAttemptState(text(r.state)),
+  transactionId: r.transaction_id == null ? "" : text(r.transaction_id),
+  rejection: r.rejection == null ? null : text(r.rejection),
   submittedAt: nullableNumber(r.submitted_at),
   finalizedAt: nullableNumber(r.finalized_at),
 });
@@ -822,7 +832,7 @@ const membershipPurchaseFromRow = (r: Record<string, unknown>): MembershipPurcha
       ? undefined
       : text(r.covenant_id),
 });
-const preparedPaymentFromRow = (r: Record<string, unknown>): PreparedPaymentRecord => ({
+const paymentAttemptFromRow = (r: Record<string, unknown>): PaymentAttempt => ({
   id: text(r.id),
   transaction: text(r.transaction_json),
   fingerprint: text(r.fingerprint),
@@ -832,9 +842,7 @@ const preparedPaymentFromRow = (r: Record<string, unknown>): PreparedPaymentReco
   buyer: text(r.buyer),
   expiresAt: number(r.expires_at),
 });
-const preparedMembershipFromRow = (
-  r: Record<string, unknown>,
-): PreparedMembershipRecord => ({
+const membershipAttemptFromRow = (r: Record<string, unknown>): MembershipAttempt => ({
   id: text(r.id),
   transaction: validatedJson(text(r.transaction_json)),
   fingerprint: text(r.fingerprint),
@@ -878,7 +886,7 @@ const signInputs = (value: string): number[] => {
     throw new Error("INVALID_SIGN_INPUTS");
   return parsed as number[];
 };
-const membershipKind = (value: string): PreparedMembershipRecord["kind"] => {
+const membershipKind = (value: string): MembershipAttempt["kind"] => {
   if (
     value !== "offer" &&
     value !== "purchase" &&
@@ -888,14 +896,14 @@ const membershipKind = (value: string): PreparedMembershipRecord["kind"] => {
     throw new Error("INVALID_MEMBERSHIP_KIND");
   return value;
 };
-const paymentWorkflowState = (value: string): PaymentWorkflow["state"] => {
+const paymentAttemptState = (value: string): PaymentAttemptStatus["state"] => {
   if (value !== "SUBMITTED" && value !== "CONFIRMED" && value !== "REJECTED")
-    throw new Error("INVALID_PAYMENT_WORKFLOW_STATE");
+    throw new Error("INVALID_PAYMENT_ATTEMPT_STATE");
   return value;
 };
-const membershipWorkflowState = (value: string): MembershipWorkflow["state"] => {
+const membershipAttemptState = (value: string): MembershipAttemptStatus["state"] => {
   if (value !== "SUBMITTED" && value !== "CONFIRMED" && value !== "REJECTED")
-    throw new Error("INVALID_MEMBERSHIP_WORKFLOW_STATE");
+    throw new Error("INVALID_MEMBERSHIP_ATTEMPT_STATE");
   return value;
 };
 const isUniqueConstraint = (error: unknown) =>

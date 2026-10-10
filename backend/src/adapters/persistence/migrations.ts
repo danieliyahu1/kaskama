@@ -370,6 +370,69 @@ export const migrations: Migration[] = [
       "ALTER TABLE prepared_memberships ADD COLUMN contract_suffix TEXT",
     ],
   },
+  {
+    version: 20,
+    name: "one_row_per_attempt",
+    statements: [
+      // A submitted transaction and the template it was built from are two
+      // states of one thing: a payment attempt. They lived in two tables whose
+      // lifetimes had to be kept in step by hand, and a mismatch (the template
+      // expiring while the transaction was still in flight) made the reconciler
+      // give up on a live transaction. Keep the whole attempt - template,
+      // submission and terminal state - in the row that already identified it,
+      // so its lifetime is its own.
+      //
+      // PREPARED  - handed to the client, not yet submitted.
+      // SUBMITTED - broadcast, the reconciler is watching it.
+      // CONFIRMED / REJECTED - terminal, about to be deleted.
+      "ALTER TABLE prepared_payments ADD COLUMN state TEXT NOT NULL DEFAULT 'PREPARED'",
+      "ALTER TABLE prepared_payments ADD COLUMN transaction_id TEXT",
+      "ALTER TABLE prepared_payments ADD COLUMN rejection TEXT",
+      "ALTER TABLE prepared_payments ADD COLUMN submitted_at INTEGER",
+      "ALTER TABLE prepared_payments ADD COLUMN finalized_at INTEGER",
+      `UPDATE prepared_payments SET
+         state = (SELECT w.state FROM payment_workflows w WHERE w.prepared_payment_id = prepared_payments.id),
+         transaction_id = (SELECT w.transaction_id FROM payment_workflows w WHERE w.prepared_payment_id = prepared_payments.id),
+         rejection = (SELECT w.rejection FROM payment_workflows w WHERE w.prepared_payment_id = prepared_payments.id),
+         submitted_at = (SELECT w.submitted_at FROM payment_workflows w WHERE w.prepared_payment_id = prepared_payments.id),
+         finalized_at = (SELECT w.finalized_at FROM payment_workflows w WHERE w.prepared_payment_id = prepared_payments.id)
+       WHERE id IN (SELECT prepared_payment_id FROM payment_workflows)`,
+      "DROP TABLE payment_workflows",
+      "CREATE INDEX IF NOT EXISTS prepared_payments_reconcile ON prepared_payments (state, submitted_at)",
+      "ALTER TABLE prepared_memberships ADD COLUMN state TEXT NOT NULL DEFAULT 'PREPARED'",
+      "ALTER TABLE prepared_memberships ADD COLUMN transaction_id TEXT",
+      "ALTER TABLE prepared_memberships ADD COLUMN rejection TEXT",
+      "ALTER TABLE prepared_memberships ADD COLUMN submitted_at INTEGER",
+      "ALTER TABLE prepared_memberships ADD COLUMN finalized_at INTEGER",
+      `UPDATE prepared_memberships SET
+         state = (SELECT w.state FROM membership_workflows w WHERE w.prepared_membership_id = prepared_memberships.id),
+         transaction_id = (SELECT w.transaction_id FROM membership_workflows w WHERE w.prepared_membership_id = prepared_memberships.id),
+         rejection = (SELECT w.rejection FROM membership_workflows w WHERE w.prepared_membership_id = prepared_memberships.id),
+         submitted_at = (SELECT w.submitted_at FROM membership_workflows w WHERE w.prepared_membership_id = prepared_memberships.id),
+         finalized_at = (SELECT w.finalized_at FROM membership_workflows w WHERE w.prepared_membership_id = prepared_memberships.id)
+       WHERE id IN (SELECT prepared_membership_id FROM membership_workflows)`,
+      "DROP TABLE membership_workflows",
+      "CREATE INDEX IF NOT EXISTS prepared_memberships_reconcile ON prepared_memberships (state, submitted_at)",
+    ],
+  },
+  {
+    version: 21,
+    name: "name_attempts_after_their_row",
+    statements: [
+      // Each row now holds a whole attempt - template, submission and terminal
+      // state - so name the tables for what they hold, not just the first phase.
+      "ALTER TABLE prepared_payments RENAME TO payment_attempts",
+      "ALTER TABLE prepared_memberships RENAME TO membership_attempts",
+      "DROP INDEX IF EXISTS prepared_payments_expiry",
+      "DROP INDEX IF EXISTS prepared_payments_reconcile",
+      "DROP INDEX IF EXISTS prepared_memberships_expiry",
+      "DROP INDEX IF EXISTS prepared_memberships_reconcile",
+      "CREATE INDEX IF NOT EXISTS payment_attempts_expiry ON payment_attempts (expires_at)",
+      "CREATE INDEX IF NOT EXISTS payment_attempts_reconcile ON payment_attempts (state, submitted_at)",
+      "CREATE INDEX IF NOT EXISTS membership_attempts_expiry ON membership_attempts (expires_at)",
+      "CREATE INDEX IF NOT EXISTS membership_attempts_reconcile ON membership_attempts (state, submitted_at)",
+    ],
+  },
 ];
 
 export async function applyMigrations(client: Client): Promise<void> {
@@ -407,11 +470,9 @@ export async function resetDatabase(client: Client): Promise<void> {
     "idempotency_keys",
     "transaction_evidence",
     "feedback_outbox",
-    "membership_workflows",
-    "payment_workflows",
+    "membership_attempts",
+    "payment_attempts",
     "pending_publications",
-    "prepared_memberships",
-    "prepared_payments",
     "membership_purchases",
     "creator_covenants",
     "purchases",

@@ -113,7 +113,7 @@ describe("WorkflowReconciler", () => {
     expiresAt?: number;
     submittedAt?: number;
   }) {
-    await store.savePreparedPayment({
+    await store.savePaymentAttempt({
       id: "prepared-1",
       transaction: "{}",
       fingerprint: "fp",
@@ -123,7 +123,7 @@ describe("WorkflowReconciler", () => {
       buyer,
       expiresAt: options.expiresAt ?? now + 60_000,
     });
-    await store.savePaymentWorkflow({
+    await store.markPaymentSubmitted({
       preparedPaymentId: "prepared-1",
       state: "SUBMITTED",
       transactionId: options.transactionId,
@@ -146,7 +146,7 @@ describe("WorkflowReconciler", () => {
     expect(await store.getPurchase("paid-post", buyer)).toMatchObject({
       transactionId: "tx-1",
     });
-    expect(await store.getPaymentWorkflow("prepared-1")).toBeNull();
+    expect(await store.getPaymentSubmission("prepared-1")).toBeNull();
   });
 
   it("leaves a still-pending payment in flight and retries later", async () => {
@@ -161,7 +161,7 @@ describe("WorkflowReconciler", () => {
 
     expect(summary.retried).toBe(1);
     expect(summary.confirmed).toBe(0);
-    expect(await store.getPaymentWorkflow("prepared-1")).toMatchObject({
+    expect(await store.getPaymentSubmission("prepared-1")).toMatchObject({
       state: "SUBMITTED",
     });
   });
@@ -180,7 +180,7 @@ describe("WorkflowReconciler", () => {
     const summary = await reconciler.run(now);
 
     expect(summary.abandoned).toBe(1);
-    expect(await store.getPaymentWorkflow("prepared-1")).toBeNull();
+    expect(await store.getPaymentSubmission("prepared-1")).toBeNull();
     expect(await store.getPurchase("paid-post", buyer)).toBeNull();
   });
 
@@ -196,11 +196,35 @@ describe("WorkflowReconciler", () => {
 
     expect(summary.rejected).toBe(1);
     expect(await store.getPurchase("paid-post", buyer)).toBeNull();
-    expect(await store.getPaymentWorkflow("prepared-1")).toBeNull();
+    expect(await store.getPaymentSubmission("prepared-1")).toBeNull();
+  });
+
+  it("still settles a payment whose prepared record outlived the client TTL", async () => {
+    await store.publishPost(post("paid-post"));
+    // The client's window to finalize has closed, but the transaction we
+    // broadcast is still in flight. The reconciler must not treat the attempt
+    // as missing just because the template expired.
+    await savePayment({
+      transactionId: "tx-1",
+      expiresAt: now - 1,
+      submittedAt: now,
+    });
+
+    const reconciler = new WorkflowReconciler({
+      store,
+      paymentGateway: paymentGateway(() => accepted("tx-1")),
+    });
+    const summary = await reconciler.run(now);
+
+    expect(summary.confirmed).toBe(1);
+    expect(summary.abandoned).toBe(0);
+    expect(await store.getPurchase("paid-post", buyer)).toMatchObject({
+      transactionId: "tx-1",
+    });
   });
 
   it("finalizes a membership purchase receipt from accepted chain state", async () => {
-    await store.savePreparedMembership({
+    await store.saveMembershipAttempt({
       id: "prepared-1",
       transaction: "{}",
       fingerprint: "fp",
@@ -213,7 +237,7 @@ describe("WorkflowReconciler", () => {
       expiresAt: now + 60_000,
       priceSompi: "1000",
     });
-    await store.saveMembershipWorkflow({
+    await store.markMembershipSubmitted({
       preparedMembershipId: "prepared-1",
       state: "SUBMITTED",
       transactionId: "tx-1",
@@ -230,7 +254,41 @@ describe("WorkflowReconciler", () => {
 
     expect(summary.confirmed).toBe(1);
     expect(await store.membershipReceipts(buyer, creator)).toHaveLength(1);
-    expect(await store.getMembershipWorkflow("prepared-1")).toBeNull();
+    expect(await store.getMembershipSubmission("prepared-1")).toBeNull();
+  });
+
+  it("still settles a membership whose prepared record outlived the client TTL", async () => {
+    await store.saveMembershipAttempt({
+      id: "prepared-1",
+      transaction: "{}",
+      fingerprint: "fp",
+      covenantId: "a".repeat(64),
+      signInputs: [1],
+      memberOutputIndex: 1,
+      creator,
+      buyer,
+      kind: "purchase",
+      expiresAt: now - 1,
+      priceSompi: "1000",
+    });
+    await store.markMembershipSubmitted({
+      preparedMembershipId: "prepared-1",
+      state: "SUBMITTED",
+      transactionId: "tx-1",
+      rejection: null,
+      submittedAt: now,
+    });
+
+    const reconciler = new WorkflowReconciler({
+      store,
+      membershipGateway,
+      membershipVerifier: membershipVerifier(validCheck("tx-1")),
+    });
+    const summary = await reconciler.run(now);
+
+    expect(summary.confirmed).toBe(1);
+    expect(summary.abandoned).toBe(0);
+    expect(await store.membershipReceipts(buyer, creator)).toHaveLength(1);
   });
 
   it("only one concurrent reconciler finalizes a workflow", async () => {

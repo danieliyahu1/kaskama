@@ -6,10 +6,10 @@ import type {
 } from "./ports.js";
 import { MembershipSettlement } from "./membership-settlement.js";
 import type {
-  MembershipWorkflow,
-  PaymentWorkflow,
-  PreparedMembershipRecord,
-  PreparedPaymentRecord,
+  MembershipAttemptStatus,
+  PaymentAttemptStatus,
+  MembershipAttempt,
+  PaymentAttempt,
 } from "../domain/models.js";
 import { logger as defaultLogger, safeError, type Logger } from "../observability.js";
 import { defaultMetrics, type Metrics } from "../metrics.js";
@@ -98,7 +98,7 @@ export class WorkflowReconciler {
   ): Promise<void> {
     const gateway = this.d.paymentGateway;
     if (!gateway) return;
-    for (const workflow of await this.d.store.pendingPaymentWorkflows(this.batchSize)) {
+    for (const workflow of await this.d.store.pendingPaymentAttempts(this.batchSize)) {
       summary.scanned += 1;
       await this.reconcilePayment(gateway, workflow, now, summary).catch((error) =>
         this.logFailure("payment", error),
@@ -108,19 +108,18 @@ export class WorkflowReconciler {
 
   private async reconcilePayment(
     gateway: PaymentGateway,
-    workflow: PaymentWorkflow,
+    workflow: PaymentAttemptStatus,
     now: number,
     summary: ReconcileSummary,
   ): Promise<void> {
     // The prepared record is the server's own view of what the buyer authorized.
     // It is read without an expiry window because reconciliation happens after
     // the client's prepared TTL has elapsed.
-    const prepared = await this.d.store.getPreparedPayment(
+    const prepared = await this.d.store.getPaymentAttemptForSettlement(
       workflow.preparedPaymentId,
-      now,
     );
     if (!prepared) {
-      await this.abandonPayment(workflow, now, "prepared_missing", summary);
+      await this.abandonPayment(workflow, now, "attempt_missing", summary);
       return;
     }
     const submission = await gateway.status(workflow.transactionId);
@@ -138,13 +137,13 @@ export class WorkflowReconciler {
   }
 
   private async confirmPayment(
-    workflow: PaymentWorkflow,
-    prepared: PreparedPaymentRecord,
+    workflow: PaymentAttemptStatus,
+    prepared: PaymentAttempt,
     transactionId: string,
     now: number,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimPaymentWorkflowTerminal(
+    const claimed = await this.d.store.claimPaymentAttemptTerminal(
       workflow.preparedPaymentId,
       "CONFIRMED",
       now,
@@ -155,7 +154,7 @@ export class WorkflowReconciler {
       buyer: prepared.buyer,
       transactionId,
     });
-    await this.d.store.deletePaymentWorkflow(workflow.preparedPaymentId);
+    await this.d.store.deletePaymentAttempt(workflow.preparedPaymentId);
     summary.confirmed += 1;
     this.metrics.paymentFinalizeAttempt(
       outcome === "DUPLICATE" ? "purchase_exists" : "confirmed",
@@ -163,36 +162,36 @@ export class WorkflowReconciler {
   }
 
   private async rejectPayment(
-    workflow: PaymentWorkflow,
+    workflow: PaymentAttemptStatus,
     now: number,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimPaymentWorkflowTerminal(
+    const claimed = await this.d.store.claimPaymentAttemptTerminal(
       workflow.preparedPaymentId,
       "REJECTED",
       now,
       "RECONCILED_REJECTED",
     );
     if (claimed === null) return;
-    await this.d.store.deletePaymentWorkflow(workflow.preparedPaymentId);
+    await this.d.store.deletePaymentAttempt(workflow.preparedPaymentId);
     summary.rejected += 1;
     this.metrics.paymentFinalizeAttempt("rejected");
   }
 
   private async abandonPayment(
-    workflow: PaymentWorkflow,
+    workflow: PaymentAttemptStatus,
     now: number,
     reason: string,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimPaymentWorkflowTerminal(
+    const claimed = await this.d.store.claimPaymentAttemptTerminal(
       workflow.preparedPaymentId,
       "REJECTED",
       now,
       reason,
     );
     if (claimed === null) return;
-    await this.d.store.deletePaymentWorkflow(workflow.preparedPaymentId);
+    await this.d.store.deletePaymentAttempt(workflow.preparedPaymentId);
     summary.abandoned += 1;
     this.metrics.paymentFinalizeAttempt("abandoned");
     this.logger.warn("workflow_reconcile_payment_abandoned", { reason });
@@ -203,7 +202,7 @@ export class WorkflowReconciler {
     summary: ReconcileSummary,
   ): Promise<void> {
     if (!this.d.membershipVerifier && !this.d.membershipGateway) return;
-    for (const workflow of await this.d.store.pendingMembershipWorkflows(
+    for (const workflow of await this.d.store.pendingMembershipAttempts(
       this.batchSize,
     )) {
       summary.scanned += 1;
@@ -214,22 +213,18 @@ export class WorkflowReconciler {
   }
 
   private async reconcileMembership(
-    workflow: MembershipWorkflow,
+    workflow: MembershipAttemptStatus,
     now: number,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const prepared = await this.d.store.getPreparedMembership(
+    const prepared = await this.d.store.getMembershipAttemptForSettlement(
       workflow.preparedMembershipId,
-      now,
     );
     if (!prepared) {
-      await this.abandonMembership(workflow, now, "prepared_missing", summary);
+      await this.abandonMembership(workflow, now, "attempt_missing", summary);
       return;
     }
-    const settlement = await this.settlement.settle(
-      prepared,
-      workflow.transactionId,
-    );
+    const settlement = await this.settlement.settle(prepared, workflow.transactionId);
     if (settlement.state === "PENDING") {
       if (this.workflowAge(workflow, now) > this.staleWorkflowMs)
         await this.abandonMembership(workflow, now, "unconfirmed_timeout", summary);
@@ -244,25 +239,25 @@ export class WorkflowReconciler {
   }
 
   private async confirmMembership(
-    workflow: MembershipWorkflow,
-    prepared: PreparedMembershipRecord,
+    workflow: MembershipAttemptStatus,
+    prepared: MembershipAttempt,
     now: number,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimMembershipWorkflowTerminal(
+    const claimed = await this.d.store.claimMembershipAttemptTerminal(
       workflow.preparedMembershipId,
       "CONFIRMED",
       now,
     );
     if (claimed === null) return;
     await this.finalizeMembershipRecord(prepared, workflow.transactionId);
-    await this.d.store.deleteMembershipWorkflow(workflow.preparedMembershipId);
+    await this.d.store.deleteMembershipAttempt(workflow.preparedMembershipId);
     summary.confirmed += 1;
     this.metrics.membershipFinalizeAttempt(prepared.kind, "confirmed");
   }
 
   private async finalizeMembershipRecord(
-    prepared: PreparedMembershipRecord,
+    prepared: MembershipAttempt,
     transactionId: string,
   ): Promise<void> {
     switch (prepared.kind) {
@@ -299,35 +294,35 @@ export class WorkflowReconciler {
   }
 
   private async rejectMembership(
-    workflow: MembershipWorkflow,
+    workflow: MembershipAttemptStatus,
     now: number,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimMembershipWorkflowTerminal(
+    const claimed = await this.d.store.claimMembershipAttemptTerminal(
       workflow.preparedMembershipId,
       "REJECTED",
       now,
       "RECONCILED_REJECTED",
     );
     if (claimed === null) return;
-    await this.d.store.deleteMembershipWorkflow(workflow.preparedMembershipId);
+    await this.d.store.deleteMembershipAttempt(workflow.preparedMembershipId);
     summary.rejected += 1;
   }
 
   private async abandonMembership(
-    workflow: MembershipWorkflow,
+    workflow: MembershipAttemptStatus,
     now: number,
     reason: string,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimMembershipWorkflowTerminal(
+    const claimed = await this.d.store.claimMembershipAttemptTerminal(
       workflow.preparedMembershipId,
       "REJECTED",
       now,
       reason,
     );
     if (claimed === null) return;
-    await this.d.store.deleteMembershipWorkflow(workflow.preparedMembershipId);
+    await this.d.store.deleteMembershipAttempt(workflow.preparedMembershipId);
     summary.abandoned += 1;
     this.logger.warn("workflow_reconcile_membership_abandoned", { reason });
   }

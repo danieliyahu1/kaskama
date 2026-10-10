@@ -107,7 +107,7 @@ export interface PreparedMembershipTransaction {
   contract?: MembershipContract;
 }
 
-export interface PreparedPaymentRecord {
+export interface PaymentAttempt {
   id: string;
   transaction: string;
   fingerprint: string;
@@ -118,20 +118,20 @@ export interface PreparedPaymentRecord {
   expiresAt: number;
 }
 
-export type PaymentWorkflowState = "SUBMITTED" | "CONFIRMED" | "REJECTED";
+export type PaymentAttemptState = "SUBMITTED" | "CONFIRMED" | "REJECTED";
 
-export interface PaymentWorkflow {
+export interface PaymentAttemptStatus {
   preparedPaymentId: string;
-  state: PaymentWorkflowState;
+  state: PaymentAttemptState;
   transactionId: string;
   rejection: string | null;
   /** First time this transaction was persisted as in flight, in epoch ms. */
   submittedAt?: number | null;
-  /** First time the reconciler observed a terminal outcome for this workflow. */
+  /** First time the reconciler observed a terminal outcome for this attempt. */
   finalizedAt?: number | null;
 }
 
-export interface PreparedMembershipRecord {
+export interface MembershipAttempt {
   id: string;
   transaction: string;
   fingerprint: string;
@@ -146,16 +146,16 @@ export interface PreparedMembershipRecord {
   contract?: MembershipContract;
 }
 
-export type MembershipWorkflowState = "SUBMITTED" | "CONFIRMED" | "REJECTED";
+export type MembershipAttemptState = "SUBMITTED" | "CONFIRMED" | "REJECTED";
 
-export interface MembershipWorkflow {
+export interface MembershipAttemptStatus {
   preparedMembershipId: string;
-  state: MembershipWorkflowState;
+  state: MembershipAttemptState;
   transactionId: string;
   rejection: string | null;
   /** First time this transaction was persisted as in flight, in epoch ms. */
   submittedAt?: number | null;
-  /** First time the reconciler observed a terminal outcome for this workflow. */
+  /** First time the reconciler observed a terminal outcome for this attempt. */
   finalizedAt?: number | null;
 }
 

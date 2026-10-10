@@ -3,16 +3,36 @@ import type {
   CreatorCovenant,
   MembershipPurchase,
   Post,
-  PreparedMembershipRecord,
-  PreparedPaymentRecord,
-  PaymentWorkflow,
-  MembershipWorkflow,
+  MembershipAttempt,
+  PaymentAttempt,
+  PaymentAttemptStatus,
+  MembershipAttemptStatus,
   Profile,
   Purchase,
   Session,
   TransactionEvidence,
 } from "./domain/models.js";
 import type { DuplicateOutcome, Repositories } from "./application/ports.js";
+
+/**
+ * One payment attempt, from the template handed to the client through the
+ * transaction broadcast and on to its terminal state. The template and the
+ * submission are the same row; its lifetime is its own.
+ */
+type PaymentAttemptRow = PaymentAttempt & {
+  state: "PREPARED" | "SUBMITTED" | "CONFIRMED" | "REJECTED";
+  transactionId: string | null;
+  rejection: string | null;
+  submittedAt: number | null;
+  finalizedAt: number | null;
+};
+type MembershipAttemptRow = MembershipAttempt & {
+  state: "PREPARED" | "SUBMITTED" | "CONFIRMED" | "REJECTED";
+  transactionId: string | null;
+  rejection: string | null;
+  submittedAt: number | null;
+  finalizedAt: number | null;
+};
 
 export class MemoryStore implements Repositories {
   readonly challenges = new Map<string, Challenge>();
@@ -24,10 +44,8 @@ export class MemoryStore implements Repositories {
   /** Every covenant, keyed by covenant id; at most one is ACTIVE per creator. */
   readonly covenants = new Map<string, CreatorCovenant>();
   readonly membershipPurchaseRecords = new Map<string, MembershipPurchase>();
-  readonly preparedPaymentRecords = new Map<string, PreparedPaymentRecord>();
-  readonly paymentWorkflows = new Map<string, PaymentWorkflow>();
-  readonly membershipWorkflows = new Map<string, MembershipWorkflow>();
-  readonly preparedMembershipRecords = new Map<string, PreparedMembershipRecord>();
+  readonly paymentAttemptRecords = new Map<string, PaymentAttemptRow>();
+  readonly membershipAttemptRecords = new Map<string, MembershipAttemptRow>();
   readonly transactionEvidence = new Map<string, TransactionEvidence>();
   async initialize() {}
   async saveTransactionEvidence(v: TransactionEvidence) {
@@ -51,107 +69,166 @@ export class MemoryStore implements Repositories {
     for (const [id, v] of this.challenges)
       if (v.consumedAt !== null || v.expiresAt <= now) this.challenges.delete(id);
   }
-  async savePreparedPayment(v: PreparedPaymentRecord) {
-    this.preparedPaymentRecords.set(v.id, structuredClone(v));
-  }
-  async getPreparedPayment(id: string, now: number) {
-    const v = this.preparedPaymentRecords.get(id);
-    return v && v.expiresAt > now ? structuredClone(v) : null;
-  }
-  async deletePreparedPayment(id: string) {
-    this.preparedPaymentRecords.delete(id);
-  }
-  async prunePreparedPayments(now: number) {
-    for (const [id, v] of this.preparedPaymentRecords)
-      if (v.expiresAt <= now) this.preparedPaymentRecords.delete(id);
-  }
-  async savePaymentWorkflow(v: PaymentWorkflow) {
-    const existing = this.paymentWorkflows.get(v.preparedPaymentId);
-    this.paymentWorkflows.set(
-      v.preparedPaymentId,
+  async savePaymentAttempt(v: PaymentAttempt) {
+    this.paymentAttemptRecords.set(
+      v.id,
       structuredClone({
         ...v,
-        submittedAt: existing?.submittedAt ?? v.submittedAt ?? Date.now(),
+        state: "PREPARED" as const,
+        transactionId: null,
+        rejection: null,
+        submittedAt: null,
+        finalizedAt: null,
       }),
     );
   }
-  async getPaymentWorkflow(id: string) {
-    const v = this.paymentWorkflows.get(id);
-    return v ? structuredClone(v) : null;
+  async getPaymentAttempt(id: string, now: number) {
+    const v = this.paymentAttemptRecords.get(id);
+    return v && v.expiresAt > now ? paymentRecord(v) : null;
   }
-  async deletePaymentWorkflow(id: string) {
-    this.paymentWorkflows.delete(id);
+  async getPaymentAttemptForSettlement(id: string) {
+    const v = this.paymentAttemptRecords.get(id);
+    return v ? paymentRecord(v) : null;
   }
-  async claimPaymentWorkflowTerminal(
+  async prunePaymentAttempts(now: number) {
+    // Only an attempt that was never submitted may be pruned by age; a
+    // submitted one is owned by the reconciler until it reaches a terminal state.
+    for (const [id, v] of this.paymentAttemptRecords)
+      if (v.expiresAt <= now && v.state === "PREPARED")
+        this.paymentAttemptRecords.delete(id);
+  }
+  async markPaymentSubmitted(v: PaymentAttemptStatus) {
+    const attempt = this.paymentAttemptRecords.get(v.preparedPaymentId);
+    if (!attempt) return;
+    attempt.state = v.state;
+    attempt.transactionId = v.transactionId;
+    attempt.rejection = v.rejection;
+    attempt.submittedAt = attempt.submittedAt ?? v.submittedAt ?? Date.now();
+  }
+  async getPaymentSubmission(id: string): Promise<PaymentAttemptStatus | null> {
+    const v = this.paymentAttemptRecords.get(id);
+    if (!v || v.state === "PREPARED") return null;
+    return {
+      preparedPaymentId: id,
+      state: v.state,
+      transactionId: v.transactionId ?? "",
+      rejection: v.rejection,
+      submittedAt: v.submittedAt,
+      finalizedAt: v.finalizedAt,
+    };
+  }
+  async deletePaymentAttempt(id: string) {
+    this.paymentAttemptRecords.delete(id);
+  }
+  async claimPaymentAttemptTerminal(
     id: string,
     state: "CONFIRMED" | "REJECTED",
     now: number,
     rejection: string | null = null,
   ) {
-    const v = this.paymentWorkflows.get(id);
-    if (!v || v.finalizedAt != null) return null;
+    const v = this.paymentAttemptRecords.get(id);
+    if (!v || v.finalizedAt != null || v.state !== "SUBMITTED") return null;
     v.state = state;
     v.rejection = rejection;
     v.finalizedAt = now;
     return now;
   }
-  async pendingPaymentWorkflows(limit: number) {
-    return [...this.paymentWorkflows.values()]
-      .filter((v) => v.state === "SUBMITTED")
-      .sort((a, b) => a.preparedPaymentId.localeCompare(b.preparedPaymentId))
+  async pendingPaymentAttempts(limit: number): Promise<PaymentAttemptStatus[]> {
+    return [...this.paymentAttemptRecords.values()]
+      .filter(
+        (v): v is PaymentAttemptRow & { state: "SUBMITTED" } => v.state === "SUBMITTED",
+      )
+      .sort((a, b) => a.id.localeCompare(b.id))
       .slice(0, limit)
-      .map((v) => structuredClone(v));
+      .map((v) => ({
+        preparedPaymentId: v.id,
+        state: v.state,
+        transactionId: v.transactionId ?? "",
+        rejection: v.rejection,
+        submittedAt: v.submittedAt,
+        finalizedAt: v.finalizedAt,
+      }));
   }
-  async saveMembershipWorkflow(v: MembershipWorkflow) {
-    const existing = this.membershipWorkflows.get(v.preparedMembershipId);
-    this.membershipWorkflows.set(
-      v.preparedMembershipId,
-      structuredClone({
-        ...v,
-        submittedAt: existing?.submittedAt ?? v.submittedAt ?? Date.now(),
-      }),
-    );
+  async markMembershipSubmitted(v: MembershipAttemptStatus) {
+    const attempt = this.membershipAttemptRecords.get(v.preparedMembershipId);
+    if (!attempt) return;
+    attempt.state = v.state;
+    attempt.transactionId = v.transactionId;
+    attempt.rejection = v.rejection;
+    attempt.submittedAt = attempt.submittedAt ?? v.submittedAt ?? Date.now();
   }
-  async getMembershipWorkflow(id: string) {
-    const v = this.membershipWorkflows.get(id);
-    return v ? structuredClone(v) : null;
+  async getMembershipSubmission(id: string): Promise<MembershipAttemptStatus | null> {
+    const v = this.membershipAttemptRecords.get(id);
+    if (!v || v.state === "PREPARED") return null;
+    return {
+      preparedMembershipId: id,
+      state: v.state,
+      transactionId: v.transactionId ?? "",
+      rejection: v.rejection,
+      submittedAt: v.submittedAt,
+      finalizedAt: v.finalizedAt,
+    };
   }
-  async deleteMembershipWorkflow(id: string) {
-    this.membershipWorkflows.delete(id);
+  async deleteMembershipAttempt(id: string) {
+    this.membershipAttemptRecords.delete(id);
   }
-  async claimMembershipWorkflowTerminal(
+  async claimMembershipAttemptTerminal(
     id: string,
     state: "CONFIRMED" | "REJECTED",
     now: number,
     rejection: string | null = null,
   ) {
-    const v = this.membershipWorkflows.get(id);
-    if (!v || v.finalizedAt != null) return null;
+    const v = this.membershipAttemptRecords.get(id);
+    if (!v || v.finalizedAt != null || v.state !== "SUBMITTED") return null;
     v.state = state;
     v.rejection = rejection;
     v.finalizedAt = now;
     return now;
   }
-  async pendingMembershipWorkflows(limit: number) {
-    return [...this.membershipWorkflows.values()]
-      .filter((v) => v.state === "SUBMITTED")
-      .sort((a, b) => a.preparedMembershipId.localeCompare(b.preparedMembershipId))
+  async pendingMembershipAttempts(limit: number): Promise<MembershipAttemptStatus[]> {
+    return [...this.membershipAttemptRecords.values()]
+      .filter(
+        (v): v is MembershipAttemptRow & { state: "SUBMITTED" } =>
+          v.state === "SUBMITTED",
+      )
+      .sort((a, b) => a.id.localeCompare(b.id))
       .slice(0, limit)
-      .map((v) => structuredClone(v));
+      .map((v) => ({
+        preparedMembershipId: v.id,
+        state: v.state,
+        transactionId: v.transactionId ?? "",
+        rejection: v.rejection,
+        submittedAt: v.submittedAt,
+        finalizedAt: v.finalizedAt,
+      }));
   }
-  async savePreparedMembership(v: PreparedMembershipRecord) {
-    this.preparedMembershipRecords.set(v.id, structuredClone(v));
+  async saveMembershipAttempt(v: MembershipAttempt) {
+    this.membershipAttemptRecords.set(
+      v.id,
+      structuredClone({
+        ...v,
+        state: "PREPARED" as const,
+        transactionId: null,
+        rejection: null,
+        submittedAt: null,
+        finalizedAt: null,
+      }),
+    );
   }
-  async getPreparedMembership(id: string, now: number) {
-    const v = this.preparedMembershipRecords.get(id);
-    return v && v.expiresAt > now ? structuredClone(v) : null;
+  async getMembershipAttempt(id: string, now: number) {
+    const v = this.membershipAttemptRecords.get(id);
+    return v && v.expiresAt > now ? membershipRecord(v) : null;
   }
-  async deletePreparedMembership(id: string) {
-    this.preparedMembershipRecords.delete(id);
+  async getMembershipAttemptForSettlement(id: string) {
+    const v = this.membershipAttemptRecords.get(id);
+    return v ? membershipRecord(v) : null;
   }
-  async prunePreparedMemberships(now: number) {
-    for (const [id, v] of this.preparedMembershipRecords)
-      if (v.expiresAt <= now) this.preparedMembershipRecords.delete(id);
+  async pruneMembershipAttempts(now: number) {
+    // Only an attempt that was never submitted may be pruned by age; a
+    // submitted one is owned by the reconciler until it reaches a terminal state.
+    for (const [id, v] of this.membershipAttemptRecords)
+      if (v.expiresAt <= now && v.state === "PREPARED")
+        this.membershipAttemptRecords.delete(id);
   }
   async createSession(v: Session) {
     this.sessions.set(v.id, structuredClone(v));
@@ -355,12 +432,12 @@ export class MemoryStore implements Repositories {
   }
   async finalizePurchase(id: string, value: Purchase): Promise<DuplicateOutcome> {
     const outcome = await this.createPurchase(value);
-    this.preparedPaymentRecords.delete(id);
+    this.paymentAttemptRecords.delete(id);
     return outcome;
   }
   async finalizeOffer(id: string, value: CreatorCovenant): Promise<DuplicateOutcome> {
     const outcome = await this.saveCreatorCovenant(value);
-    this.preparedMembershipRecords.delete(id);
+    this.membershipAttemptRecords.delete(id);
     return outcome;
   }
   async finalizePriceUpdate(
@@ -369,11 +446,11 @@ export class MemoryStore implements Repositories {
   ): Promise<DuplicateOutcome> {
     const active = this.activeByCovenant(value.creator, value.covenantId);
     if (!active) {
-      this.preparedMembershipRecords.delete(id);
+      this.membershipAttemptRecords.delete(id);
       return "DUPLICATE";
     }
     this.covenants.set(value.covenantId, { ...value, status: "ACTIVE" });
-    this.preparedMembershipRecords.delete(id);
+    this.membershipAttemptRecords.delete(id);
     return "CREATED";
   }
   async finalizeCancellation(
@@ -382,11 +459,11 @@ export class MemoryStore implements Repositories {
   ): Promise<DuplicateOutcome> {
     const active = this.activeByCovenant(value.creator, value.covenantId);
     if (!active) {
-      this.preparedMembershipRecords.delete(id);
+      this.membershipAttemptRecords.delete(id);
       return "DUPLICATE";
     }
     this.covenants.set(value.covenantId, { ...active, status: "CANCELED" });
-    this.preparedMembershipRecords.delete(id);
+    this.membershipAttemptRecords.delete(id);
     return "CREATED";
   }
   private activeByCovenant(
@@ -403,10 +480,38 @@ export class MemoryStore implements Repositories {
     value: MembershipPurchase,
   ): Promise<DuplicateOutcome> {
     const outcome = await this.createMembershipPurchase(value);
-    this.preparedMembershipRecords.delete(id);
+    this.membershipAttemptRecords.delete(id);
     return outcome;
   }
 }
 
 /** A covenant offering access; a canceled one no longer counts as current. */
 const isActiveCovenant = (value: CreatorCovenant) => value.status !== "CANCELED";
+
+/** The client-facing shape of an attempt, without its submission state. */
+const paymentRecord = (v: PaymentAttemptRow): PaymentAttempt =>
+  structuredClone({
+    id: v.id,
+    transaction: v.transaction,
+    fingerprint: v.fingerprint,
+    amountSompi: v.amountSompi,
+    creator: v.creator,
+    postId: v.postId,
+    buyer: v.buyer,
+    expiresAt: v.expiresAt,
+  });
+const membershipRecord = (v: MembershipAttemptRow): MembershipAttempt =>
+  structuredClone({
+    id: v.id,
+    transaction: v.transaction,
+    fingerprint: v.fingerprint,
+    covenantId: v.covenantId,
+    signInputs: v.signInputs,
+    memberOutputIndex: v.memberOutputIndex,
+    creator: v.creator,
+    buyer: v.buyer,
+    kind: v.kind,
+    expiresAt: v.expiresAt,
+    priceSompi: v.priceSompi,
+    ...(v.contract ? { contract: v.contract } : {}),
+  });

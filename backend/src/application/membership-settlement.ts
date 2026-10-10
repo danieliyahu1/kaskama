@@ -1,5 +1,5 @@
 import type { MembershipGateway, MembershipVerifier } from "./ports.js";
-import type { MembershipCheck, PreparedMembershipRecord } from "../domain/models.js";
+import type { MembershipCheck, MembershipAttempt } from "../domain/models.js";
 
 export type MembershipSettlementState = "CONFIRMED" | "PENDING" | "REJECTED";
 
@@ -28,7 +28,7 @@ export class MembershipSettlement {
   ) {}
 
   async settle(
-    prepared: PreparedMembershipRecord,
+    prepared: MembershipAttempt,
     transactionId: string,
   ): Promise<MembershipSettlementResult> {
     if (this.isPurchasable(prepared) && this.verifier) {
@@ -65,8 +65,8 @@ export class MembershipSettlement {
   }
 
   private isPurchasable(
-    prepared: PreparedMembershipRecord,
-  ): prepared is PreparedMembershipRecord & { memberOutputIndex: number } {
+    prepared: MembershipAttempt,
+  ): prepared is MembershipAttempt & { memberOutputIndex: number } {
     return prepared.kind === "purchase" && prepared.memberOutputIndex !== null;
   }
 }

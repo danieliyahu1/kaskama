@@ -566,8 +566,8 @@ describe("payment confirmation", () => {
     expect(finalized.body.state).toBe("PENDING");
     expect(finalized.body.transactionId).toBe("tx-1");
     expect(await store.getPurchase("paid-post", buyer)).toBeNull();
-    expect(await store.getPreparedPayment(prepared.body.id, Date.now())).not.toBeNull();
-    expect(await store.getPaymentWorkflow(prepared.body.id)).toMatchObject({
+    expect(await store.getPaymentAttempt(prepared.body.id, Date.now())).not.toBeNull();
+    expect(await store.getPaymentSubmission(prepared.body.id)).toMatchObject({
       state: "SUBMITTED",
       transactionId: "tx-1",
     });
@@ -1611,12 +1611,12 @@ describe("membership state changes", () => {
     return creator;
   }
 
-  async function seedPrepared(
+  async function seedAttempt(
     store: MemoryStore,
     creator: string,
     kind: "offer" | "purchase" | "update" | "cancel",
   ) {
-    await store.savePreparedMembership({
+    await store.saveMembershipAttempt({
       id: "prepared-1",
       transaction: "{}",
       fingerprint: "fp",
@@ -1663,7 +1663,7 @@ describe("membership state changes", () => {
 
   async function seedPurchase(store: MemoryStore) {
     const creator = await creatorSession(store);
-    await store.savePreparedMembership({
+    await store.saveMembershipAttempt({
       id: "prepared-1",
       transaction: "{}",
       fingerprint: "fp",
@@ -1704,7 +1704,7 @@ describe("membership state changes", () => {
 
     expect(response.status).toBe(202);
     expect(response.body).toMatchObject({ state: "PENDING", transactionId: "tx-1" });
-    expect(await store.getMembershipWorkflow("prepared-1")).toMatchObject({
+    expect(await store.getMembershipSubmission("prepared-1")).toMatchObject({
       state: "SUBMITTED",
     });
   });
@@ -1743,7 +1743,7 @@ describe("membership state changes", () => {
   it("re-checks an in-flight purchase instead of relaying again", async () => {
     const store = new MemoryStore();
     await seedPurchase(store);
-    await store.saveMembershipWorkflow({
+    await store.markMembershipSubmitted({
       preparedMembershipId: "prepared-1",
       state: "SUBMITTED",
       transactionId: "tx-1",
@@ -1883,7 +1883,7 @@ describe("membership state changes", () => {
     const store = new MemoryStore();
     const creator = await creatorSession(store);
     await store.saveCreatorCovenant({ creator, covenantId, priceSompi: "1000000000" });
-    await seedPrepared(store, creator, kind);
+    await seedAttempt(store, creator, kind);
     const { app } = appWithGateway(
       store,
       gatewayThatThrows(new MembershipStateChangedError()),
@@ -1900,14 +1900,14 @@ describe("membership state changes", () => {
       retry: "AFTER_REFRESH",
       message: staleMessage,
     });
-    expect(await store.getPreparedMembership("prepared-1", Date.now())).toBeNull();
+    expect(await store.getMembershipAttempt("prepared-1", Date.now())).toBeNull();
   });
 
   it("cancels an offer under the contract it was created with", async () => {
     const store = new MemoryStore();
     const creator = await creatorSession(store);
     const contract = { prefix: "6b", suffix: "6a" };
-    await store.savePreparedMembership({
+    await store.saveMembershipAttempt({
       id: "prepared-1",
       transaction: "{}",
       fingerprint: "fp",
@@ -1965,7 +1965,7 @@ describe("membership state changes", () => {
       const store = new MemoryStore();
       const creator = await creatorSession(store);
       await store.saveCreatorCovenant({ creator, covenantId, priceSompi: "1000000000" });
-      await seedPrepared(store, creator, kind);
+      await seedAttempt(store, creator, kind);
       const { app } = appWithGateway(
         store,
         gatewayThatThrows(new MembershipSubmissionError()),
@@ -1982,7 +1982,7 @@ describe("membership state changes", () => {
         message: submissionMessage,
       });
       expect(response.body.retry).toBeUndefined();
-      expect(await store.getPreparedMembership("prepared-1", Date.now())).toBeNull();
+      expect(await store.getMembershipAttempt("prepared-1", Date.now())).toBeNull();
     },
   );
 
@@ -2014,13 +2014,13 @@ describe("membership state changes", () => {
       error: "MEMBERSHIP_SUBMISSION_FAILED",
       message: submissionMessage,
     });
-    expect(await store.getPreparedMembership("prepared-1", Date.now())).toBeNull();
+    expect(await store.getMembershipAttempt("prepared-1", Date.now())).toBeNull();
   });
 
   it("explains a price update that no longer matches the covenant", async () => {
     const store = new MemoryStore();
     const creator = await creatorSession(store);
-    await seedPrepared(store, creator, "update");
+    await seedAttempt(store, creator, "update");
     const { app } = appWithGateway(store, gatewayThatConfirms());
 
     const response = await request(app)
@@ -2039,7 +2039,7 @@ describe("membership state changes", () => {
   it("keeps the offer pending and preserves the prepared record until the chain settles it", async () => {
     const store = new MemoryStore();
     const creator = await creatorSession(store);
-    await seedPrepared(store, creator, "offer");
+    await seedAttempt(store, creator, "offer");
     const { app } = appWithGateway(store, gatewayThatPends());
 
     const response = await request(app)
@@ -2051,9 +2051,9 @@ describe("membership state changes", () => {
     expect(response.body).toMatchObject({ state: "PENDING", transactionId: "tx-1" });
     // The prepared record survives so the reconciler can still settle it.
     expect(
-      await store.getPreparedMembership("prepared-1", Date.now()),
+      await store.getMembershipAttempt("prepared-1", Date.now()),
     ).not.toBeNull();
-    expect(await store.getMembershipWorkflow("prepared-1")).toMatchObject({
+    expect(await store.getMembershipSubmission("prepared-1")).toMatchObject({
       state: "SUBMITTED",
       transactionId: "tx-1",
     });

@@ -5,15 +5,15 @@ import type {
   MembershipContract,
   MembershipPurchase,
   Post,
-  PreparedMembershipRecord,
+  MembershipAttempt,
   PreparedMembershipTransaction,
-  MembershipWorkflow,
-  MembershipWorkflowState,
-  PreparedPaymentRecord,
+  MembershipAttemptStatus,
+  MembershipAttemptState,
+  PaymentAttempt,
   PreparedPayment,
   PaymentSubmission,
-  PaymentWorkflow,
-  PaymentWorkflowState,
+  PaymentAttemptStatus,
+  PaymentAttemptState,
   Profile,
   Purchase,
   Session,
@@ -36,53 +36,56 @@ export interface SessionRepository {
   pruneSessions(now: number): Promise<void>;
 }
 
-export interface PreparedPaymentRepository {
-  savePreparedPayment(value: PreparedPaymentRecord): Promise<void>;
-  getPreparedPayment(id: string, now: number): Promise<PreparedPaymentRecord | null>;
-  deletePreparedPayment(id: string): Promise<void>;
-  prunePreparedPayments(now: number): Promise<void>;
-  savePaymentWorkflow(value: PaymentWorkflow): Promise<void>;
-  getPaymentWorkflow(preparedPaymentId: string): Promise<PaymentWorkflow | null>;
-  deletePaymentWorkflow(preparedPaymentId: string): Promise<void>;
+export interface PaymentAttemptRepository {
+  savePaymentAttempt(value: PaymentAttempt): Promise<void>;
+  getPaymentAttempt(id: string, now: number): Promise<PaymentAttempt | null>;
   /**
-   * Atomically marks a workflow terminal the first time and returns that time.
+   * Reads an attempt by id for the reconciler, ignoring the client-facing TTL.
+   * The TTL bounds how long a *client* may finalize; it must not bound how long
+   * the server settles a transaction it already broadcast.
+   */
+  getPaymentAttemptForSettlement(id: string): Promise<PaymentAttempt | null>;
+  prunePaymentAttempts(now: number): Promise<void>;
+  markPaymentSubmitted(value: PaymentAttemptStatus): Promise<void>;
+  getPaymentSubmission(preparedPaymentId: string): Promise<PaymentAttemptStatus | null>;
+  deletePaymentAttempt(preparedPaymentId: string): Promise<void>;
+  /**
+   * Atomically marks an attempt terminal the first time and returns that time.
    * Returns null if it was already terminal, so only one caller reconciles it.
    */
-  claimPaymentWorkflowTerminal(
+  claimPaymentAttemptTerminal(
     preparedPaymentId: string,
-    state: Exclude<PaymentWorkflowState, "SUBMITTED">,
+    state: Exclude<PaymentAttemptState, "SUBMITTED">,
     now: number,
     rejection?: string | null,
   ): Promise<number | null>;
 }
 
-export interface PreparedMembershipRepository {
-  savePreparedMembership(value: PreparedMembershipRecord): Promise<void>;
-  getPreparedMembership(
-    id: string,
-    now: number,
-  ): Promise<PreparedMembershipRecord | null>;
-  deletePreparedMembership(id: string): Promise<void>;
-  prunePreparedMemberships(now: number): Promise<void>;
-  saveMembershipWorkflow(value: MembershipWorkflow): Promise<void>;
-  getMembershipWorkflow(
+export interface MembershipAttemptRepository {
+  saveMembershipAttempt(value: MembershipAttempt): Promise<void>;
+  getMembershipAttempt(id: string, now: number): Promise<MembershipAttempt | null>;
+  /** Reads an attempt by id for the reconciler, ignoring the client-facing TTL. */
+  getMembershipAttemptForSettlement(id: string): Promise<MembershipAttempt | null>;
+  pruneMembershipAttempts(now: number): Promise<void>;
+  markMembershipSubmitted(value: MembershipAttemptStatus): Promise<void>;
+  getMembershipSubmission(
     preparedMembershipId: string,
-  ): Promise<MembershipWorkflow | null>;
-  deleteMembershipWorkflow(preparedMembershipId: string): Promise<void>;
+  ): Promise<MembershipAttemptStatus | null>;
+  deleteMembershipAttempt(preparedMembershipId: string): Promise<void>;
   /**
-   * Atomically marks a workflow terminal the first time and returns that time.
+   * Atomically marks an attempt terminal the first time and returns that time.
    * Returns null if it was already terminal, so only one caller reconciles it.
    */
-  claimMembershipWorkflowTerminal(
+  claimMembershipAttemptTerminal(
     preparedMembershipId: string,
-    state: Exclude<MembershipWorkflowState, "SUBMITTED">,
+    state: Exclude<MembershipAttemptState, "SUBMITTED">,
     now: number,
     rejection?: string | null,
   ): Promise<number | null>;
-  /** Every unresolved (SUBMITTED) membership workflow, oldest first. */
-  pendingMembershipWorkflows(limit: number): Promise<MembershipWorkflow[]>;
-  /** Every unresolved (SUBMITTED) payment workflow, oldest first. */
-  pendingPaymentWorkflows(limit: number): Promise<PaymentWorkflow[]>;
+  /** Every unresolved (SUBMITTED) membership attempt, oldest first. */
+  pendingMembershipAttempts(limit: number): Promise<MembershipAttemptStatus[]>;
+  /** Every unresolved (SUBMITTED) payment attempt, oldest first. */
+  pendingPaymentAttempts(limit: number): Promise<PaymentAttemptStatus[]>;
 }
 
 export interface ProfileRepository {
@@ -149,8 +152,8 @@ export interface Repositories
   extends
     ChallengeRepository,
     SessionRepository,
-    PreparedPaymentRepository,
-    PreparedMembershipRepository,
+    PaymentAttemptRepository,
+    MembershipAttemptRepository,
     ProfileRepository,
     PostRepository,
     PurchaseRepository,

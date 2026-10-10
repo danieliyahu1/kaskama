@@ -298,7 +298,7 @@ describe.each([
   });
 
   it("finalizes a payment atomically with its prepared record", async () => {
-    await store.savePreparedPayment({
+    await store.savePaymentAttempt({
       id: "prepared-payment",
       transaction: "{}",
       fingerprint: "fingerprint",
@@ -316,7 +316,7 @@ describe.each([
         transactionId: "tx-finalized",
       }),
     ).toBe("CREATED");
-    expect(await store.getPreparedPayment("prepared-payment", now)).toBeNull();
+    expect(await store.getPaymentAttempt("prepared-payment", now)).toBeNull();
     expect(await store.getPurchase("post-1", buyer)).toEqual({
       postId: "post-1",
       buyer,
@@ -324,8 +324,79 @@ describe.each([
     });
   });
 
+  it("keeps an in-flight payment attempt past its client TTL so it can be settled", async () => {
+    await store.savePaymentAttempt({
+      id: "in-flight",
+      transaction: "{}",
+      fingerprint: "fingerprint",
+      amountSompi: "100000000",
+      creator,
+      postId: "post-1",
+      buyer,
+      expiresAt: now + 1_000,
+    });
+    await store.markPaymentSubmitted({
+      preparedPaymentId: "in-flight",
+      state: "SUBMITTED",
+      transactionId: "tx-in-flight",
+      rejection: null,
+      submittedAt: now,
+    });
+
+    await store.prunePaymentAttempts(now + 10_000);
+
+    expect(await store.getPaymentAttempt("in-flight", now + 10_000)).toBeNull();
+    expect(
+      await store.getPaymentAttemptForSettlement("in-flight"),
+    ).toMatchObject({ id: "in-flight", postId: "post-1" });
+    expect(await store.pendingPaymentAttempts(10)).toMatchObject([
+      {
+        preparedPaymentId: "in-flight",
+        state: "SUBMITTED",
+        transactionId: "tx-in-flight",
+      },
+    ]);
+  });
+
+  it("keeps an in-flight membership attempt past its client TTL so it can be settled", async () => {
+    await store.saveMembershipAttempt({
+      id: "in-flight-membership",
+      transaction: "{}",
+      fingerprint: "fingerprint",
+      covenantId: "covenant-1",
+      signInputs: [0],
+      memberOutputIndex: 1,
+      creator,
+      buyer,
+      kind: "purchase",
+      expiresAt: now + 1_000,
+      priceSompi: "1000000000",
+    });
+    await store.markMembershipSubmitted({
+      preparedMembershipId: "in-flight-membership",
+      state: "SUBMITTED",
+      transactionId: "tx-in-flight-membership",
+      rejection: null,
+      submittedAt: now,
+    });
+
+    await store.pruneMembershipAttempts(now + 10_000);
+
+    expect(await store.getMembershipAttempt("in-flight-membership", now + 10_000)).toBeNull();
+    expect(
+      await store.getMembershipAttemptForSettlement("in-flight-membership"),
+    ).toMatchObject({ id: "in-flight-membership", kind: "purchase" });
+    expect(await store.pendingMembershipAttempts(10)).toMatchObject([
+      {
+        preparedMembershipId: "in-flight-membership",
+        state: "SUBMITTED",
+        transactionId: "tx-in-flight-membership",
+      },
+    ]);
+  });
+
   it("treats repeated membership finalization as a duplicate and clears preparation", async () => {
-    await store.savePreparedMembership({
+    await store.saveMembershipAttempt({
       id: "prepared-membership",
       transaction: "{}",
       fingerprint: "fingerprint",
@@ -346,7 +417,7 @@ describe.each([
     expect(
       await store.finalizeMembershipPurchase("prepared-membership", membership),
     ).toBe("DUPLICATE");
-    expect(await store.getPreparedMembership("prepared-membership", now)).toBeNull();
+    expect(await store.getMembershipAttempt("prepared-membership", now)).toBeNull();
   });
 
   it("round-trips a prepared membership cancellation through persistence", async () => {
@@ -355,7 +426,7 @@ describe.each([
       covenantId: "covenant-1",
       priceSompi: "1000000000",
     });
-    await store.savePreparedMembership({
+    await store.saveMembershipAttempt({
       id: "prepared-cancel",
       transaction: "{}",
       fingerprint: "fingerprint",
@@ -369,7 +440,7 @@ describe.each([
       priceSompi: "1000000000",
     });
 
-    const loaded = await store.getPreparedMembership("prepared-cancel", now);
+    const loaded = await store.getMembershipAttempt("prepared-cancel", now);
     expect(loaded?.kind).toBe("cancel");
 
     const finalize = store.finalizeCancellation?.bind(store);
@@ -378,7 +449,7 @@ describe.each([
       await finalize("prepared-cancel", { creator, covenantId: "covenant-1" }),
     ).toBe("CREATED");
     expect(await store.getCreatorCovenant(creator)).toBeNull();
-    expect(await store.getPreparedMembership("prepared-cancel", now)).toBeNull();
+    expect(await store.getMembershipAttempt("prepared-cancel", now)).toBeNull();
   });
 
   it("round-trips a covenant's contract through persistence", async () => {
@@ -395,7 +466,7 @@ describe.each([
 
   it("round-trips a prepared membership's contract through persistence", async () => {
     const contract = { prefix: "6b", suffix: "6a" };
-    await store.savePreparedMembership({
+    await store.saveMembershipAttempt({
       id: "prepared-contract",
       transaction: "{}",
       fingerprint: "fingerprint",
@@ -411,7 +482,7 @@ describe.each([
     });
 
     expect(
-      (await store.getPreparedMembership("prepared-contract", now))?.contract,
+      (await store.getMembershipAttempt("prepared-contract", now))?.contract,
     ).toEqual(contract);
   });
 

@@ -208,8 +208,7 @@ export function createApp(d: AppDependencies) {
       )
     )
       return undefined;
-    await d.store.deleteMembershipWorkflow(id);
-    await d.store.deletePreparedMembership(id);
+    await d.store.deleteMembershipAttempt(id);
     return error instanceof MembershipStateChangedError
       ? membershipStale(res)
       : apiError(
@@ -819,9 +818,9 @@ export function createApp(d: AppDependencies) {
           metrics.paymentPrepareAttempt("template_invalid");
           return apiError(res, 422, "PAYMENT_TEMPLATE_INVALID");
         }
-        await d.store.prunePreparedPayments(now());
+        await d.store.prunePaymentAttempts(now());
         const id = randomUUID();
-        await d.store.savePreparedPayment({
+        await d.store.savePaymentAttempt({
           id,
           ...prepared,
           postId: post.id,
@@ -850,12 +849,12 @@ export function createApp(d: AppDependencies) {
     asyncHandler(async (req, res) => {
       if (!d.paymentGateway) throw new HttpError(503, "PAYMENT_UNAVAILABLE");
       const id = param(req, "id"),
-        prepared = await d.store.getPreparedPayment(id, now());
+        prepared = await d.store.getPaymentAttempt(id, now());
       if (!prepared || prepared.buyer !== req.walletSession!.address) {
         metrics.paymentFinalizeAttempt("not_found");
         return apiError(res, 404, "PAYMENT_NOT_FOUND");
       }
-      const workflow = await d.store.getPaymentWorkflow(id);
+      const workflow = await d.store.getPaymentSubmission(id);
       const submission = workflow
         ? workflow.state === "CONFIRMED"
           ? {
@@ -872,7 +871,7 @@ export function createApp(d: AppDependencies) {
           })();
       if (submission.isAccepted !== true || !submission.transactionId) {
         if (submission.isAccepted === null) {
-          await d.store.savePaymentWorkflow({
+          await d.store.markPaymentSubmitted({
             preparedPaymentId: id,
             state: "SUBMITTED",
             transactionId: submission.transactionId ?? workflow?.transactionId ?? "",
@@ -885,8 +884,7 @@ export function createApp(d: AppDependencies) {
             transactionId: submission.transactionId,
           });
         }
-        await d.store.deletePaymentWorkflow(id);
-        await d.store.deletePreparedPayment(id);
+        await d.store.deletePaymentAttempt(id);
         metrics.paymentFinalizeAttempt("rejected");
         return res.status(422).json({
           state: "REJECTED",
@@ -899,7 +897,7 @@ export function createApp(d: AppDependencies) {
         buyer: prepared.buyer,
         transactionId: submission.transactionId,
       };
-      await d.store.savePaymentWorkflow({
+      await d.store.markPaymentSubmitted({
         preparedPaymentId: id,
         state: "CONFIRMED",
         transactionId: submission.transactionId,
@@ -907,11 +905,11 @@ export function createApp(d: AppDependencies) {
       });
       const outcome = await d.store.finalizePurchase(id, purchase);
       if (outcome === "DUPLICATE") {
-        await d.store.deletePaymentWorkflow(id);
+        await d.store.deletePaymentAttempt(id);
         metrics.paymentFinalizeAttempt("purchase_exists");
         return apiError(res, 409, "PURCHASE_EXISTS");
       }
-      await d.store.deletePaymentWorkflow(id);
+      await d.store.deletePaymentAttempt(id);
       metrics.paymentFinalizeAttempt("confirmed");
       res.status(201).json({
         state: "CONFIRMED",
@@ -962,8 +960,8 @@ export function createApp(d: AppDependencies) {
         kind: "offer",
         priceSompi: priceSompi.toString(),
       });
-      await d.store.prunePreparedMemberships(now());
-      await d.store.savePreparedMembership({
+      await d.store.pruneMembershipAttempts(now());
+      await d.store.saveMembershipAttempt({
         id,
         ...value,
         creator,
@@ -984,7 +982,7 @@ export function createApp(d: AppDependencies) {
     asyncHandler(async (req, res) => {
       if (!d.membershipGateway) throw new HttpError(503, "MEMBERSHIP_UNAVAILABLE");
       const id = param(req, "id"),
-        value = await d.store.getPreparedMembership(id, now());
+        value = await d.store.getMembershipAttempt(id, now());
       if (
         !value ||
         value.kind !== "offer" ||
@@ -1010,15 +1008,14 @@ export function createApp(d: AppDependencies) {
       }
       if (submission.isAccepted !== true || !submission.transactionId) {
         if (submission.isAccepted === null && submission.transactionId) {
-          await d.store.saveMembershipWorkflow({
+          await d.store.markMembershipSubmitted({
             preparedMembershipId: id,
             state: "SUBMITTED",
             transactionId: submission.transactionId,
             rejection: null,
           });
         } else {
-          await d.store.deleteMembershipWorkflow(id);
-          await d.store.deletePreparedMembership(id);
+          await d.store.deleteMembershipAttempt(id);
         }
         metrics.membershipFinalizeAttempt(
           "offer",
@@ -1037,19 +1034,19 @@ export function createApp(d: AppDependencies) {
         contract: value.contract ?? currentMembershipContract(),
       };
       const outcome = await d.store.finalizeOffer(id, mapping);
-      await d.store.saveMembershipWorkflow({
+      await d.store.markMembershipSubmitted({
         preparedMembershipId: id,
         state: "CONFIRMED",
         transactionId: submission.transactionId,
         rejection: null,
       });
       if (outcome === "DUPLICATE") {
-        await d.store.deleteMembershipWorkflow(id);
+        await d.store.deleteMembershipAttempt(id);
         return apiError(res, 409, "MEMBERSHIP_OFFER_EXISTS", COPY.membershipOfferExists, {
           retry: RETRY_AFTER_REFRESH,
         });
       }
-      await d.store.deleteMembershipWorkflow(id);
+      await d.store.deleteMembershipAttempt(id);
       metrics.membershipFinalizeAttempt("offer", "confirmed");
       res.status(201).json({
         state: "CONFIRMED",
@@ -1084,8 +1081,8 @@ export function createApp(d: AppDependencies) {
         throw error;
       }
       const id = randomUUID();
-      await d.store.prunePreparedMemberships(now());
-      await d.store.savePreparedMembership({
+      await d.store.pruneMembershipAttempts(now());
+      await d.store.saveMembershipAttempt({
         id,
         ...value,
         creator,
@@ -1104,7 +1101,7 @@ export function createApp(d: AppDependencies) {
       if (!d.membershipGateway) throw new HttpError(503, "MEMBERSHIP_UNAVAILABLE");
       if (!d.store.finalizeCancellation) throw new HttpError(503, "MEMBERSHIP_UNAVAILABLE");
       const id = param(req, "id");
-      const value = await d.store.getPreparedMembership(id, now());
+      const value = await d.store.getMembershipAttempt(id, now());
       if (!value || value.kind !== "cancel" || value.creator !== req.walletSession!.address)
         return apiError(res, 404, "MEMBERSHIP_CANCELLATION_NOT_FOUND", undefined, {
           retry: RETRY_AFTER_REFRESH,
@@ -1120,15 +1117,14 @@ export function createApp(d: AppDependencies) {
       }
       if (submission.isAccepted !== true || !submission.transactionId) {
         if (submission.isAccepted === null && submission.transactionId) {
-          await d.store.saveMembershipWorkflow({
+          await d.store.markMembershipSubmitted({
             preparedMembershipId: id,
             state: "SUBMITTED",
             transactionId: submission.transactionId,
             rejection: null,
           });
         } else {
-          await d.store.deleteMembershipWorkflow(id);
-          await d.store.deletePreparedMembership(id);
+          await d.store.deleteMembershipAttempt(id);
         }
         return res.status(submission.isAccepted === null ? 202 : 422).json({
           state: submission.isAccepted === null ? "PENDING" : "REJECTED",
@@ -1140,7 +1136,7 @@ export function createApp(d: AppDependencies) {
         creator: value.creator,
         covenantId: value.covenantId,
       });
-      await d.store.deleteMembershipWorkflow(id);
+      await d.store.deleteMembershipAttempt(id);
       if (outcome === "DUPLICATE")
         return apiError(res, 409, "MEMBERSHIP_CANCELLATION_STALE", COPY.membershipCancellationStale, {
           retry: RETRY_AFTER_REFRESH,
@@ -1189,8 +1185,8 @@ export function createApp(d: AppDependencies) {
         throw error;
       }
       const id = randomUUID();
-      await d.store.prunePreparedMemberships(now());
-      await d.store.savePreparedMembership({
+      await d.store.pruneMembershipAttempts(now());
+      await d.store.saveMembershipAttempt({
         id,
         ...value,
         creator,
@@ -1246,8 +1242,8 @@ export function createApp(d: AppDependencies) {
         kind: "purchase",
         priceSompi: value.priceSompi,
       });
-      await d.store.prunePreparedMemberships(now());
-      await d.store.savePreparedMembership({
+      await d.store.pruneMembershipAttempts(now());
+      await d.store.saveMembershipAttempt({
         id,
         ...value,
         creator,
@@ -1268,7 +1264,7 @@ export function createApp(d: AppDependencies) {
     asyncHandler(async (req, res) => {
       if (!d.membershipGateway) throw new HttpError(503, "MEMBERSHIP_UNAVAILABLE");
       const id = param(req, "id"),
-        value = await d.store.getPreparedMembership(id, now());
+        value = await d.store.getMembershipAttempt(id, now());
       if (
         !value ||
         value.kind !== "update" ||
@@ -1288,15 +1284,14 @@ export function createApp(d: AppDependencies) {
       }
       if (submission.isAccepted !== true || !submission.transactionId) {
         if (submission.isAccepted === null && submission.transactionId) {
-          await d.store.saveMembershipWorkflow({
+          await d.store.markMembershipSubmitted({
             preparedMembershipId: id,
             state: "SUBMITTED",
             transactionId: submission.transactionId,
             rejection: null,
           });
         } else {
-          await d.store.deleteMembershipWorkflow(id);
-          await d.store.deletePreparedMembership(id);
+          await d.store.deleteMembershipAttempt(id);
         }
         return res.status(submission.isAccepted === null ? 202 : 422).json({
           state: submission.isAccepted === null ? "PENDING" : "REJECTED",
@@ -1309,7 +1304,7 @@ export function createApp(d: AppDependencies) {
         covenantId: value.covenantId,
         priceSompi: value.priceSompi!,
       });
-      await d.store.deleteMembershipWorkflow(id);
+      await d.store.deleteMembershipAttempt(id);
       if (outcome === "DUPLICATE")
         return apiError(res, 409, "MEMBERSHIP_PRICE_UPDATE_STALE", COPY.membershipStale, {
           retry: RETRY_AFTER_REFRESH,
@@ -1330,7 +1325,7 @@ export function createApp(d: AppDependencies) {
       if (!d.membershipGateway || !d.membershipVerifier)
         throw new HttpError(503, "MEMBERSHIP_UNAVAILABLE");
       const id = param(req, "id"),
-        value = await d.store.getPreparedMembership(id, now());
+        value = await d.store.getMembershipAttempt(id, now());
       if (
         !value ||
         value.kind !== "purchase" ||
@@ -1344,7 +1339,7 @@ export function createApp(d: AppDependencies) {
       // Like the post payment: a finalize that arrives while the purchase is
       // already in flight re-checks it instead of relaying again. Only the first
       // finalize — with no stored workflow — needs the signed transaction.
-      const workflow = await d.store.getMembershipWorkflow(id);
+      const workflow = await d.store.getMembershipSubmission(id);
       let transactionId: string;
       if (workflow) {
         transactionId = workflow.transactionId;
@@ -1369,8 +1364,7 @@ export function createApp(d: AppDependencies) {
         }
         // The relay refused the transaction outright: nothing was charged.
         if (!submission.transactionId) {
-          await d.store.deleteMembershipWorkflow(id);
-          await d.store.deletePreparedMembership(id);
+          await d.store.deleteMembershipAttempt(id);
           metrics.membershipFinalizeAttempt("purchase", "rejected");
           return res.status(422).json({
             state: "REJECTED",
@@ -1384,7 +1378,7 @@ export function createApp(d: AppDependencies) {
       // until then it is pending, never a rejection.
       const settlement = await membershipSettlement!.settle(value, transactionId);
       if (settlement.state === "PENDING") {
-        await d.store.saveMembershipWorkflow({
+        await d.store.markMembershipSubmitted({
           preparedMembershipId: id,
           state: "SUBMITTED",
           transactionId,
@@ -1394,8 +1388,7 @@ export function createApp(d: AppDependencies) {
         return res.status(202).json({ state: "PENDING", transactionId });
       }
       if (settlement.state === "REJECTED") {
-        await d.store.deleteMembershipWorkflow(id);
-        await d.store.deletePreparedMembership(id);
+        await d.store.deleteMembershipAttempt(id);
         metrics.membershipFinalizeAttempt("purchase", "rejected");
         return res.status(422).json({
           state: "REJECTED",
@@ -1409,13 +1402,13 @@ export function createApp(d: AppDependencies) {
         creator: value.creator,
         covenantId: value.covenantId,
       });
-      await d.store.saveMembershipWorkflow({
+      await d.store.markMembershipSubmitted({
         preparedMembershipId: id,
         state: "CONFIRMED",
         transactionId,
         rejection: null,
       });
-      await d.store.deleteMembershipWorkflow(id);
+      await d.store.deleteMembershipAttempt(id);
       if (outcome === "DUPLICATE")
         return apiError(res, 409, "MEMBERSHIP_PURCHASE_EXISTS", COPY.membershipPurchaseExists, {
           retry: RETRY_AFTER_REFRESH,
