@@ -2458,6 +2458,7 @@ describe("Server-rendered public pages", () => {
     expect(response.text).toContain("<title>Creators - Kaskama</title>");
     expect(response.text).toContain(`href="${origin}/creators"`);
     expect(response.text).toContain("Browse creators selling access");
+    expect(response.text).toContain('<div id="root"><noscript>');
     expect(response.text).toContain(
       'The same creators are available as data at <a href="/api/creators/public">',
     );
@@ -2518,7 +2519,8 @@ describe("Server-rendered public pages", () => {
 
     expect(response.status).toBe(404);
     expect(response.text).toContain("<title>Page not found - Kaskama</title>");
-    expect(response.text).toContain('id="root"><div class="message">');
+    expect(response.text).toContain('id="root"><noscript><div class="message">');
+    expect(response.text).toContain("</div></noscript></div>");
     expect(response.text).not.toContain('class="home-page"');
     expect(response.text).not.toContain('rel="canonical"');
     expect(response.text).toContain('name="robots" content="noindex"');

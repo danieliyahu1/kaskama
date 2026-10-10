@@ -191,9 +191,12 @@ export function renderDocument(
     match.description,
   );
   if (match.body !== undefined) {
+    // Wrap in <noscript>: it exists for clients that do not run the app, and a
+    // browser that does must never paint it before React mounts.
     html = html.replace(
       /(<div id="root">)[\s\S]*(<\/div>\s*<\/body>)/,
-      (_match, open: string, close: string) => `${open}${match.body}${close}`,
+      (_match, open: string, close: string) =>
+        `${open}<noscript>${match.body}</noscript>${close}`,
     );
   }
   return html;

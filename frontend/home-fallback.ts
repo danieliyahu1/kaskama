@@ -15,6 +15,8 @@ export interface HomeCopy {
 /**
  * Static homepage shell baked into index.html. Crawlers that do not run
  * JavaScript still see the 1% fee, KAS payments, and 30-day subscriptions.
+ * It is wrapped in <noscript> so a browser that runs the app never paints a
+ * second, poorer copy of the homepage before React mounts.
  */
 export function homeFallbackHtml(copy: HomeCopy): string {
   const points = copy.moneyPoints
@@ -26,6 +28,7 @@ export function homeFallbackHtml(copy: HomeCopy): string {
     )
     .join("");
   return (
+    "<noscript>" +
     '<div class="home-page">' +
     '<section class="home-section home-intro">' +
     `<h1>${escapeHtml(copy.headline)}</h1>` +
@@ -50,7 +53,8 @@ export function homeFallbackHtml(copy: HomeCopy): string {
     `<h2 class="home-section-title">${escapeHtml(copy.fanHeading)}</h2>` +
     `<p class="home-lede">${escapeHtml(copy.fanLede)}</p>` +
     "</section>" +
-    "</div>"
+    "</div>" +
+    "</noscript>"
   );
 }
 

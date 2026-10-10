@@ -42,6 +42,13 @@ describe("homeFallbackHtml", () => {
     expect(html).toContain(homeCopy.fanHeading);
   });
 
+  it("hides the shell from a browser that runs the app", () => {
+    const html = homeFallbackHtml(homeCopy);
+
+    expect(html.startsWith("<noscript>")).toBe(true);
+    expect(html.endsWith("</noscript>")).toBe(true);
+  });
+
   it("escapes copy so the shell stays valid HTML", () => {
     const html = homeFallbackHtml({ ...homeCopy, headline: "<script>" });
 
