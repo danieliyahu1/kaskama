@@ -5,6 +5,7 @@ import type {
   Repositories,
 } from "./ports.js";
 import { MembershipSettlement } from "./membership-settlement.js";
+import { currentMembershipContract } from "../membership-contract.js";
 import type {
   MembershipAttemptStatus,
   PaymentAttemptStatus,
@@ -266,6 +267,7 @@ export class WorkflowReconciler {
           creator: prepared.creator,
           covenantId: prepared.covenantId,
           priceSompi: prepared.priceSompi ?? "0",
+          contract: prepared.contract ?? currentMembershipContract(),
         });
         return;
       case "update":
