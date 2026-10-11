@@ -135,6 +135,9 @@ const membershipVerifier = new KaspaMembershipVerifier(
   metrics,
   environment.KASPA_NETWORK,
   store,
+  // The same store, read through the covenant-contract port: verification
+  // resolves each covenant's stored contract instead of assuming the current one.
+  store,
 );
 const app = createApp({
   store,

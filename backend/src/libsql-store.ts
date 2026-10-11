@@ -576,6 +576,13 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
     });
     return r.rows[0] ? creatorCovenantFromRow(r.rows[0]) : null;
   }
+  async getCovenant(covenantId: string) {
+    const r = await this.execute({
+      sql: `SELECT * FROM creator_covenants WHERE covenant_id=?`,
+      args: [covenantId],
+    });
+    return r.rows[0] ? creatorCovenantFromRow(r.rows[0]) : null;
+  }
   async listCreatorCovenants(creator: string) {
     const r = await this.execute({
       sql: `SELECT * FROM creator_covenants WHERE creator=?`,

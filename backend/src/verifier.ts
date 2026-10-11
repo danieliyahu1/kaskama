@@ -1,6 +1,6 @@
 import type { MembershipCheck } from "./domain/models.js";
 import type { MembershipContract } from "./domain/models.js";
-import type { MembershipVerifier, TransactionEvidenceStore } from "./application/ports.js";
+import type { MembershipVerifier, CovenantLookup, TransactionEvidenceStore } from "./application/ports.js";
 import { XOnlyPublicKey } from "@kluster/kaspa-wasm";
 import { DEFAULT_NETWORK, networkDefinition, type NetworkId } from "@kaskama/shared";
 import { logger as defaultLogger, type Logger } from "./observability.js";
@@ -59,6 +59,7 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
     private readonly metrics: Metrics = defaultMetrics,
     private readonly network: NetworkId = DEFAULT_NETWORK,
     private readonly evidence?: TransactionEvidenceStore,
+    private readonly covenants?: CovenantLookup,
   ) {}
 
   async verifyUtxo(
@@ -67,7 +68,6 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
     expectedOwner?: string,
     expectedCovenantId?: string,
     expectedCreator?: string,
-    contract: MembershipContract = currentMembershipContract(),
   ): Promise<MembershipCheck> {
     const [transaction, currentDaa] = await Promise.all([
       this.transaction(transactionId),
@@ -81,7 +81,6 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
       expectedOwner,
       expectedCovenantId,
       expectedCreator,
-      contract,
     );
   }
 
@@ -93,10 +92,10 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
     expectedOwner?: string,
     expectedCovenantId?: string,
     expectedCreator?: string,
-    contract: MembershipContract = currentMembershipContract(),
   ): Promise<MembershipCheck> {
     const output = transaction.outputs?.[outputIndex];
     const covenantId = outputCovenantId(output);
+    const contract = await this.contractFor(covenantId);
     const payload = parseMembershipPayloadDetails(transaction.payload);
     const state = payload ? decodeMembershipRedeemScript(payload.memberRedeemScript, contract) : null;
     if (
@@ -126,6 +125,20 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
 
     const status = state.expiresAtDaa > currentDaa ? "VALID" : "EXPIRED";
     return membership(transactionId, outputIndex, covenantId, owner, creator, platformAddress, payload.metadata.createdAtDaa, state.expiresAtDaa, currentDaa, status, this.now);
+  }
+
+  /**
+   * The contract a covenant was minted with, read from the covenant recorded
+   * when the offer was opened. Verification must use the code the membership
+   * was actually locked with, not whatever this server compiles now; resolving
+   * it here keeps that decision inside the verifier, where no caller can forget
+   * it. Falls back to the current contract only when the covenant is unknown -
+   * a membership recorded before its contract was stored, or a raw probe of an
+   * output that belongs to no covenant we know.
+   */
+  private async contractFor(covenantId: string | null): Promise<MembershipContract> {
+    const covenant = covenantId ? await this.covenants?.getCovenant(covenantId) : null;
+    return covenant?.contract ?? currentMembershipContract();
   }
 
   private async isUnspent(address: string, transactionId: string, outputIndex: number): Promise<boolean> {

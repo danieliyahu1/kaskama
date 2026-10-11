@@ -38,7 +38,6 @@ export class MembershipSettlement {
         prepared.buyer,
         prepared.covenantId,
         prepared.creator,
-        prepared.contract,
       );
       return {
         state:

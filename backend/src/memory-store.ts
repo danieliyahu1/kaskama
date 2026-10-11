@@ -388,6 +388,10 @@ export class MemoryStore implements Repositories {
     const active = this.activeFor(creator);
     return active ? this.present(active) : null;
   }
+  async getCovenant(covenantId: string) {
+    const value = this.covenants.get(covenantId);
+    return value ? this.present(value) : null;
+  }
   async listCreatorCovenants(creator: string) {
     return [...this.covenants.values()]
       .filter((v) => v.creator === creator)

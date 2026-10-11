@@ -466,6 +466,19 @@ describe.each([
     expect((await store.getCreatorCovenant(creator))?.contract).toEqual(contract);
   });
 
+  it("looks up a covenant by its on-chain id", async () => {
+    const contract = { prefix: "6b", suffix: "6a" };
+    await store.saveCreatorCovenant({
+      creator,
+      covenantId: "covenant-by-id",
+      priceSompi: "1000000000",
+      contract,
+    });
+
+    expect((await store.getCovenant("covenant-by-id"))?.contract).toEqual(contract);
+    expect(await store.getCovenant("missing")).toBeNull();
+  });
+
   it("round-trips a prepared membership's contract through persistence", async () => {
     const contract = { prefix: "6b", suffix: "6a" };
     await store.saveMembershipAttempt({

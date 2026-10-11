@@ -54,6 +54,7 @@ function harness(options: {
             contract: storedContract,
           }
         : null,
+    getCovenant: async () => null,
     saveCreatorCovenant: async () => "CREATED",
     finalizeOffer: async () => "CREATED",
     finalizePriceUpdate: async () => "CREATED",
@@ -78,13 +79,13 @@ describe("MembershipAccess", () => {
     });
 
     await expect(access.isActive(buyer, creator)).resolves.toBe(true);
+    // The verifier owns the contract; the use case states only what it knows.
     expect(verifyUtxo).toHaveBeenCalledWith(
       "tx-1",
       1,
       buyer,
       "covenant-1",
       creator,
-      storedContract,
     );
   });
 

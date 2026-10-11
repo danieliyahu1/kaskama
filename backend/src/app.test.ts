@@ -735,7 +735,6 @@ describe("subscription recognition", () => {
       viewer,
       "covenant-1",
       creator,
-      undefined,
     );
 
     const postResponse = await request(app)
@@ -2357,6 +2356,112 @@ describe("network configuration", () => {
       walletNetwork: "kaspa_mainnet",
       addressPrefix: "kaspa",
     });
+  });
+});
+
+describe("membership verification endpoints", () => {
+  const creator = `kaspatest:${"c".repeat(60)}`;
+  const buyer = `kaspatest:${"b".repeat(60)}`;
+
+  function membershipCheck(status: MembershipCheck["status"]): MembershipCheck {
+    return {
+      transactionId: "tx-1",
+      outputIndex: 1,
+      covenantId: "covenant-1",
+      kind: status === "NOT_MEMBERSHIP" ? "none" : "token",
+      tokenType: status === "NOT_MEMBERSHIP" ? null : "membership",
+      owner: buyer,
+      contentCreator: creator,
+      platformAddress: creator,
+      createdAtDaa: "1",
+      expiresAtDaa: "2",
+      createdAt: null,
+      validUntil: null,
+      status,
+    };
+  }
+
+  async function seeded() {
+    const store = new MemoryStore();
+    await store.saveCreatorCovenant({
+      creator,
+      covenantId: "covenant-1",
+      priceSompi: "1000000000",
+    });
+    await store.createMembershipPurchase({
+      transactionId: "tx-1",
+      buyer,
+      creator,
+      covenantId: "covenant-1",
+    });
+    return store;
+  }
+
+  it("verifies an address against the covenant each receipt records", async () => {
+    const store = await seeded();
+    const verifyUtxo = vi.fn(async () => membershipCheck("VALID"));
+    const { app } = testApp(
+      store,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { verifyUtxo },
+    );
+
+    const response = await request(app).get(
+      `/api/verify/membership/address/${buyer}`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ address: buyer, valid: true });
+    expect(verifyUtxo).toHaveBeenCalledWith(
+      "tx-1",
+      1,
+      buyer,
+      "covenant-1",
+      creator,
+    );
+  });
+
+  it("reports an address as unverified when its membership does not hold", async () => {
+    const store = await seeded();
+    const { app } = testApp(
+      store,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { verifyUtxo: async () => membershipCheck("NOT_MEMBERSHIP") },
+    );
+
+    const response = await request(app).get(
+      `/api/verify/membership/address/${buyer}`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.valid).toBe(false);
+  });
+
+  it("verifies a raw utxo without a covenant hint", async () => {
+    const verifyUtxo = vi.fn(async () => membershipCheck("VALID"));
+    const { app } = testApp(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { verifyUtxo },
+    );
+    const transactionId = "11".repeat(32);
+
+    const response = await request(app).get(
+      `/api/verify/membership/utxo/${transactionId}/1`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("VALID");
+    expect(verifyUtxo).toHaveBeenCalledWith(transactionId, 1, undefined);
   });
 });
 

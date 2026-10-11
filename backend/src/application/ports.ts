@@ -120,7 +120,16 @@ export interface PurchaseRepository {
   ): Promise<DuplicateOutcome>;
 }
 
-export interface CovenantRepository {
+/**
+ * Resolves a covenant by its on-chain id, so verification can use the contract
+ * the covenant was actually minted with instead of whatever contract the
+ * running server happens to compile now.
+ */
+export interface CovenantLookup {
+  getCovenant(covenantId: string): Promise<CreatorCovenant | null>;
+}
+
+export interface CovenantRepository extends CovenantLookup {
   getCreatorCovenant(creator: string): Promise<CreatorCovenant | null>;
   listCreatorCovenants?(creator: string): Promise<CreatorCovenant[]>;
   /** Active offers for many creators at once, for directory listings. */
@@ -320,6 +329,12 @@ export interface WalletVerifier {
   ): Promise<boolean>;
 }
 
+/**
+ * Decides whether a transaction output is a live membership. It owns the whole
+ * rule - the contract the covenant was minted with, the unspent output, the
+ * expiry - so callers state what they know (the owner and covenant they expect)
+ * and read a verdict. They never pass a contract, so none can pass the wrong one.
+ */
 export interface MembershipVerifier {
   verifyUtxo(
     transactionId: string,
@@ -327,7 +342,6 @@ export interface MembershipVerifier {
     expectedOwner?: string,
     expectedCovenantId?: string,
     expectedCreator?: string,
-    contract?: MembershipContract,
   ): Promise<MembershipCheck>;
 }
 

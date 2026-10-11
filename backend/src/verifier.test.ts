@@ -7,6 +7,8 @@ import {
   membershipScript,
   type MembershipState,
 } from "./membership-contract.js";
+import type { MembershipContract } from "./domain/models.js";
+import { DEFAULT_NETWORK } from "@kaskama/shared";
 import { KaspaMembershipVerifier } from "./verifier.js";
 
 const creator =
@@ -31,6 +33,7 @@ function memberState(overrides: Partial<MembershipState> = {}): MembershipState 
 
 type StubOptions = {
   state: MembershipState;
+  contract?: MembershipContract;
   payload?: string;
   outputs?: unknown[];
   utxoAmount?: string | null;
@@ -39,8 +42,8 @@ type StubOptions = {
 };
 
 function stubChain(options: StubOptions) {
-  const { state } = options;
-  const redeemScript = membershipRedeemScript(state);
+  const { state, contract } = options;
+  const redeemScript = membershipRedeemScript(state, contract);
   const payload =
     options.payload ??
     membershipPayload(redeemScript, {
@@ -52,7 +55,7 @@ function stubChain(options: StubOptions) {
     {},
     {
       amount: MEMBERSHIP_OUTPUT_VALUE.toString(),
-      script_public_key: membershipScript(state).slice(4),
+      script_public_key: membershipScript(state, contract).slice(4),
       covenant: { covenantId, authorizingInput: 0 },
     },
   ];
@@ -63,7 +66,9 @@ function stubChain(options: StubOptions) {
       if (url.includes("/info/blockdag"))
         return Response.json({ virtualDaaScore: options.daa ?? "500000" });
       if (
-        url.includes(`/addresses/${encodeURIComponent(membershipAddress(state))}/utxos`)
+        url.includes(
+          `/addresses/${encodeURIComponent(membershipAddress(state, DEFAULT_NETWORK, contract))}/utxos`,
+        )
       )
         return Response.json(
           options.utxo === false
@@ -161,6 +166,43 @@ describe("KaspaMembershipVerifier", () => {
   it("rejects a covenant that is no longer in the UTXO set", async () => {
     const state = memberState();
     stubChain({ state, utxo: false });
+
+    const result = await new KaspaMembershipVerifier(
+      "https://node.test",
+      () => 0,
+    ).verifyUtxo(transactionId, 1, buyer, covenantId, creator);
+
+    expect(result.status).toBe("NOT_MEMBERSHIP");
+  });
+
+  it("verifies against the contract its covenant was minted with, not the current one", async () => {
+    const state = memberState();
+    const storedContract = { prefix: "6b", suffix: "6a" };
+    stubChain({ state, contract: storedContract });
+
+    const result = await new KaspaMembershipVerifier(
+      "https://node.test",
+      () => 0,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        getCovenant: async () => ({
+          creator,
+          covenantId,
+          priceSompi: "1000000000",
+          contract: storedContract,
+        }),
+      },
+    ).verifyUtxo(transactionId, 1, buyer, covenantId, creator);
+
+    expect(result.status).toBe("VALID");
+  });
+
+  it("does not accept a membership it cannot decode without the covenant's contract", async () => {
+    const state = memberState();
+    stubChain({ state, contract: { prefix: "6b", suffix: "6a" } });
 
     const result = await new KaspaMembershipVerifier(
       "https://node.test",
