@@ -15,4 +15,4 @@ app changes.
 
 Referrals cut across these files rather than living in one: a purchase made through a `?ref=<wallet>` link credits that wallet with half the platform fee, paid in the same transaction, and the creator's payout is unchanged. It is documented in `docs/agent-guide.md` and in the `referrer` field of `POST /api/posts/{id}/payments/prepare` in `backend/src/adapters/http/openapi.ts`.
 
-Repo-only verifier docs: `docs/ppv-media-verification.md`, `docs/membership-verifier.md`, `docs/testnet-transactions.md`, `docs/security-audit.md`.
+Repo-only verifier docs: `docs/ppv-media-verification.md`, `docs/membership-verifier.md`, `docs/security-audit.md`.
