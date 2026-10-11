@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import {
-  addressFromScriptPublicKey,
   covenantId,
   Encoding,
   payToScriptHashScript,
@@ -44,6 +43,7 @@ import {
 import type { MembershipContract } from "./domain/models.js";
 import { logger as defaultLogger, safeError, type Logger } from "./observability.js";
 import { defaultMetrics, type Metrics } from "./metrics.js";
+import { awaitAcceptance, type Sleep } from "./acceptance.js";
 
 const ZERO_SUBNETWORK = "0".repeat(40);
 const WALLET_COMPUTE_BUDGET = 50;
@@ -58,7 +58,6 @@ const CONFIRM_BASE_DELAY_MS = 1_000;
 const CONFIRM_MAX_DELAY_MS = 4_000;
 
 type MembershipTransactionRelay = (signedTransaction: string) => Promise<string>;
-type Sleep = (milliseconds: number) => Promise<void>;
 type MembershipRpcClient = Pick<
   RpcClient,
   "connect" | "disconnect" | "submitTransaction"
@@ -593,24 +592,14 @@ export class KaspaMembershipGateway implements MembershipGateway {
   }
 
   /**
-   * Whether the prepared transaction's covenant output has taken effect on the
-   * ledger: the fact a reader pays into. Callers that must report "confirmed"
-   * ask this after submit; a purchase settles by its member output instead.
-   *
-   * Confirmation reads the transaction's effect on the ledger rather than
-   * asking the node for the transaction id: a node's transaction index is an
-   * implementation detail of the chain the payment rules must not depend on
-   * (the public REST node does not serve v1 transactions at all, yet the ledger
-   * still records their effect).
+   * Whether the ledger has accepted the transaction. A transaction is atomic,
+   * so acceptance is the whole of "confirmed": the covenant output exists and a
+   * reader can pay into it. The node answers acceptance from the transaction id
+   * alone, so this holds even though the public REST node does not serve v1
+   * transactions.
    */
-  async confirm(
-    preparedValue: PreparedMembershipTransaction,
-    transactionId: string,
-  ): Promise<boolean> {
-    const accepted = await this.confirmCovenantOutput(
-      preparedValue.transaction,
-      transactionId,
-    );
+  async confirm(transactionId: string): Promise<boolean> {
+    const accepted = await this.confirmTransaction(transactionId);
     if (!accepted) {
       this.logger.warn("membership_transaction_pending", {
         txIdPrefix: transactionId.slice(0, 12),
@@ -632,60 +621,17 @@ export class KaspaMembershipGateway implements MembershipGateway {
     };
   }
 
-  /**
-   * Whether the transaction's covenant output has taken effect on the ledger:
-   * that output is now a spendable UTXO at the address named by its script.
-   * Confirmation waits on the covenant output specifically, never on a plain
-   * wallet output (change), so "confirmed" means the same fact a reader pays
-   * into - the covenant is on chain. This proves acceptance from a fact the
-   * chain itself reports, so it holds on any node regardless of that node's
-   * transaction index.
-   */
-  private async confirmCovenantOutput(
-    transactionJson: string,
-    transactionId: string,
-  ): Promise<boolean> {
-    const targets: { index: number; address: string }[] = [];
-    const outputs =
-      (
-        JSON.parse(transactionJson) as {
-          outputs?: { scriptPublicKey?: string; covenant?: unknown }[];
-        }
-      ).outputs ?? [];
-    outputs.forEach((output, index) => {
-      // A wallet output (change) is indexed before the covenant address is, so
-      // waiting on it would report "confirmed" for an offer a reader cannot yet
-      // find. Only the covenant output is the fact being confirmed.
-      if (!output.covenant) return;
-      try {
-        const address = addressFromScriptPublicKey(
-          output.scriptPublicKey ?? "",
-          this.network,
-        );
-        if (address) targets.push({ index, address: address.toString() });
-      } catch {
-        // An output whose script has no address cannot be observed by effect.
-      }
-    });
-    let delay = CONFIRM_BASE_DELAY_MS;
-    for (let attempt = 0; attempt <= CONFIRM_MAX_ATTEMPTS; attempt++) {
-      for (const target of targets) {
-        const utxos = await this.utxos(target.address).catch(() => []);
-        if (
-          utxos.some(
-            (utxo) =>
-              utxo.outpoint.transactionId === transactionId &&
-              utxo.outpoint.index === target.index,
-          )
-        )
-          return true;
-      }
-      if (attempt < CONFIRM_MAX_ATTEMPTS) {
-        await this.sleep(delay);
-        delay = Math.min(delay * 2, CONFIRM_MAX_DELAY_MS);
-      }
-    }
-    return false;
+  private confirmTransaction(transactionId: string): Promise<boolean> {
+    return awaitAcceptance(
+      (operation, path, init) => this.request(operation, path, init),
+      transactionId,
+      this.sleep,
+      {
+        attempts: CONFIRM_MAX_ATTEMPTS,
+        baseDelayMs: CONFIRM_BASE_DELAY_MS,
+        maxDelayMs: CONFIRM_MAX_DELAY_MS,
+      },
+    );
   }
 
   private async transaction(

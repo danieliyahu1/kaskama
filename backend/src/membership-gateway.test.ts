@@ -324,6 +324,8 @@ describe("KaspaMembershipGateway", () => {
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
+        if (url.endsWith("/transactions/acceptance"))
+          return Response.json([{ transactionId, accepted: true }]);
         if (url.endsWith("/info/fee-estimate"))
           return Response.json({
             normalBuckets: [{ feerate: 1 }],
@@ -336,21 +338,6 @@ describe("KaspaMembershipGateway", () => {
               utxoEntry: {
                 amount: "100000000",
                 scriptPublicKey: { scriptPublicKey: addressScript(creator).slice(4) },
-                blockDaaScore: "100",
-                isCoinbase: false,
-              },
-            },
-          ]);
-        // The covenant output of the offer now exists on the ledger.
-        if (url.includes(encodeURIComponent(membershipAddress(minter))))
-          return Response.json([
-            {
-              outpoint: { transactionId, index: 0 },
-              utxoEntry: {
-                amount: MEMBERSHIP_OUTPUT_VALUE.toString(),
-                scriptPublicKey: {
-                  scriptPublicKey: membershipScript(minter).slice(4),
-                },
                 blockDaaScore: "100",
                 isCoinbase: false,
               },
@@ -376,7 +363,7 @@ describe("KaspaMembershipGateway", () => {
       transactionId,
       rejection: null,
     });
-    await expect(gateway.confirm(offer, transactionId)).resolves.toBe(true);
+    await expect(gateway.confirm(transactionId)).resolves.toBe(true);
     expect(relay).toHaveBeenCalledWith(signedJson);
     // The effect was already on the ledger, so no retry was needed.
     expect(sleep).not.toHaveBeenCalled();
@@ -476,91 +463,8 @@ describe("KaspaMembershipGateway", () => {
       transactionId,
       rejection: null,
     });
-    await expect(gateway.confirm(offer, transactionId)).resolves.toBe(false);
+    await expect(gateway.confirm(transactionId)).resolves.toBe(false);
     expect(relay).toHaveBeenCalledWith(signedJson);
-  });
-
-  it("does not confirm an offer from the wallet change output alone", async () => {
-    const transactionId = "44".repeat(32);
-    stubOfferSources();
-    const relay = vi.fn(async () => transactionId);
-    const gateway = new KaspaMembershipGateway(
-      platformFeeAddress,
-      "https://node.test",
-      relay,
-      vi.fn(async () => undefined),
-    );
-    const { offer, signedJson } = await signedOffer(gateway);
-
-    // Only the change output (index 1, the creator's own address) is visible;
-    // the covenant output is not. Confirmation must not fire off the change, or
-    // "confirmed" would outrun the offer a reader can actually find on chain.
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        const url = String(input);
-        if (url.includes(encodeURIComponent(creator)))
-          return Response.json([
-            {
-              outpoint: { transactionId, index: 1 },
-              utxoEntry: {
-                amount: "49999000",
-                scriptPublicKey: { scriptPublicKey: addressScript(creator).slice(4) },
-                blockDaaScore: "100",
-                isCoinbase: false,
-              },
-            },
-          ]);
-        return new Response("not found", { status: 404 });
-      }),
-    );
-
-    await expect(gateway.submit(offer, signedJson)).resolves.toEqual({
-      transactionId,
-      rejection: null,
-    });
-    await expect(gateway.confirm(offer, transactionId)).resolves.toBe(false);
-  });
-
-  it("confirms an offer once the covenant output is visible", async () => {
-    const transactionId = "44".repeat(32);
-    stubOfferSources();
-    const relay = vi.fn(async () => transactionId);
-    const gateway = new KaspaMembershipGateway(
-      platformFeeAddress,
-      "https://node.test",
-      relay,
-      vi.fn(async () => undefined),
-    );
-    const { offer, signedJson } = await signedOffer(gateway);
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        const url = String(input);
-        if (url.includes(encodeURIComponent(membershipAddress(minter))))
-          return Response.json([
-            {
-              outpoint: { transactionId, index: 0 },
-              utxoEntry: {
-                amount: MEMBERSHIP_OUTPUT_VALUE.toString(),
-                scriptPublicKey: {
-                  scriptPublicKey: membershipScript(minter).slice(4),
-                },
-                blockDaaScore: "100",
-                isCoinbase: false,
-              },
-            },
-          ]);
-        return new Response("not found", { status: 404 });
-      }),
-    );
-
-    await expect(gateway.submit(offer, signedJson)).resolves.toEqual({
-      transactionId,
-      rejection: null,
-    });
-    await expect(gateway.confirm(offer, transactionId)).resolves.toBe(true);
   });
 
   it("relays signed covenant transactions over wRPC", async () => {

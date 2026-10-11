@@ -269,14 +269,11 @@ export interface MembershipGateway {
     signedTransaction: string,
   ): Promise<MembershipSubmission>;
   /**
-   * Whether the prepared transaction's covenant output has taken effect on the
-   * ledger — the fact a reader pays into. Callers that must report "confirmed"
-   * ask this after submit; a purchase settles by its member output instead.
+   * Whether the ledger accepted the transaction. Callers that must report
+   * "confirmed" ask this after submit; a purchase settles by its member output
+   * instead.
    */
-  confirm(
-    prepared: PreparedMembershipTransaction,
-    transactionId: string,
-  ): Promise<boolean>;
+  confirm(transactionId: string): Promise<boolean>;
   /**
    * Whether the creator's offer can currently be served: its covenant output
    * is on chain and the transaction that created it is readable. A stored

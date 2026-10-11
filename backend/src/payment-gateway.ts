@@ -7,6 +7,7 @@ import { logger as defaultLogger, type Logger } from "./observability.js";
 import { defaultMetrics, type Metrics } from "./metrics.js";
 import { paymentSplit, type PaymentSplit } from "./payment-fee.js";
 import { parsePpvPayload, ppvPayload } from "./ppv-payload.js";
+import { awaitAcceptance, type Sleep } from "./acceptance.js";
 import { submitMembershipTransactionOverWrpc } from "./membership-gateway.js";
 
 const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
@@ -15,7 +16,6 @@ const VERIFY_MAX_ATTEMPTS = 5;
 const VERIFY_BASE_DELAY_MS = 1_000;
 const VERIFY_MAX_DELAY_MS = 4_000;
 const CHANGE_DUST_SOMPI = 2_200_000n;
-type Sleep = (milliseconds: number) => Promise<void>;
 type PaymentTransactionRelay = (signedTransaction: string) => Promise<string>;
 type Utxo = { outpoint: { transactionId: string; index: number }; utxoEntry: { amount: string; scriptPublicKey: { scriptPublicKey: string }; blockDaaScore: string; isCoinbase: boolean } };
 type ChainTransaction = { is_accepted?: boolean; payload?: string; inputs?: { previous_outpoint_resolved?: { script_public_key_address?: string } }[]; outputs?: { amount?: string | number; script_public_key_address?: string }[] };
@@ -139,10 +139,10 @@ export class KaspaPaymentGateway implements PaymentGateway {
         transaction: signedTransaction,
         acceptedAt: Date.now(),
       });
-    // Confirm by the transaction's effect on the ledger, not by asking the node
-    // for the transaction id: a node's transaction index is an implementation
-    // detail the payment rules must not depend on.
-    const accepted = await this.confirmByEffect(prepared.transaction, transactionId);
+    // Confirm by whether the ledger accepted the transaction, not by asking the
+    // node for the transaction id: a node's transaction index is an
+    // implementation detail the payment rules must not depend on.
+    const accepted = await this.confirmTransaction(transactionId);
     return accepted
       ? { isAccepted: true, transactionId, rejection: null }
       : { isAccepted: null, transactionId, rejection: null };
@@ -231,39 +231,22 @@ export class KaspaPaymentGateway implements PaymentGateway {
   }
 
   /**
-   * Whether the transaction has taken effect on the ledger: at least one of its
-   * outputs is now a spendable UTXO at the address named by that output's
-   * script. This proves acceptance from a fact the chain itself reports, so it
-   * holds on any node regardless of that node's transaction index.
+   * Whether the ledger has accepted the transaction. A transaction is atomic,
+   * so acceptance is the whole of "confirmed": every output the buyer signed
+   * exists and everyone it pays is paid. Watching an output would only be a
+   * proxy, and could be satisfied while the transaction is still relayed.
    */
-  private async confirmByEffect(transactionJson: string, transactionId: string) {
-    const outputs = (
-      JSON.parse(transactionJson) as { outputs?: { scriptPublicKey?: string }[] }
-    ).outputs ?? [];
-    const targets: { index: number; address: string }[] = [];
-    outputs.forEach((output, index) => {
-      try {
-        const address = addressFromScriptPublicKey(output.scriptPublicKey ?? "", this.network);
-        if (address) targets.push({ index, address: address.toString() });
-      } catch {
-        // An output whose script has no address cannot be observed by effect.
-      }
-    });
-    let delay = VERIFY_BASE_DELAY_MS;
-    for (let attempt = 0; attempt <= VERIFY_MAX_ATTEMPTS; attempt++) {
-      for (const target of targets) {
-        const utxos = await this.request<Utxo[]>(
-          "utxos",
-          `/addresses/${encodeURIComponent(target.address)}/utxos`,
-        ).catch(() => [] as Utxo[]);
-        if (utxos.some((utxo) => utxo.outpoint.transactionId === transactionId && utxo.outpoint.index === target.index)) return true;
-      }
-      if (attempt < VERIFY_MAX_ATTEMPTS) {
-        await this.sleep(delay);
-        delay = Math.min(delay * 2, VERIFY_MAX_DELAY_MS);
-      }
-    }
-    return false;
+  private confirmTransaction(transactionId: string): Promise<boolean> {
+    return awaitAcceptance(
+      (operation, path, init) => this.request(operation, path, init),
+      transactionId,
+      this.sleep,
+      {
+        attempts: VERIFY_MAX_ATTEMPTS,
+        baseDelayMs: VERIFY_BASE_DELAY_MS,
+        maxDelayMs: VERIFY_MAX_DELAY_MS,
+      },
+    );
   }
 
   private async request<T>(operation: string, path: string, init?: RequestInit): Promise<T> {

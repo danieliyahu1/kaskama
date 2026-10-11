@@ -264,7 +264,7 @@ export function createApp(d: AppDependencies) {
         }),
       };
     }
-    if (!(await d.membershipGateway!.confirm(value, relayed.transactionId))) {
+    if (!(await d.membershipGateway!.confirm(relayed.transactionId))) {
       await d.store.markMembershipSubmitted({
         preparedMembershipId: id,
         state: "SUBMITTED",

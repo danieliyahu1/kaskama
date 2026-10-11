@@ -1,6 +1,7 @@
 import { KaspaPaymentGateway } from "./payment-gateway.js";
 import { addressScript } from "./membership-contract.js";
 import { parsePpvPayload, ppvPayload } from "./ppv-payload.js";
+import type { Post } from "./domain/models.js";
 
 const buyer = "kaspatest:qzvp9r3gxg4wvcl44lm5phav2gz5zfx2de7qqqwd3hjlr53rtsn6wefhk0aj8";
 const creator = "kaspatest:qrzjdw58hp75mvvx6aq58kjyg3xjk7pt0k8txpll9sxdary9npn8v3pmkukdl";
@@ -128,18 +129,8 @@ describe("KaspaPaymentGateway preparation", () => {
     const relay = vi.fn(async () => transactionId);
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
-      if (url.includes(encodeURIComponent(creator)))
-        return Response.json([
-          {
-            outpoint: { transactionId, index: 0 },
-            utxoEntry: {
-              amount: "100000000",
-              scriptPublicKey: { scriptPublicKey: addressScript(creator).slice(4) },
-              blockDaaScore: "1",
-              isCoinbase: false,
-            },
-          },
-        ]);
+      if (url.endsWith("/transactions/acceptance"))
+        return Response.json([{ transactionId, accepted: true }]);
       if (url.includes("/utxos")) return Response.json([funding("200000000", parentId)]);
       if (url.endsWith("/info/fee-estimate")) return Response.json({ normalBuckets: [{ feerate: 1 }], priorityBucket: { feerate: 1 } });
       if (url.endsWith(`/transactions/${parentId}`)) return Response.json({ outputs: [{ amount: "200000000", script_public_key: addressScript(buyer) }] });
@@ -517,5 +508,129 @@ describe("KaspaPaymentGateway evidence verification", () => {
         "a".repeat(64),
       ),
     ).resolves.toBe(false);
+  });
+});
+
+describe("KaspaPaymentGateway transaction confirmation", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const transactionId = "44".repeat(32);
+  const parentId = "11".repeat(32);
+  const mediaDigest = "a".repeat(64);
+  const priceSompi = "100000000";
+
+  const post = (): Post => ({
+    id: "post-1",
+    creator,
+    caption: "",
+    priceSompi,
+    mediaType: "image/jpeg",
+    mediaSize: 1,
+    mediaDigest,
+    mediaKey: "key",
+    publishedAt: 0,
+  });
+
+  const funding = () => ({
+    outpoint: { transactionId: parentId, index: 0 },
+    utxoEntry: {
+      amount: "200000000",
+      scriptPublicKey: { scriptPublicKey: addressScript(buyer).slice(4) },
+      blockDaaScore: "1",
+      isCoinbase: false,
+    },
+  });
+
+  const sign = (transaction: string) => {
+    const parsed = JSON.parse(transaction) as { inputs: { signatureScript: string }[] };
+    parsed.inputs[0]!.signatureScript = "01";
+    return JSON.stringify(parsed);
+  };
+
+  // The node's answer to the one question confirmation asks: is it accepted?
+  const stubNode = (accepted: boolean) =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.endsWith("/transactions/acceptance"))
+          return Response.json([{ transactionId, accepted }]);
+        if (url.endsWith("/info/fee-estimate"))
+          return Response.json({ normalBuckets: [{ feerate: 1 }], priorityBucket: { feerate: 1 } });
+        if (url.includes("/utxos")) return Response.json([funding()]);
+        return new Response("not found", { status: 404 });
+      }),
+    );
+
+  it("confirms a payment once the ledger accepts the transaction", async () => {
+    stubNode(true);
+    const gateway = new KaspaPaymentGateway(
+      feeAddress,
+      "https://node.test",
+      undefined,
+      undefined,
+      undefined,
+      async () => transactionId,
+    );
+    const prepared = await gateway.prepare(post(), buyer);
+
+    await expect(
+      gateway.submit(prepared, sign(prepared.transaction)),
+    ).resolves.toMatchObject({ isAccepted: true, transactionId });
+  });
+
+  it("reports a payment as pending while the ledger has not accepted it", async () => {
+    stubNode(false);
+    const gateway = new KaspaPaymentGateway(
+      feeAddress,
+      "https://node.test",
+      async () => undefined,
+      undefined,
+      undefined,
+      async () => transactionId,
+    );
+    const prepared = await gateway.prepare(post(), buyer);
+
+    // A transaction that is not accepted yet is pending, not rejected: the
+    // caller keeps the prepared record and the reconciler settles it later.
+    await expect(
+      gateway.submit(prepared, sign(prepared.transaction)),
+    ).resolves.toMatchObject({ isAccepted: null, transactionId });
+  });
+
+  it("confirms a payment that verifyPurchase immediately accepts", async () => {
+    const saved = new Map<string, string>();
+    const evidence = {
+      saveTransactionEvidence: async (value: {
+        transactionId: string;
+        transaction: string;
+      }) => {
+        saved.set(value.transactionId, value.transaction);
+      },
+      getTransactionEvidence: async (id: string) =>
+        saved.has(id)
+          ? { transactionId: id, transaction: saved.get(id)!, acceptedAt: 1 }
+          : null,
+    };
+    stubNode(true);
+    const gateway = new KaspaPaymentGateway(
+      feeAddress,
+      "https://node.test",
+      undefined,
+      undefined,
+      undefined,
+      async () => transactionId,
+      undefined,
+      evidence,
+    );
+    const prepared = await gateway.prepare(post(), buyer);
+
+    await expect(
+      gateway.submit(prepared, sign(prepared.transaction)),
+    ).resolves.toMatchObject({ isAccepted: true });
+    // The fact that made "confirmed" true is the same fact a reader verifies.
+    await expect(
+      gateway.verifyPurchase(transactionId, buyer, creator, priceSompi, "post-1", mediaDigest),
+    ).resolves.toBe(true);
   });
 });
