@@ -7,7 +7,11 @@ import { logger as defaultLogger, type Logger } from "./observability.js";
 import { defaultMetrics, type Metrics } from "./metrics.js";
 import { paymentSplit, type PaymentSplit } from "./payment-fee.js";
 import { parsePpvPayload, ppvPayload } from "./ppv-payload.js";
-import { awaitAcceptance, type Sleep } from "./acceptance.js";
+import {
+  awaitAcceptance,
+  transactionAccepted,
+  type Sleep,
+} from "./acceptance.js";
 import { submitMembershipTransactionOverWrpc } from "./membership-gateway.js";
 
 const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
@@ -156,9 +160,18 @@ export class KaspaPaymentGateway implements PaymentGateway {
     return rejected(reason, transactionId);
   }
 
+  /**
+   * Reports the ledger's verdict, asked the one way `submit` asks it: whether
+   * it accepted the transaction. A transaction the ledger has not accepted yet
+   * is pending, never rejected — an unserved transaction body says nothing
+   * about whether the transaction exists.
+   */
   async status(transactionId: string): Promise<PaymentSubmission> {
-    const value = await this.requestRetryingMissing<{ is_accepted: boolean }>("transaction_status", `/transactions/${transactionId}`);
-    return { isAccepted: value?.is_accepted ? true : null, transactionId, rejection: null };
+    const accepted = await transactionAccepted(
+      (operation, path, init) => this.request(operation, path, init),
+      transactionId,
+    );
+    return { isAccepted: accepted ? true : null, transactionId, rejection: null };
   }
 
   async verifyPurchase(transactionId: string, buyer: string, creator: string, amountSompi: string, postId: string, mediaDigest: string): Promise<boolean> {

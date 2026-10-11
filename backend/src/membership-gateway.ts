@@ -43,7 +43,11 @@ import {
 import type { MembershipContract } from "./domain/models.js";
 import { logger as defaultLogger, safeError, type Logger } from "./observability.js";
 import { defaultMetrics, type Metrics } from "./metrics.js";
-import { awaitAcceptance, type Sleep } from "./acceptance.js";
+import {
+  awaitAcceptance,
+  transactionAccepted,
+  type Sleep,
+} from "./acceptance.js";
 
 const ZERO_SUBNETWORK = "0".repeat(40);
 const WALLET_COMPUTE_BUDGET = 50;
@@ -612,13 +616,18 @@ export class KaspaMembershipGateway implements MembershipGateway {
     return true;
   }
 
+  /**
+   * Reports the ledger's verdict, asked the one way `confirm` asks it: whether
+   * it accepted the transaction. A transaction the ledger has not accepted yet
+   * is pending, never rejected — an unserved v1 transaction body is not
+   * evidence that the covenant output does not exist.
+   */
   async status(transactionId: string): Promise<PaymentSubmission> {
-    const transaction = await this.transaction(transactionId);
-    return {
-      isAccepted: transaction ? (transaction.is_accepted ? true : null) : false,
+    const accepted = await transactionAccepted(
+      (operation, path, init) => this.request(operation, path, init),
       transactionId,
-      rejection: null,
-    };
+    );
+    return { isAccepted: accepted ? true : null, transactionId, rejection: null };
   }
 
   private confirmTransaction(transactionId: string): Promise<boolean> {
@@ -630,32 +639,6 @@ export class KaspaMembershipGateway implements MembershipGateway {
         attempts: CONFIRM_MAX_ATTEMPTS,
         baseDelayMs: CONFIRM_BASE_DELAY_MS,
         maxDelayMs: CONFIRM_MAX_DELAY_MS,
-      },
-    );
-  }
-
-  private async transaction(
-    transactionId: string,
-  ): Promise<{ is_accepted?: boolean } | null> {
-    return this.metrics.observeDependency(
-      "kaspa_rest",
-      "transaction_status",
-      async () => {
-        const response = await fetch(
-          `${this.api}/transactions/${transactionId.toLowerCase()}`,
-          {
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-        if (response.status === 404) return null;
-        if (!response.ok)
-          throw new Error(
-            `Kaspa request failed: ${response.status} ${await response.text()}`,
-          );
-        const body: unknown = await response.json();
-        if (!body || typeof body !== "object")
-          throw new Error("INVALID_KASPA_RESPONSE");
-        return body as { is_accepted?: boolean };
       },
     );
   }

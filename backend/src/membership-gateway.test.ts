@@ -369,6 +369,48 @@ describe("KaspaMembershipGateway", () => {
     expect(sleep).not.toHaveBeenCalled();
   });
 
+  it("reports status from the ledger's acceptance even when the body is not served", async () => {
+    const transactionId = "44".repeat(32);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.endsWith("/transactions/acceptance"))
+          return Response.json([{ transactionId, accepted: true }]);
+        return new Response("not found", { status: 404 });
+      }),
+    );
+    const gateway = new KaspaMembershipGateway(platformFeeAddress, "https://node.test");
+
+    await expect(gateway.status(transactionId)).resolves.toEqual({
+      isAccepted: true,
+      transactionId,
+      rejection: null,
+    });
+  });
+
+  it("reports pending, never rejected, when the ledger has not accepted", async () => {
+    const transactionId = "44".repeat(32);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.endsWith("/transactions/acceptance"))
+          return Response.json([{ transactionId, accepted: false }]);
+        return new Response("not found", { status: 404 });
+      }),
+    );
+    const gateway = new KaspaMembershipGateway(platformFeeAddress, "https://node.test");
+
+    // A body the node will not serve is not a rejection: the reconciler must
+    // keep waiting for the ledger to accept, not delete the attempt.
+    await expect(gateway.status(transactionId)).resolves.toEqual({
+      isAccepted: null,
+      transactionId,
+      rejection: null,
+    });
+  });
+
   function stubOfferSources() {
     vi.stubGlobal(
       "fetch",

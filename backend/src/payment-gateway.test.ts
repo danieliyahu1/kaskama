@@ -370,45 +370,53 @@ describe("KaspaPaymentGateway purchase verification", () => {
   });
 });
 
-describe("KaspaPaymentGateway purchase confirmation", () => {
+describe("KaspaPaymentGateway status", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("retries a missing transaction before confirming it", async () => {
-    const fetch = vi.fn()
-      .mockResolvedValueOnce(Response.json({ detail: "Transaction not found" }, { status: 404 }))
-      .mockResolvedValueOnce(Response.json({ detail: "Transaction not found" }, { status: 404 }))
-      .mockResolvedValueOnce(Response.json({ is_accepted: true }));
-    const sleep = vi.fn(async () => undefined);
+  const acceptance = (accepted: boolean) =>
+    vi.fn(async (input: string | URL | Request) => {
+      void input;
+      return Response.json([{ transactionId: "a".repeat(64), accepted }]);
+    });
+
+  it("asks the ledger for acceptance and confirms an accepted transaction", async () => {
+    const fetch = acceptance(true);
     vi.stubGlobal("fetch", fetch);
-    const gateway = new KaspaPaymentGateway(feeAddress, "https://node.test", sleep);
+    const gateway = new KaspaPaymentGateway(feeAddress, "https://node.test");
 
     await expect(gateway.status("a".repeat(64))).resolves.toEqual({
       isAccepted: true,
       transactionId: "a".repeat(64),
       rejection: null,
     });
-    expect(fetch).toHaveBeenCalledTimes(3);
-    expect(sleep.mock.calls).toEqual([[1_000], [2_000]]);
+    expect(String(fetch.mock.calls[0]![0])).toBe(
+      "https://node.test/transactions/acceptance",
+    );
   });
 
-  it("reports pending instead of failing when the transaction is still missing", async () => {
-    const fetch = vi.fn(async () =>
-      Response.json({ detail: "Transaction not found" }, { status: 404 }),
-    );
-    const sleep = vi.fn(async () => undefined);
-    vi.stubGlobal("fetch", fetch);
-    const gateway = new KaspaPaymentGateway(feeAddress, "https://node.test", sleep);
+  it("reports pending while the ledger has not accepted the transaction", async () => {
+    vi.stubGlobal("fetch", acceptance(false));
+    const gateway = new KaspaPaymentGateway(feeAddress, "https://node.test");
 
     await expect(gateway.status("a".repeat(64))).resolves.toEqual({
       isAccepted: null,
       transactionId: "a".repeat(64),
       rejection: null,
     });
-    expect(fetch).toHaveBeenCalledTimes(5);
-    expect(sleep.mock.calls).toEqual([[1_000], [2_000], [4_000], [4_000]]);
   });
 
-  it("does not hide upstream service failures during confirmation", async () => {
+  it("treats a missing acceptance row as pending, not rejected", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json([])));
+    const gateway = new KaspaPaymentGateway(feeAddress, "https://node.test");
+
+    await expect(gateway.status("a".repeat(64))).resolves.toEqual({
+      isAccepted: null,
+      transactionId: "a".repeat(64),
+      rejection: null,
+    });
+  });
+
+  it("does not hide upstream service failures", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       new Response("upstream unavailable", { status: 503 }),
     ));
