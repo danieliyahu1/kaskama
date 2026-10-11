@@ -156,6 +156,7 @@ Besides the shared codes, a subscription can fail with:
 | `INVALID_MEMBERSHIP_PRICE`    | `400`  | The price failed the format, floor, or ceiling check.                 |
 | `MEMBERSHIP_OFFER_EXISTS`     | `409`  | The creator already has a live offer.                                 |
 | `MEMBERSHIP_OFFER_STALE`      | `409`  | The covenant moved while you worked; carries `retry: AFTER_REFRESH`.  |
+| `MEMBERSHIP_NOT_FINALIZED`    | `409`  | The offer's covenant output has not finalized yet; carries `retry: AFTER_REFRESH`. Prepare again and retry. Nothing was charged. |
 | `MEMBERSHIP_SUBMISSION_FAILED`| `502`  | The network refused the signed transaction. Nothing was charged.      |
 | `MEMBERSHIP_UNAVAILABLE`      | `503`  | The subscription service is not wired on this server.                 |
 
@@ -225,8 +226,9 @@ Every failure uses one envelope:
 ```
 
 `error` is stable and machine-readable. `requestId` correlates with server logs.
-`retry: "AFTER_REFRESH"` means the resource changed underneath you: refetch it,
-then you may submit again. Known codes include `AUTHENTICATION_REQUIRED`,
+`retry: "AFTER_REFRESH"` means the state you relied on is no longer valid: it
+changed underneath you, or the chain has not settled it yet. Refetch or prepare
+again, then retry. Known codes include `AUTHENTICATION_REQUIRED`,
 `INVALID_ADDRESS`, `POST_NOT_FOUND`, `ALREADY_UNLOCKED`, `INSUFFICIENT_FUNDS`,
 `PAYMENT_NOT_FOUND`, `INVALID_REQUEST`, `RATE_LIMITED`, and the media codes
 `INVALID_MEDIA`, `UNSUPPORTED_MEDIA`, `IMAGE_TOO_LARGE`, `VIDEO_TOO_LARGE`,

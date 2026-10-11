@@ -52,6 +52,7 @@ import {
 import type { CreatorCovenant, Post, Profile, Session } from "./domain/models.js";
 import { currentMembershipContract } from "./membership-contract.js";
 import {
+  MembershipNotFinalizedError,
   MembershipStateChangedError,
   MembershipSubmissionError,
   type MembershipGateway,
@@ -196,11 +197,12 @@ export function createApp(d: AppDependencies) {
       )
       .catch(() => true);
   }
-  // A submit can fail for two reasons: the covenant moved under the caller (a
-  // competing spend), or the network would not take the signed transaction at
-  // all. In both cases the prepared record is spent and nothing was charged, so
-  // the caller is told the truth - retry against fresh state, or that something
-  // went wrong - and never a cause they cannot act on.
+  // A submit can fail three ways: the covenant moved under the caller (a
+  // competing spend), the network refused because the funding output has not
+  // finalized yet, or the network refused for some other reason. Nothing was
+  // charged in any of them, so the caller is told the truth - retry against
+  // fresh state, retry once the chain settles, or that something went wrong -
+  // and never a cause they cannot act on.
   async function membershipSubmitFailure(
     res: Response,
     id: string,
@@ -209,19 +211,21 @@ export function createApp(d: AppDependencies) {
     if (
       !(
         error instanceof MembershipStateChangedError ||
-        error instanceof MembershipSubmissionError
+        error instanceof MembershipSubmissionError ||
+        error instanceof MembershipNotFinalizedError
       )
     )
       return undefined;
     await d.store.deleteMembershipAttempt(id);
-    return error instanceof MembershipStateChangedError
-      ? membershipStale(res)
-      : apiError(
-          res,
-          502,
-          "MEMBERSHIP_SUBMISSION_FAILED",
-          COPY.membershipSubmissionFailed,
-        );
+    if (error instanceof MembershipStateChangedError) return membershipStale(res);
+    if (error instanceof MembershipNotFinalizedError)
+      return membershipNotFinalized(res);
+    return apiError(
+      res,
+      502,
+      "MEMBERSHIP_SUBMISSION_FAILED",
+      COPY.membershipSubmissionFailed,
+    );
   }
   /**
    * Relay a signed offer, price, or cancel transaction and confirm its covenant
@@ -1922,6 +1926,16 @@ function validationIssue(issue: z.core.$ZodIssue) {
  */
 function membershipStale(res: Response) {
   return apiError(res, 409, "MEMBERSHIP_OFFER_STALE", COPY.membershipStale, {
+    retry: RETRY_AFTER_REFRESH,
+  });
+}
+/**
+ * The funding output has not finalized on the network yet. Not a fault and not
+ * a stale covenant: the same subscription is accepted once the chain settles,
+ * so the caller re-prepares and retries rather than believing a server broke.
+ */
+function membershipNotFinalized(res: Response) {
+  return apiError(res, 409, "MEMBERSHIP_NOT_FINALIZED", COPY.membershipNotFinalized, {
     retry: RETRY_AFTER_REFRESH,
   });
 }

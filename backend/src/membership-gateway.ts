@@ -11,6 +11,7 @@ import {
   updateTransactionMass,
 } from "@kluster/kaspa-wasm";
 import {
+  MembershipNotFinalizedError,
   MembershipStateChangedError,
   MembershipSubmissionError,
   type MembershipGateway,
@@ -574,6 +575,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
       this.logger.error("membership_transaction_relay_failed", {
         error: safeError(error),
       });
+      if (isNotFinalizedRejection(error)) throw new MembershipNotFinalizedError();
       throw new MembershipSubmissionError();
     }
     this.logger.info("membership_transaction_relayed", {
@@ -793,6 +795,18 @@ export class KaspaMembershipGateway implements MembershipGateway {
       return body as T;
     });
   }
+}
+
+/**
+ * Whether the node refused the transaction because an input it spends has not
+ * finalized yet. The wasm client rejects with a plain `Error` carrying the
+ * node's message, so the one phrase that names this condition is matched
+ * explicitly; every other refusal stays a generic submission failure and
+ * nothing else is inferred from node text.
+ */
+function isNotFinalizedRejection(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /is not finalized/i.test(message);
 }
 
 export async function submitMembershipTransactionOverWrpc(

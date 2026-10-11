@@ -220,6 +220,20 @@ export class MembershipSubmissionError extends Error {
   }
 }
 
+/**
+ * The node refused the transaction because an input it spends - the covenant
+ * output of a fresh offer - has not finalized yet. The chain is mid-flight, not
+ * the caller's mistake and not an upstream fault: the same subscription is
+ * accepted once the output settles. Named, so the boundary can report a retry
+ * instead of a server failure.
+ */
+export class MembershipNotFinalizedError extends Error {
+  constructor() {
+    super("MEMBERSHIP_NOT_FINALIZED");
+    this.name = "MembershipNotFinalizedError";
+  }
+}
+
 export interface MembershipGateway {
   prepareOffer(
     creator: string,

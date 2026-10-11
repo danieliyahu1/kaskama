@@ -19,6 +19,7 @@ import { StorageError } from "./r2-storage.js";
 import { TestStorage } from "./test-storage.js";
 import { MEDIA_ERROR_CATEGORIES, type VerifiedMedia } from "./adapters/media/media.js";
 import {
+  MembershipNotFinalizedError,
   MembershipStateChangedError,
   MembershipSubmissionError,
   type MembershipGateway,
@@ -1564,6 +1565,7 @@ describe("membership state changes", () => {
   const staleMessage =
     "This subscription changed while you were confirming it. Nothing was charged - submit again.";
   const submissionMessage = "Something went wrong. You weren't charged. Try again.";
+  const notFinalizedMessage = "Network error. Nothing was charged - try again.";
   const covenantId = "a".repeat(64);
 
   function gatewayThatThrows(error: Error): MembershipGateway {
@@ -2009,6 +2011,67 @@ describe("membership state changes", () => {
     expect(response.body).toMatchObject({
       error: "MEMBERSHIP_SUBMISSION_FAILED",
       message: submissionMessage,
+    });
+    expect(await store.getMembershipAttempt("prepared-1", Date.now())).toBeNull();
+  });
+
+  it.each([
+    ["offer", "/api/membership/offers/prepared-1/finalize"],
+    ["update", "/api/membership/price/prepared-1/finalize"],
+    ["cancel", "/api/membership/cancel/prepared-1/finalize"],
+  ] as const)(
+    "tells the user to retry when the network has not finalized an %s",
+    async (kind, path) => {
+      const store = new MemoryStore();
+      const creator = await creatorSession(store);
+      await store.saveCreatorCovenant({ creator, covenantId, priceSompi: "1000000000" });
+      await seedAttempt(store, creator, kind);
+      const { app } = appWithGateway(
+        store,
+        gatewayThatThrows(new MembershipNotFinalizedError()),
+      );
+
+      const response = await request(app)
+        .post(path)
+        .set("Cookie", "kaskama_session=creator-session")
+        .send({ signedTransaction: "aa01" });
+
+      expect(response.status).toBe(409);
+      expect(response.body).toMatchObject({
+        error: "MEMBERSHIP_NOT_FINALIZED",
+        message: notFinalizedMessage,
+        retry: "AFTER_REFRESH",
+      });
+      expect(await store.getMembershipAttempt("prepared-1", Date.now())).toBeNull();
+    },
+  );
+
+  it("tells the buyer to retry when the network has not finalized the purchase", async () => {
+    const store = new MemoryStore();
+    await seedPurchase(store);
+    const verifier: MembershipVerifier = {
+      verifyUtxo: async () => check("VALID"),
+    };
+    const { app } = testApp(
+      store,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      verifier,
+      gatewayThatThrows(new MembershipNotFinalizedError()),
+    );
+
+    const response = await request(app)
+      .post("/api/membership/purchases/prepared-1/finalize")
+      .set("Cookie", "kaskama_session=creator-session")
+      .send({ signedTransaction: "{}" });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      error: "MEMBERSHIP_NOT_FINALIZED",
+      message: notFinalizedMessage,
+      retry: "AFTER_REFRESH",
     });
     expect(await store.getMembershipAttempt("prepared-1", Date.now())).toBeNull();
   });

@@ -1,6 +1,9 @@
 import { Transaction } from "@kluster/kaspa-wasm";
 import { DEFAULT_NETWORK } from "@kaskama/shared";
-import { MembershipSubmissionError } from "./application/ports.js";
+import {
+  MembershipNotFinalizedError,
+  MembershipSubmissionError,
+} from "./application/ports.js";
 import {
   KaspaMembershipGateway,
   submitMembershipTransactionOverWrpc,
@@ -430,6 +433,27 @@ describe("KaspaMembershipGateway", () => {
 
     await expect(gateway.submit(offer, signedJson)).rejects.toBeInstanceOf(
       MembershipSubmissionError,
+    );
+  });
+
+  it("reports a relay refused for finality as not finalized, not a submission failure", async () => {
+    stubOfferSources();
+    const relay = vi.fn(async () => {
+      throw new Error(
+        "RPC Server (remote error) -> Rejected transaction " +
+          `${"5c2fea37".repeat(8)}: transaction input #0 is not finalized`,
+      );
+    });
+    const gateway = new KaspaMembershipGateway(
+      platformFeeAddress,
+      "https://node.test",
+      relay,
+      vi.fn(async () => undefined),
+    );
+    const { offer, signedJson } = await signedOffer(gateway);
+
+    await expect(gateway.submit(offer, signedJson)).rejects.toBeInstanceOf(
+      MembershipNotFinalizedError,
     );
   });
 
