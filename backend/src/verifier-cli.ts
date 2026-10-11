@@ -12,11 +12,13 @@ import { KaspaMembershipVerifier } from "./verifier.js";
 function usage(): string {
   return [
     "Usage:",
-    "  verify-membership address <address> [--owner <address>] [--node <url>] [--network mainnet|testnet-10]",
     "  verify-membership utxo <transactionId> <outputIndex> [--owner <address>] [--node <url>] [--network mainnet|testnet-10]",
     "",
-    "Verifies membership status directly from the Kaspa chain by reading covenant",
-    "UTXOs. The source of truth is on-chain data, not Kaskama records.",
+    "Verifies a membership covenant output directly from the Kaspa chain. The",
+    "source of truth is on-chain data, not Kaskama records.",
+    "",
+    "Address-wide discovery needs the covenant handle recorded at mint time, so",
+    "it lives in the API (GET /api/verify/membership/address/:address), not here.",
   ].join("\n");
 }
 
@@ -59,36 +61,6 @@ export async function runVerifierCli(
     options.network,
   );
   try {
-    if (command === "address") {
-      const address = rest[0];
-      if (
-        !address ||
-        rest.length > 1 ||
-        !isAddressForNetwork(options.network, address)
-      )
-        throw new Error(usage());
-      if (
-        options.owner !== undefined &&
-        !isAddressForNetwork(options.network, options.owner)
-      )
-        throw new Error(`--owner must be a valid ${addressPrefix}: address.`);
-      const memberships = await verifier.verifyAddress(address, options.owner);
-      stdout.write(
-        `${JSON.stringify(
-          {
-            address,
-            verifiedAt: new Date().toISOString(),
-            valid: memberships.some(
-              (membership) => membership.status === "VALID",
-            ),
-            memberships,
-          },
-          null,
-          2,
-        )}\n`,
-      );
-      return 0;
-    }
     if (command === "utxo") {
       const transactionId = rest[0];
       const outputIndex = Number(rest[1]);

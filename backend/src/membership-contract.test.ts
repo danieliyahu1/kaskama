@@ -105,7 +105,6 @@ describe("membership contract codec", () => {
       1,
       2,
       3,
-      4,
     );
 
     expect(signatureScript).toMatch(/^[0-9a-f]+$/);

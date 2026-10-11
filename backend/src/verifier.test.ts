@@ -1,7 +1,6 @@
 import {
   addressPublicKey,
   membershipAddress,
-  MEMBERSHIP_INDEX_VALUE,
   MEMBERSHIP_OUTPUT_VALUE,
   membershipPayload,
   membershipRedeemScript,
@@ -169,60 +168,5 @@ describe("KaspaMembershipVerifier", () => {
     ).verifyUtxo(transactionId, 1, buyer, covenantId, creator);
 
     expect(result.status).toBe("NOT_MEMBERSHIP");
-  });
-
-  it("discovers a membership for the requested creator by scanning the owner address", async () => {
-    const state = memberState();
-    const redeemScript = membershipRedeemScript(state);
-    const payload = membershipPayload(redeemScript, {
-      platformAddress: platformFeeAddress,
-      createdAtDaa: 136_000n,
-      expiresAtDaa: state.expiresAtDaa,
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        const url = String(input);
-        if (url.includes("/info/blockdag"))
-          return Response.json({ virtualDaaScore: "500000" });
-        if (url.includes(`/addresses/${encodeURIComponent(buyer)}/utxos`))
-          return Response.json([
-            {
-              outpoint: { transactionId, index: 4 },
-              utxoEntry: { amount: MEMBERSHIP_INDEX_VALUE.toString() },
-            },
-          ]);
-        if (
-          url.includes(
-            `/addresses/${encodeURIComponent(membershipAddress(state))}/utxos`,
-          )
-        )
-          return Response.json([
-            {
-              outpoint: { transactionId, index: 1 },
-              utxoEntry: { amount: MEMBERSHIP_OUTPUT_VALUE.toString() },
-            },
-          ]);
-        if (url.includes(`/transactions/${transactionId}`))
-          return Response.json({
-            version: 1,
-            is_accepted: true,
-            payload,
-            outputs: [
-              {},
-              {
-                amount: MEMBERSHIP_OUTPUT_VALUE.toString(),
-                script_public_key: membershipScript(state).slice(4),
-                covenant: { covenantId, authorizingInput: 0 },
-              },
-            ],
-          });
-        return new Response("not found", { status: 404 });
-      }),
-    );
-
-    const verifier = new KaspaMembershipVerifier("https://node.test", () => 0);
-    expect((await verifier.findMembership(buyer, creator))?.status).toBe("VALID");
-    expect(await verifier.findMembership(buyer, platformFeeAddress)).toBeNull();
   });
 });

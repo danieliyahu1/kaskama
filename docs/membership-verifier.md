@@ -6,18 +6,17 @@ and descriptive transaction fields are not authorization sources.
 
 ## Discovery
 
-Mint transactions create a 50,000,000-sompi P2PK output for the member. This output
-is a discovery pointer, not the membership token itself.
+Kaspa identifies a covenant by its `covenant_id`, but the public node exposes no
+reverse index from an address to a covenant. Kaskama therefore records the
+covenant handle — its `covenant_id` and the member output outpoint — on the
+membership receipt when a purchase settles, and discovery starts from that
+record.
 
-For each unspent output returned by `GET /addresses/{member}/utxos`, the
-verifier loads its creation transaction and requires the pointer output to:
-
-- contain exactly 50,000,000 sompi;
-- use the scanned member address's P2PK script;
-- share a transaction with a valid membership covenant output.
-
-The returned `MembershipCheck.outputIndex` identifies the covenant output, not
-the discovery output.
+For each receipt for an address, the verifier loads the mint transaction and
+requires the member covenant output at index `1` to pass the covenant validation
+below. The returned `MembershipCheck.outputIndex` identifies the covenant output.
+Discovery never depends on a wallet coin, so spending the wallet cannot hide a
+live membership.
 
 ## Covenant validation
 
@@ -38,8 +37,7 @@ A membership is recognized only when all of these checks pass:
 - the creator public key in state matches the creator whose offer is checked;
 - the covenant output still appears in the UTXO set for its P2SH address.
 
-The last check prevents a spent token from remaining valid when an unrelated
-discovery output still exists.
+The last check prevents a spent token from remaining valid.
 
 The verifier trusts the contract once it is on chain. The covenant enforces the
 payment amounts, platform address, and lifetime at mint time; the verifier does
@@ -49,10 +47,11 @@ covenant state.
 ## Creator-scoped discovery
 
 Access checks resolve a subscription for one creator at a time. The access use
-case checks stored receipts first, then falls back to `findMembership(owner,
-creator)`, which scans the owner address's 0.5 KAS discovery pointers and returns
-the first valid covenant for that creator. A discovered covenant is cached as a
-receipt.
+case checks stored receipts and verifies each recorded covenant output on chain.
+Because the public node has no address-to-covenant index, there is no chain-only
+scan: a membership is only discoverable from the handle recorded at mint time. A
+membership that was never recorded must be found by its outpoint via the UTXO
+endpoint.
 
 
 ## Status semantics
@@ -65,7 +64,7 @@ with the expiry committed in covenant state.
 | `VALID` | The covenant is recognized, unspent, owned by the expected address when supplied, and its expiry DAA is in the future. |
 | `EXPIRED` | The covenant is recognized and unspent, but current DAA is at or beyond its expiry. |
 | `OWNER_MISMATCH` | The covenant is recognized and unspent, but its state owner differs from `expectedOwner`. |
-| `NOT_MEMBERSHIP` | Any discovery, template, script, amount, covenant ID, lifetime, or unspent check fails. |
+| `NOT_MEMBERSHIP` | Any template, script, covenant ID, lifetime, or unspent check fails. |
 
 The `kaskama` payload contains the platform address, membership output index,
 and creation/expiry DAA values. The verifier cross-checks every machine-readable
@@ -92,9 +91,12 @@ Errors are `400 INVALID_ADDRESS`, `400 INVALID_REQUEST`, or
 ## CLI
 
 ```text
-pnpm --filter @kaskama/backend verify:membership address <kaspatest:address> [--owner <address>] [--node <url>]
 pnpm --filter @kaskama/backend verify:membership utxo <transactionId> <outputIndex> [--owner <address>] [--node <url>]
 ```
+
+The CLI verifies a single covenant output. Address-wide discovery needs the
+recorded covenant handle, so it is served by the HTTP API, not the chain-only
+CLI.
 
 The default node is `https://api-tn10.kaspa.org`. `backend/src/server.ts`
 constructs `KaspaMembershipVerifier` using `KASPA_NODE_URL` and injects it into

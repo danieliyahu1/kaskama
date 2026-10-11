@@ -30,7 +30,6 @@ import {
   addressScript,
   currentMembershipContract,
   MEMBERSHIP_DURATION_DAA,
-  MEMBERSHIP_INDEX_VALUE,
   MEMBERSHIP_OUTPUT_VALUE,
   membershipAddress,
   membershipMintSignatureScript,
@@ -277,11 +276,6 @@ export class KaspaMembershipGateway implements MembershipGateway {
         scriptPublicKey: addressScript(this.platformFeeAddress),
         covenant: null,
       },
-      {
-        value: MEMBERSHIP_INDEX_VALUE.toString(),
-        scriptPublicKey: addressScript(buyer),
-        covenant: null,
-      },
     ];
     const minterInput = {
       transactionId: minterUtxo.outpoint.transactionId,
@@ -296,7 +290,6 @@ export class KaspaMembershipGateway implements MembershipGateway {
         1,
         2,
         3,
-        4,
       ),
       utxo: serializableUtxo(minterUtxo, covenantIdHex),
     };
@@ -312,7 +305,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
     const selected = selectWalletUtxos(
       buyerUtxos,
       buyer,
-      effectivePrice + MEMBERSHIP_OUTPUT_VALUE + MEMBERSHIP_INDEX_VALUE,
+      effectivePrice + MEMBERSHIP_OUTPUT_VALUE,
       (values) =>
         estimatedFee(
           [minterInput, ...values.map(walletInput)],
@@ -325,7 +318,7 @@ export class KaspaMembershipGateway implements MembershipGateway {
     const fee = estimatedFee(inputs, provisionalOutputs, rate, payload);
     const total = sumUtxos(selected);
     const change =
-      total - effectivePrice - MEMBERSHIP_OUTPUT_VALUE - MEMBERSHIP_INDEX_VALUE - fee;
+      total - effectivePrice - MEMBERSHIP_OUTPUT_VALUE - fee;
     if (change > 0n)
       outputs.push({
         value: change.toString(),
@@ -1110,7 +1103,6 @@ function membershipPreflight(
   const paymentOutput = outputs[2];
   const platformFee = membershipFeeSompi(member.priceSompi);
   const platformOutput = outputs[3];
-  const ownerOutput = outputs[4];
   const fundingInput = inputs[1];
   const memberExpiry = member.expiresAtDaa;
   const currentDaa = BigInt(daa);
@@ -1131,16 +1123,6 @@ function membershipPreflight(
     },
     fundingInputUsesBuyerLock: {
       pass: fundingInput?.utxo.scriptPublicKey === buyerLock,
-    },
-    ownerOutputUsesBuyerLock: {
-      pass: ownerOutput?.scriptPublicKey === buyerLock,
-      actualScriptLength: ownerOutput?.scriptPublicKey.length,
-      expectedScriptLength: buyerLock.length,
-    },
-    ownerOutputValue: {
-      pass: ownerOutput?.value === MEMBERSHIP_INDEX_VALUE.toString(),
-      actual: ownerOutput?.value,
-      expected: MEMBERSHIP_INDEX_VALUE.toString(),
     },
     paymentOutputUsesCreatorLock: {
       pass: paymentOutput?.scriptPublicKey === creatorLock,

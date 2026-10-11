@@ -690,7 +690,7 @@ describe("subscription recognition", () => {
     };
   }
 
-  it("recognizes a subscriber found on chain without a stored receipt", async () => {
+  it("recognizes a subscriber from a stored receipt that verifies on chain", async () => {
     const store = new MemoryStore();
     await store.publishPost({ ...post("paid-post"), creator });
     await store.saveCreatorCovenant({
@@ -698,13 +698,15 @@ describe("subscription recognition", () => {
       covenantId: "covenant-1",
       priceSompi: "1000000000",
     });
+    await store.createMembershipPurchase({
+      transactionId: "tx-1",
+      buyer: viewer,
+      creator,
+      covenantId: "covenant-1",
+    });
     const cookie = await viewerSession(store);
-    const findMembership = vi.fn(async () => membershipCheck("VALID"));
-    const verifier: MembershipVerifier = {
-      verifyAddress: async () => [],
-      findMembership,
-      verifyUtxo: async () => membershipCheck("NOT_MEMBERSHIP"),
-    };
+    const verifyUtxo = vi.fn(async () => membershipCheck("VALID"));
+    const verifier: MembershipVerifier = { verifyUtxo };
     const { app } = testApp(
       store,
       undefined,
@@ -726,13 +728,14 @@ describe("subscription recognition", () => {
       covenantId: "covenant-1",
     });
     expect(creatorResponse.body.posts[0].canView).toBe(true);
-    expect(findMembership).toHaveBeenCalledWith(
+    expect(verifyUtxo).toHaveBeenCalledWith(
+      "tx-1",
+      1,
       viewer,
-      creator,
       "covenant-1",
+      creator,
       undefined,
     );
-    expect(await store.membershipReceipts(viewer, creator)).toHaveLength(1);
 
     const postResponse = await request(app)
       .get("/api/posts/paid-post")
@@ -834,7 +837,7 @@ describe("subscription recognition", () => {
     expect(offerAvailable).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps a viewer locked when no membership is found on chain", async () => {
+  it("keeps a viewer locked when no membership is recorded", async () => {
     const store = new MemoryStore();
     await store.publishPost({ ...post("paid-post"), creator });
     await store.saveCreatorCovenant({
@@ -844,8 +847,6 @@ describe("subscription recognition", () => {
     });
     const cookie = await viewerSession(store);
     const verifier: MembershipVerifier = {
-      verifyAddress: async () => [],
-      findMembership: async () => null,
       verifyUtxo: async () => membershipCheck("NOT_MEMBERSHIP"),
     };
     const { app } = testApp(
@@ -1686,8 +1687,6 @@ describe("membership state changes", () => {
     const store = new MemoryStore();
     await seedPurchase(store);
     const verifier: MembershipVerifier = {
-      verifyAddress: async () => [],
-      findMembership: async () => null,
       verifyUtxo: async () => check("NOT_MEMBERSHIP"),
     };
     const { app } = testApp(
@@ -1716,8 +1715,6 @@ describe("membership state changes", () => {
     const store = new MemoryStore();
     const creator = await seedPurchase(store);
     const verifier: MembershipVerifier = {
-      verifyAddress: async () => [],
-      findMembership: async () => null,
       verifyUtxo: async () => check("VALID"),
     };
     const { app } = testApp(
@@ -1760,8 +1757,6 @@ describe("membership state changes", () => {
       submit,
     };
     const verifier: MembershipVerifier = {
-      verifyAddress: async () => [],
-      findMembership: async () => null,
       verifyUtxo: async () => check("VALID"),
     };
     const { app } = testApp(
@@ -1993,8 +1988,6 @@ describe("membership state changes", () => {
     const store = new MemoryStore();
     await seedPurchase(store);
     const verifier: MembershipVerifier = {
-      verifyAddress: async () => [],
-      findMembership: async () => null,
       verifyUtxo: async () => check("VALID"),
     };
     const { app } = testApp(

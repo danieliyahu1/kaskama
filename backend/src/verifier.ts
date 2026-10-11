@@ -9,7 +9,6 @@ import {
   addressPublicKey,
   currentMembershipContract,
   decodeMembershipRedeemScript,
-  MEMBERSHIP_INDEX_VALUE,
   membershipAddress,
   membershipScript,
   parseMembershipPayloadDetails,
@@ -61,55 +60,6 @@ export class KaspaMembershipVerifier implements MembershipVerifier {
     private readonly network: NetworkId = DEFAULT_NETWORK,
     private readonly evidence?: TransactionEvidenceStore,
   ) {}
-
-  async verifyAddress(
-    address: string,
-    expectedOwner?: string,
-    expectedCovenantId?: string,
-    expectedCreator?: string,
-    contract: MembershipContract = currentMembershipContract(),
-  ): Promise<MembershipCheck[]> {
-    const [utxos, currentDaa] = await Promise.all([this.utxos(address), this.currentDaa()]);
-    const pointers = utxos.filter((utxo) => bigintOrNull(utxo.utxoEntry.amount) === MEMBERSHIP_INDEX_VALUE);
-    return Promise.all(pointers.map(async (pointer) => {
-      const transaction = await this.transaction(pointer.outpoint.transactionId);
-      return this.checkMemberOutput(
-        pointer.outpoint.transactionId,
-        1,
-        transaction,
-        currentDaa,
-        expectedOwner ?? address,
-        expectedCovenantId,
-        expectedCreator,
-        contract,
-      );
-    }));
-  }
-
-  async findMembership(
-    owner: string,
-    creator: string,
-    expectedCovenantId?: string,
-    contract: MembershipContract = currentMembershipContract(),
-  ): Promise<MembershipCheck | null> {
-    const [utxos, currentDaa] = await Promise.all([this.utxos(owner), this.currentDaa()]);
-    const pointers = utxos.filter((utxo) => bigintOrNull(utxo.utxoEntry.amount) === MEMBERSHIP_INDEX_VALUE);
-    for (const pointer of pointers) {
-      const transaction = await this.transaction(pointer.outpoint.transactionId);
-      const check = await this.checkMemberOutput(
-        pointer.outpoint.transactionId,
-        1,
-        transaction,
-        currentDaa,
-        owner,
-        expectedCovenantId,
-        creator,
-        contract,
-      );
-      if (check.status === "VALID") return check;
-    }
-    return null;
-  }
 
   async verifyUtxo(
     transactionId: string,
@@ -299,11 +249,6 @@ function outputScript(output: ChainOutput | undefined): string | null {
 
 function withVersion(script: string): string {
   return script.startsWith("0000") ? script : `0000${script}`;
-}
-
-function bigintOrNull(value: unknown): bigint | null {
-  if (typeof value !== "string" && typeof value !== "number") return null;
-  try { return BigInt(value); } catch { return null; }
 }
 
 function keyAddress(publicKey: string, network: NetworkId): string | null {

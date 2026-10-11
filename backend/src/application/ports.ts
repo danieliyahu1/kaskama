@@ -143,6 +143,8 @@ export interface CovenantRepository {
 export interface MembershipPurchaseRepository {
   createMembershipPurchase(value: MembershipPurchase): Promise<DuplicateOutcome>;
   membershipReceipts(buyer: string, creator: string): Promise<MembershipPurchase[]>;
+  /** Every recorded membership for an address, across creators. */
+  membershipReceiptsForBuyer(buyer: string): Promise<MembershipPurchase[]>;
   finalizeMembershipPurchase(
     preparedMembershipId: string,
     value: MembershipPurchase,
@@ -308,19 +310,6 @@ export interface WalletVerifier {
 }
 
 export interface MembershipVerifier {
-  verifyAddress(
-    address: string,
-    expectedOwner?: string,
-    expectedCovenantId?: string,
-    expectedCreator?: string,
-    contract?: MembershipContract,
-  ): Promise<MembershipCheck[]>;
-  findMembership(
-    owner: string,
-    creator: string,
-    expectedCovenantId?: string,
-    contract?: MembershipContract,
-  ): Promise<MembershipCheck | null>;
   verifyUtxo(
     transactionId: string,
     outputIndex: number,

@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import {
   MAX_MEMBERSHIP_PRICE_SOMPI,
   MEMBERSHIP_DURATION_DAA,
-  MEMBERSHIP_INDEX_VALUE,
   MEMBERSHIP_OUTPUT_VALUE,
   MIN_MEMBERSHIP_FEE_SOMPI,
   MIN_MEMBERSHIP_PRICE_SOMPI,
@@ -36,7 +35,6 @@ describe("membership covenant constants", () => {
     expect(constant("MEMBERSHIP_LIFETIME_DAA"), regenerate).toBe(
       MEMBERSHIP_DURATION_DAA,
     );
-    expect(constant("INDEX_OUTPUT_VALUE"), regenerate).toBe(MEMBERSHIP_INDEX_VALUE);
     expect(constant("MEMBERSHIP_OUTPUT_VALUE"), regenerate).toBe(
       MEMBERSHIP_OUTPUT_VALUE,
     );

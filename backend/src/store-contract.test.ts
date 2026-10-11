@@ -234,6 +234,8 @@ describe.each([
     expect(await store.createMembershipPurchase(membership)).toBe("DUPLICATE");
     expect(await store.membershipReceipts(buyer, creator)).toEqual([membership]);
     expect(await store.membershipReceipts(buyer, "other-creator")).toEqual([]);
+    expect(await store.membershipReceiptsForBuyer(buyer)).toEqual([membership]);
+    expect(await store.membershipReceiptsForBuyer("other-buyer")).toEqual([]);
   });
 
   it("returns active offers for a set of creators in one call", async () => {

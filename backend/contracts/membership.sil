@@ -11,7 +11,6 @@ contract Membership(
     int constant MEMBERSHIP_LIFETIME_DAA = 25920000;
     int constant MIN_PRICE_SOMPI = 200000000;
     int constant MAX_PRICE_SOMPI = 100000000000000;
-    int constant INDEX_OUTPUT_VALUE = 50000000;
     int constant MEMBERSHIP_OUTPUT_VALUE = 50000000;
     int constant FEE_DENOMINATOR = 100;
     int constant MIN_FEE_SOMPI = 100000000;
@@ -29,8 +28,7 @@ contract Membership(
         State[] newStates,
         byte fundingInputIndex,
         byte paymentOutputIndex,
-        byte platformOutputIndex,
-        byte ownerIndexOutputIndex
+        byte platformOutputIndex
     ) {
         require(prevState.isMinter);
         require(prevState.priceSompi >= MIN_PRICE_SOMPI);
@@ -54,8 +52,6 @@ contract Membership(
 
         byte[] ownerLock = byte[](new ScriptPubKeyP2PK(pubkey(newStates[1].owner)));
         require(tx.inputs[unsigned(fundingInputIndex)].scriptPubKey == ownerLock);
-        require(tx.outputs[unsigned(ownerIndexOutputIndex)].scriptPubKey == ownerLock);
-        require(tx.outputs[unsigned(ownerIndexOutputIndex)].value == INDEX_OUTPUT_VALUE);
 
         byte[] creatorLock = byte[](new ScriptPubKeyP2PK(pubkey(prevState.creator)));
         int platformPayment = (prevState.priceSompi + 50) / FEE_DENOMINATOR;

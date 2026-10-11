@@ -659,6 +659,13 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
     });
     return r.rows.map(membershipPurchaseFromRow);
   }
+  async membershipReceiptsForBuyer(buyer: string) {
+    const r = await this.execute({
+      sql: `SELECT * FROM membership_purchases WHERE buyer=?`,
+      args: [buyer],
+    });
+    return r.rows.map(membershipPurchaseFromRow);
+  }
   async finalizePurchase(id: string, value: Purchase): Promise<DuplicateOutcome> {
     return this.transactionalFinalize(
       id,

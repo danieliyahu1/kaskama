@@ -54,9 +54,9 @@ Evidence: `backend/src/app.ts` (prepare/finalize routes),
 Status: **verified** by adversarial consensus tests.
 
 `backend/contracts/membership.sil` requires a minter state to mint, enforces the
-creator payment and optional platform payment, binds the member output to the
-buyer's P2PK lock and the discovery pointer, and constrains the membership
-lifetime relative to the transaction DAA score.
+creator payment and optional platform payment, binds the funding input to the
+buyer's P2PK lock, and constrains the membership lifetime relative to the
+transaction DAA score.
 
 The consensus suite (`backend/contracts/consensus-tests/src/lib.rs`) exercises
 the VM with negative cases added in this audit:

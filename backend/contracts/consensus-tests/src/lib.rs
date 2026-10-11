@@ -108,7 +108,6 @@ mod tests {
         builder.add_data(&[1]).unwrap();
         builder.add_data(&[2]).unwrap();
         builder.add_data(&[3]).unwrap();
-        builder.add_data(&[4]).unwrap();
         builder.add_data(compiled.dispatch_tags.get("mint").expect("mint dispatch tag")).unwrap();
         builder.add_data(current).unwrap();
         builder.drain()
@@ -201,7 +200,6 @@ mod tests {
                 TransactionOutput { value: DEPOSIT, script_public_key: pay_to_script_hash_script(&member), covenant: Some(CovenantBinding { authorizing_input: 0, covenant_id: COVENANT_ID }) },
                 TransactionOutput { value: PRICE - fee, script_public_key: p2pk(&creator_key), covenant: None },
                 TransactionOutput { value: fee, script_public_key: p2pk(&platform_key), covenant: None },
-                TransactionOutput { value: DEPOSIT, script_public_key: buyer_spk.clone(), covenant: None },
                 TransactionOutput { value: 100_000_000, script_public_key: buyer_spk, covenant: None },
             ],
             DAA,
@@ -424,7 +422,6 @@ mod tests {
             TransactionOutput { value: DEPOSIT, script_public_key: pay_to_script_hash_script(member), covenant: Some(CovenantBinding { authorizing_input: 0, covenant_id: COVENANT_ID }) },
             TransactionOutput { value: price as u64 - fee, script_public_key: p2pk(&creator_key), covenant: None },
             TransactionOutput { value: fee, script_public_key: p2pk(&platform_key), covenant: None },
-            TransactionOutput { value: DEPOSIT, script_public_key: buyer_spk.clone(), covenant: None },
             TransactionOutput { value: 100_000_000, script_public_key: buyer_spk, covenant: None },
         ]
     }
@@ -514,8 +511,8 @@ mod tests {
         let mut outputs = valid_mint_outputs(&minter, &member, PRICE as i64);
         // A member-shaped output at a non-designated index must not satisfy the
         // covenant; only the contract-selected member output carries the state.
-        outputs[5].script_public_key = pay_to_script_hash_script(&member);
-        outputs[5].covenant = Some(CovenantBinding { authorizing_input: 0, covenant_id: COVENANT_ID });
+        outputs[4].script_public_key = pay_to_script_hash_script(&member);
+        outputs[4].covenant = Some(CovenantBinding { authorizing_input: 0, covenant_id: COVENANT_ID });
         assert_eq!(
             execute(&mint_transaction(&compiled, &minter, &member, PRICE as i64, &entries, outputs), &entries, 0),
             Err(TxScriptError::VerifyError),

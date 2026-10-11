@@ -430,6 +430,11 @@ export class MemoryStore implements Repositories {
       .filter((v) => v.buyer === buyer && v.creator === creator)
       .map((v) => structuredClone(v));
   }
+  async membershipReceiptsForBuyer(buyer: string) {
+    return [...this.membershipPurchaseRecords.values()]
+      .filter((v) => v.buyer === buyer)
+      .map((v) => structuredClone(v));
+  }
   async finalizePurchase(id: string, value: Purchase): Promise<DuplicateOutcome> {
     const outcome = await this.createPurchase(value);
     this.paymentAttemptRecords.delete(id);

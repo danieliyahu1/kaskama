@@ -76,8 +76,6 @@ function validCheck(transactionId: string): MembershipCheck {
 }
 
 const membershipVerifier = (check: MembershipCheck): MembershipVerifier => ({
-  verifyAddress: async () => [check],
-  findMembership: async () => check,
   verifyUtxo: async () => check,
 });
 

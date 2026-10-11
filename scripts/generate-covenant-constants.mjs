@@ -33,11 +33,6 @@ const MAPPING = [
     doc: "How long a membership lasts, in DAA score.",
   },
   {
-    exported: "MEMBERSHIP_INDEX_VALUE",
-    covenant: "INDEX_OUTPUT_VALUE",
-    doc: "The owner-index output value a mint requires, in sompi.",
-  },
-  {
     exported: "MEMBERSHIP_OUTPUT_VALUE",
     covenant: "MEMBERSHIP_OUTPUT_VALUE",
     doc: "The minter and member covenant output value, in sompi.",

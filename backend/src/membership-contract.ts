@@ -9,7 +9,6 @@ import artifact from "./contracts/membership.json" with { type: "json" };
 
 export {
   MEMBERSHIP_DURATION_DAA,
-  MEMBERSHIP_INDEX_VALUE,
   MEMBERSHIP_OUTPUT_VALUE,
 } from "@kaskama/shared";
 export const MEMBERSHIP_PROTOCOL = "kaskama";
@@ -153,7 +152,6 @@ export function membershipMintSignatureScript(
   fundingInputIndex: number,
   paymentOutputIndex: number,
   platformOutputIndex: number,
-  ownerIndexOutputIndex: number,
 ): string {
   const builder = new ScriptBuilder({ flags: { covenantsEnabled: true } });
   builder.addData(`${minter.creator}${member.creator}`);
@@ -179,7 +177,6 @@ export function membershipMintSignatureScript(
   builder.addData(byteHex(fundingInputIndex));
   builder.addData(byteHex(paymentOutputIndex));
   builder.addData(byteHex(platformOutputIndex));
-  builder.addData(byteHex(ownerIndexOutputIndex));
   builder.addData(contract.entries.mint.dispatch_tag);
   return ScriptBuilder.fromScript(builder.toString(), {
     flags: { covenantsEnabled: true },

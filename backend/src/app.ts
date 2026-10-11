@@ -94,6 +94,7 @@ import { createPublishPostUseCase } from "./application/publication-use-cases.js
 import { createDeletePostUseCase } from "./application/delete-post.js";
 import { MembershipAccess } from "./application/membership-access.js";
 import { MembershipSettlement } from "./application/membership-settlement.js";
+import { MembershipVerification } from "./application/membership-verification.js";
 import { StorageError } from "./r2-storage.js";
 import { discardTempDir } from "./temp-files.js";
 
@@ -167,6 +168,10 @@ export function createApp(d: AppDependencies) {
   });
   const discovery = createDiscoveryUseCases({ profiles: d.store });
   const membershipAccess = new MembershipAccess(d.store, d.store, d.membershipVerifier);
+  const membershipVerification = new MembershipVerification(
+    d.store,
+    d.membershipVerifier,
+  );
   // The one decision maker for "has this membership transaction settled?",
   // shared with the reconciler so the immediate finalize and the background
   // pass can never disagree about whether a purchase happened.
@@ -1430,7 +1435,7 @@ export function createApp(d: AppDependencies) {
       if (!addressPattern.test(address)) return apiError(res, 400, "INVALID_ADDRESS");
       const owner = ownerFrom(req, addressPattern);
       if (owner === "invalid") return apiError(res, 400, "INVALID_ADDRESS");
-      const memberships = await d.membershipVerifier.verifyAddress(address, owner),
+      const memberships = await membershipVerification.checksFor(address, owner),
         body: MembershipAddressVerificationResponse = {
           address,
           verifiedAt: new Date(now()).toISOString(),

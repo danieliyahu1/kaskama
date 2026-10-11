@@ -694,7 +694,7 @@ export function openApiDocument(origin: string): Record<string, unknown> {
         ),
       },
       "/api/verify/membership/address/{address}": {
-        get: get("Membership status from chain, by address.", {
+        get: get("Membership status by address, from recorded covenant handles verified on chain.", {
           security: false,
           parameters: [
             pathParam("address", "Member wallet address."),

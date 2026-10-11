@@ -14,8 +14,5 @@ export const MIN_MEMBERSHIP_FEE_SOMPI = 100_000_000n;
 /** How long a membership lasts, in DAA score. */
 export const MEMBERSHIP_DURATION_DAA = 25_920_000n;
 
-/** The owner-index output value a mint requires, in sompi. */
-export const MEMBERSHIP_INDEX_VALUE = 50_000_000n;
-
 /** The minter and member covenant output value, in sompi. */
 export const MEMBERSHIP_OUTPUT_VALUE = 50_000_000n;
