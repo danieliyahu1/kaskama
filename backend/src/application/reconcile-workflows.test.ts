@@ -258,6 +258,45 @@ describe("WorkflowReconciler", () => {
     expect(await store.getMembershipSubmission("prepared-1")).toBeNull();
   });
 
+  it("keeps the contract a reconciled offer was created with", async () => {
+    // An offer the client left for the reconciler must keep the contract it was
+    // created with, or a later contract change orphans its on-chain identity.
+    const contract = { prefix: "6b", suffix: "6a" };
+    await store.saveMembershipAttempt({
+      id: "prepared-1",
+      transaction: "{}",
+      fingerprint: "fp",
+      covenantId: "a".repeat(64),
+      signInputs: [0],
+      memberOutputIndex: null,
+      creator,
+      buyer: creator,
+      kind: "offer",
+      expiresAt: now + 60_000,
+      priceSompi: "1000",
+      contract,
+    });
+    await store.markMembershipSubmitted({
+      preparedMembershipId: "prepared-1",
+      state: "SUBMITTED",
+      transactionId: "tx-1",
+      rejection: null,
+      submittedAt: now,
+    });
+
+    const reconciler = new WorkflowReconciler({
+      store,
+      membershipGateway: {
+        ...membershipGateway,
+        status: async () => accepted("tx-1"),
+      },
+    });
+    const summary = await reconciler.run(now);
+
+    expect(summary.confirmed).toBe(1);
+    expect((await store.getCreatorCovenant(creator))?.contract).toEqual(contract);
+  });
+
   it("still settles a membership whose prepared record outlived the client TTL", async () => {
     await store.saveMembershipAttempt({
       id: "prepared-1",
