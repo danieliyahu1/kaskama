@@ -1741,6 +1741,65 @@ describe("membership state changes", () => {
     expect(await store.membershipReceipts(creator, creator)).toHaveLength(1);
   });
 
+  it("keeps the relayed transaction id on a purchase when verification fails", async () => {
+    const store = new MemoryStore();
+    await seedPurchase(store);
+    const verifier: MembershipVerifier = {
+      verifyUtxo: async () => {
+        throw new Error("node unavailable");
+      },
+    };
+    const { app } = testApp(
+      store,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      verifier,
+      gatewayThatConfirms(),
+    );
+
+    await request(app)
+      .post("/api/membership/purchases/prepared-1/finalize")
+      .set("Cookie", "kaskama_session=creator-session")
+      .send({ signedTransaction: "{}" });
+
+    // The relay return was durable before the chain lookup, so a verification
+    // failure leaves the reconciler a submitted attempt with its transaction id
+    // instead of a PREPARED attempt that pruning would erase.
+    expect(await store.getMembershipSubmission("prepared-1")).toMatchObject({
+      state: "SUBMITTED",
+      transactionId: "tx-1",
+    });
+  });
+
+  it("keeps the relayed transaction id on an offer when confirmation fails", async () => {
+    const store = new MemoryStore();
+    const creator = await creatorSession(store);
+    await seedAttempt(store, creator, "offer");
+    let confirmCalls = 0;
+    const gateway: MembershipGateway = {
+      ...gatewayThatThrows(new Error("unused")),
+      submit: async () => ({ transactionId: "tx-1", rejection: null }),
+      confirm: async () => {
+        confirmCalls += 1;
+        if (confirmCalls === 1) throw new Error("node unavailable");
+        return true;
+      },
+    };
+    const { app } = appWithGateway(store, gateway);
+
+    await request(app)
+      .post("/api/membership/offers/prepared-1/finalize")
+      .set("Cookie", "kaskama_session=creator-session")
+      .send({ signedTransaction: "aa01" });
+
+    expect(await store.getMembershipSubmission("prepared-1")).toMatchObject({
+      state: "SUBMITTED",
+      transactionId: "tx-1",
+    });
+  });
+
   it("re-checks an in-flight purchase instead of relaying again", async () => {
     const store = new MemoryStore();
     await seedPurchase(store);

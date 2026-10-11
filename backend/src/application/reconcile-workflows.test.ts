@@ -350,4 +350,82 @@ describe("WorkflowReconciler", () => {
       transactionId: "tx-1",
     });
   });
+
+  it("retries a payment whose finalization failed instead of stranding it", async () => {
+    await store.publishPost(post("paid-post"));
+    await savePayment({ transactionId: "tx-1" });
+    // A transient store failure after the chain accepted the transaction. The
+    // receipt write must roll back as a unit, leaving the attempt retryable.
+    const finalize = store.finalizePurchase.bind(store);
+    store.finalizePurchase = async () => {
+      store.finalizePurchase = finalize;
+      throw new Error("transient database failure");
+    };
+
+    const reconciler = new WorkflowReconciler({
+      store,
+      paymentGateway: paymentGateway(() => accepted("tx-1")),
+    });
+    const first = await reconciler.run(now);
+
+    expect(first.confirmed).toBe(0);
+    expect(await store.getPaymentSubmission("prepared-1")).toMatchObject({
+      state: "SUBMITTED",
+    });
+    expect(await store.getPurchase("paid-post", buyer)).toBeNull();
+
+    const second = await reconciler.run(now);
+
+    expect(second.confirmed).toBe(1);
+    expect(await store.getPurchase("paid-post", buyer)).toMatchObject({
+      transactionId: "tx-1",
+    });
+  });
+
+  it("retries a membership offer whose finalization failed instead of stranding it", async () => {
+    await store.saveMembershipAttempt({
+      id: "prepared-1",
+      transaction: "{}",
+      fingerprint: "fp",
+      covenantId: "a".repeat(64),
+      signInputs: [0],
+      memberOutputIndex: null,
+      creator,
+      buyer: creator,
+      kind: "offer",
+      expiresAt: now + 60_000,
+      priceSompi: "1000",
+    });
+    await store.markMembershipSubmitted({
+      preparedMembershipId: "prepared-1",
+      state: "SUBMITTED",
+      transactionId: "tx-1",
+      rejection: null,
+      submittedAt: now,
+    });
+    const finalize = store.finalizeOffer.bind(store);
+    store.finalizeOffer = async () => {
+      store.finalizeOffer = finalize;
+      throw new Error("transient database failure");
+    };
+
+    const reconciler = new WorkflowReconciler({
+      store,
+      membershipGateway: {
+        ...membershipGateway,
+        status: async () => accepted("tx-1"),
+      },
+    });
+    const first = await reconciler.run(now);
+
+    expect(first.confirmed).toBe(0);
+    expect(await store.getMembershipSubmission("prepared-1")).toMatchObject({
+      state: "SUBMITTED",
+    });
+
+    const second = await reconciler.run(now);
+
+    expect(second.confirmed).toBe(1);
+    expect(await store.getCreatorCovenant(creator)).not.toBeNull();
+  });
 });

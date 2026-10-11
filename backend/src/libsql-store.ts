@@ -210,24 +210,11 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
     return r.rows[0] ? paymentAttemptStatusFromRow(r.rows[0]) : null;
   }
   async deletePaymentAttempt(id: string) {
-    await this.execute({
+    const r = await this.execute({
       sql: `DELETE FROM payment_attempts WHERE id=?`,
       args: [id],
     });
-  }
-  async claimPaymentAttemptTerminal(
-    id: string,
-    state: "CONFIRMED" | "REJECTED",
-    now: number,
-    rejection: string | null = null,
-  ) {
-    const r = await this.execute({
-      sql: `UPDATE payment_attempts SET state=?, rejection=?, finalized_at=?
-        WHERE id=? AND state='SUBMITTED' AND finalized_at IS NULL
-        RETURNING finalized_at`,
-      args: [state, rejection, now, id],
-    });
-    return r.rows[0] ? number(r.rows[0].finalized_at) : null;
+    return r.rowsAffected === 1;
   }
   async pendingPaymentAttempts(limit: number) {
     const r = await this.execute({
@@ -302,24 +289,11 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
     return r.rows[0] ? membershipAttemptStatusFromRow(r.rows[0]) : null;
   }
   async deleteMembershipAttempt(id: string) {
-    await this.execute({
+    const r = await this.execute({
       sql: `DELETE FROM membership_attempts WHERE id=?`,
       args: [id],
     });
-  }
-  async claimMembershipAttemptTerminal(
-    id: string,
-    state: "CONFIRMED" | "REJECTED",
-    now: number,
-    rejection: string | null = null,
-  ) {
-    const r = await this.execute({
-      sql: `UPDATE membership_attempts SET state=?, rejection=?, finalized_at=?
-        WHERE id=? AND state='SUBMITTED' AND finalized_at IS NULL
-        RETURNING finalized_at`,
-      args: [state, rejection, now, id],
-    });
-    return r.rows[0] ? number(r.rows[0].finalized_at) : null;
+    return r.rowsAffected === 1;
   }
   async pendingMembershipAttempts(limit: number) {
     const r = await this.execute({

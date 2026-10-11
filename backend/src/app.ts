@@ -264,13 +264,16 @@ export function createApp(d: AppDependencies) {
         }),
       };
     }
+    // The relay return is the durable fact: record the transaction id and move
+    // the attempt to SUBMITTED before confirming, so a confirm that fails still
+    // leaves the reconciler a submitted attempt with its transaction id.
+    await d.store.markMembershipSubmitted({
+      preparedMembershipId: id,
+      state: "SUBMITTED",
+      transactionId: relayed.transactionId,
+      rejection: null,
+    });
     if (!(await d.membershipGateway!.confirm(relayed.transactionId))) {
-      await d.store.markMembershipSubmitted({
-        preparedMembershipId: id,
-        state: "SUBMITTED",
-        transactionId: relayed.transactionId,
-        rejection: null,
-      });
       metrics.membershipFinalizeAttempt(kind, "pending");
       return {
         confirmed: false,
@@ -921,13 +924,7 @@ export function createApp(d: AppDependencies) {
       }
       const workflow = await d.store.getPaymentSubmission(id);
       const submission = workflow
-        ? workflow.state === "CONFIRMED"
-          ? {
-              isAccepted: true as const,
-              transactionId: workflow.transactionId,
-              rejection: workflow.rejection,
-            }
-          : await d.paymentGateway.status(workflow.transactionId)
+        ? await d.paymentGateway.status(workflow.transactionId)
         : await (async () => {
             const body = z
               .object({ signedTransaction: z.string().min(1) })
@@ -962,19 +959,20 @@ export function createApp(d: AppDependencies) {
         buyer: prepared.buyer,
         transactionId: submission.transactionId,
       };
+      // The relay return is the durable fact: record the transaction id and move
+      // the attempt to SUBMITTED before settling, so a failure here leaves the
+      // reconciler a submitted attempt instead of stranding the payment.
       await d.store.markPaymentSubmitted({
         preparedPaymentId: id,
-        state: "CONFIRMED",
+        state: "SUBMITTED",
         transactionId: submission.transactionId,
         rejection: null,
       });
       const outcome = await d.store.finalizePurchase(id, purchase);
       if (outcome === "DUPLICATE") {
-        await d.store.deletePaymentAttempt(id);
         metrics.paymentFinalizeAttempt("purchase_exists");
         return apiError(res, 409, "PURCHASE_EXISTS");
       }
-      await d.store.deletePaymentAttempt(id);
       metrics.paymentFinalizeAttempt("confirmed");
       res.status(201).json({
         state: "CONFIRMED",
@@ -1078,19 +1076,11 @@ export function createApp(d: AppDependencies) {
         contract: value.contract ?? currentMembershipContract(),
       };
       const result = await d.store.finalizeOffer(id, mapping);
-      await d.store.markMembershipSubmitted({
-        preparedMembershipId: id,
-        state: "CONFIRMED",
-        transactionId: outcome.transactionId,
-        rejection: null,
-      });
       if (result === "DUPLICATE") {
-        await d.store.deleteMembershipAttempt(id);
         return apiError(res, 409, "MEMBERSHIP_OFFER_EXISTS", COPY.membershipOfferExists, {
           retry: RETRY_AFTER_REFRESH,
         });
       }
-      await d.store.deleteMembershipAttempt(id);
       metrics.membershipFinalizeAttempt("offer", "confirmed");
       res.status(201).json({
         state: "CONFIRMED",
@@ -1143,7 +1133,6 @@ export function createApp(d: AppDependencies) {
     required,
     asyncHandler(async (req, res) => {
       if (!d.membershipGateway) throw new HttpError(503, "MEMBERSHIP_UNAVAILABLE");
-      if (!d.store.finalizeCancellation) throw new HttpError(503, "MEMBERSHIP_UNAVAILABLE");
       const id = param(req, "id");
       const value = await d.store.getMembershipAttempt(id, now());
       if (!value || value.kind !== "cancel" || value.creator !== req.walletSession!.address)
@@ -1163,7 +1152,6 @@ export function createApp(d: AppDependencies) {
         creator: value.creator,
         covenantId: value.covenantId,
       });
-      await d.store.deleteMembershipAttempt(id);
       if (outcome === "DUPLICATE")
         return apiError(res, 409, "MEMBERSHIP_CANCELLATION_STALE", COPY.membershipCancellationStale, {
           retry: RETRY_AFTER_REFRESH,
@@ -1314,7 +1302,6 @@ export function createApp(d: AppDependencies) {
         covenantId: value.covenantId,
         priceSompi: value.priceSompi!,
       });
-      await d.store.deleteMembershipAttempt(id);
       if (outcome === "DUPLICATE")
         return apiError(res, 409, "MEMBERSHIP_PRICE_UPDATE_STALE", COPY.membershipStale, {
           retry: RETRY_AFTER_REFRESH,
@@ -1382,18 +1369,22 @@ export function createApp(d: AppDependencies) {
           });
         }
         transactionId = submission.transactionId;
-      }
-      // One decision, shared with the reconciler: has the purchase settled? A
-      // purchase is confirmed only once its member output is verified on chain;
-      // until then it is pending, never a rejection.
-      const settlement = await membershipSettlement!.settle(value, transactionId);
-      if (settlement.state === "PENDING") {
+        // The relay return is the durable fact. Record the transaction id and
+        // move the attempt to SUBMITTED now, before the chain lookup in settle,
+        // so a verification that fails leaves the reconciler a submitted attempt
+        // with its transaction id instead of a prunable PREPARED one.
         await d.store.markMembershipSubmitted({
           preparedMembershipId: id,
           state: "SUBMITTED",
           transactionId,
           rejection: null,
         });
+      }
+      // One decision, shared with the reconciler: has the purchase settled? A
+      // purchase is confirmed only once its member output is verified on chain;
+      // until then it is pending, never a rejection.
+      const settlement = await membershipSettlement!.settle(value, transactionId);
+      if (settlement.state === "PENDING") {
         metrics.membershipFinalizeAttempt("purchase", "pending");
         return res.status(202).json({ state: "PENDING", transactionId });
       }
@@ -1412,13 +1403,6 @@ export function createApp(d: AppDependencies) {
         creator: value.creator,
         covenantId: value.covenantId,
       });
-      await d.store.markMembershipSubmitted({
-        preparedMembershipId: id,
-        state: "CONFIRMED",
-        transactionId,
-        rejection: null,
-      });
-      await d.store.deleteMembershipAttempt(id);
       if (outcome === "DUPLICATE")
         return apiError(res, 409, "MEMBERSHIP_PURCHASE_EXISTS", COPY.membershipPurchaseExists, {
           retry: RETRY_AFTER_REFRESH,

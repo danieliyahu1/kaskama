@@ -1,4 +1,5 @@
 import type {
+  DuplicateOutcome,
   MembershipGateway,
   MembershipVerifier,
   PaymentGateway,
@@ -54,7 +55,9 @@ export interface ReconcileSummary {
  * the durable half of "the backend decides": it polls persisted transaction IDs
  * and finalizes the off-chain record. It never broadcasts a transaction and
  * never trusts a value the client supplied. Exactly one process finalizes a
- * workflow because terminal claiming is atomic in the store.
+ * workflow because the store writes the receipt and consumes the attempt in one
+ * transaction: an attempt stays SUBMITTED, and therefore retryable, until that
+ * transaction commits.
  */
 export class WorkflowReconciler {
   private readonly now: () => number;
@@ -120,79 +123,67 @@ export class WorkflowReconciler {
       workflow.preparedPaymentId,
     );
     if (!prepared) {
-      await this.abandonPayment(workflow, now, "attempt_missing", summary);
+      await this.abandonPayment(workflow, "attempt_missing", summary);
       return;
     }
     const submission = await gateway.status(workflow.transactionId);
     if (submission.isAccepted === null) {
       if (this.workflowAge(workflow, now) > this.staleWorkflowMs)
-        await this.abandonPayment(workflow, now, "unconfirmed_timeout", summary);
+        await this.abandonPayment(workflow, "unconfirmed_timeout", summary);
       else summary.retried += 1;
       return;
     }
     if (submission.isAccepted !== true) {
-      await this.rejectPayment(workflow, now, summary);
+      await this.rejectPayment(workflow, summary);
       return;
     }
-    await this.confirmPayment(workflow, prepared, workflow.transactionId, now, summary);
+    await this.confirmPayment(workflow, prepared, workflow.transactionId, summary);
   }
 
+  /**
+   * Writes the receipt and consumes the attempt in one transaction, so the
+   * terminal outcome is only ever observed once the effect is durable. A
+   * failure rolls the whole thing back, leaving the attempt SUBMITTED for the
+   * next pass instead of stranding a confirmed payment with no receipt.
+   */
   private async confirmPayment(
     workflow: PaymentAttemptStatus,
     prepared: PaymentAttempt,
     transactionId: string,
-    now: number,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimPaymentAttemptTerminal(
-      workflow.preparedPaymentId,
-      "CONFIRMED",
-      now,
-    );
-    if (claimed === null) return;
     const outcome = await this.d.store.finalizePurchase(workflow.preparedPaymentId, {
       postId: prepared.postId,
       buyer: prepared.buyer,
       transactionId,
     });
-    await this.d.store.deletePaymentAttempt(workflow.preparedPaymentId);
+    // Only the pass that created the receipt settles the workflow. A duplicate
+    // means another worker already did, or the buyer already owns the post.
+    if (outcome !== "CREATED") {
+      this.metrics.paymentFinalizeAttempt("purchase_exists");
+      return;
+    }
     summary.confirmed += 1;
-    this.metrics.paymentFinalizeAttempt(
-      outcome === "DUPLICATE" ? "purchase_exists" : "confirmed",
-    );
+    this.metrics.paymentFinalizeAttempt("confirmed");
   }
 
   private async rejectPayment(
     workflow: PaymentAttemptStatus,
-    now: number,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimPaymentAttemptTerminal(
-      workflow.preparedPaymentId,
-      "REJECTED",
-      now,
-      "RECONCILED_REJECTED",
-    );
-    if (claimed === null) return;
-    await this.d.store.deletePaymentAttempt(workflow.preparedPaymentId);
+    if (!(await this.d.store.deletePaymentAttempt(workflow.preparedPaymentId)))
+      return;
     summary.rejected += 1;
     this.metrics.paymentFinalizeAttempt("rejected");
   }
 
   private async abandonPayment(
     workflow: PaymentAttemptStatus,
-    now: number,
     reason: string,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimPaymentAttemptTerminal(
-      workflow.preparedPaymentId,
-      "REJECTED",
-      now,
-      reason,
-    );
-    if (claimed === null) return;
-    await this.d.store.deletePaymentAttempt(workflow.preparedPaymentId);
+    if (!(await this.d.store.deletePaymentAttempt(workflow.preparedPaymentId)))
+      return;
     summary.abandoned += 1;
     this.metrics.paymentFinalizeAttempt("abandoned");
     this.logger.warn("workflow_reconcile_payment_abandoned", { reason });
@@ -222,37 +213,38 @@ export class WorkflowReconciler {
       workflow.preparedMembershipId,
     );
     if (!prepared) {
-      await this.abandonMembership(workflow, now, "attempt_missing", summary);
+      await this.abandonMembership(workflow, "attempt_missing", summary);
       return;
     }
     const settlement = await this.settlement.settle(prepared, workflow.transactionId);
     if (settlement.state === "PENDING") {
       if (this.workflowAge(workflow, now) > this.staleWorkflowMs)
-        await this.abandonMembership(workflow, now, "unconfirmed_timeout", summary);
+        await this.abandonMembership(workflow, "unconfirmed_timeout", summary);
       else summary.retried += 1;
       return;
     }
     if (settlement.state === "REJECTED") {
-      await this.rejectMembership(workflow, now, summary);
+      await this.rejectMembership(workflow, summary);
       return;
     }
-    await this.confirmMembership(workflow, prepared, now, summary);
+    await this.confirmMembership(workflow, prepared, summary);
   }
 
+  /**
+   * Applies the membership effect and consumes the attempt in one transaction,
+   * so this pass only reports a confirmation once the effect is durable. A
+   * failure rolls back, leaving the attempt SUBMITTED for the next pass.
+   */
   private async confirmMembership(
     workflow: MembershipAttemptStatus,
     prepared: MembershipAttempt,
-    now: number,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimMembershipAttemptTerminal(
-      workflow.preparedMembershipId,
-      "CONFIRMED",
-      now,
+    const outcome = await this.finalizeMembershipRecord(
+      prepared,
+      workflow.transactionId,
     );
-    if (claimed === null) return;
-    await this.finalizeMembershipRecord(prepared, workflow.transactionId);
-    await this.d.store.deleteMembershipAttempt(workflow.preparedMembershipId);
+    if (outcome !== "CREATED") return;
     summary.confirmed += 1;
     this.metrics.membershipFinalizeAttempt(prepared.kind, "confirmed");
   }
@@ -260,71 +252,52 @@ export class WorkflowReconciler {
   private async finalizeMembershipRecord(
     prepared: MembershipAttempt,
     transactionId: string,
-  ): Promise<void> {
+  ): Promise<DuplicateOutcome> {
     switch (prepared.kind) {
       case "offer":
-        await this.d.store.finalizeOffer(prepared.id, {
+        return this.d.store.finalizeOffer(prepared.id, {
           creator: prepared.creator,
           covenantId: prepared.covenantId,
           priceSompi: prepared.priceSompi ?? "0",
           contract: prepared.contract ?? currentMembershipContract(),
         });
-        return;
       case "update":
-        await this.d.store.finalizePriceUpdate(prepared.id, {
+        return this.d.store.finalizePriceUpdate(prepared.id, {
           creator: prepared.creator,
           covenantId: prepared.covenantId,
           priceSompi: prepared.priceSompi ?? "0",
         });
-        return;
       case "cancel":
-        if (this.d.store.finalizeCancellation)
-          await this.d.store.finalizeCancellation(prepared.id, {
-            creator: prepared.creator,
-            covenantId: prepared.covenantId,
-          });
-        return;
+        return this.d.store.finalizeCancellation(prepared.id, {
+          creator: prepared.creator,
+          covenantId: prepared.covenantId,
+        });
       case "purchase":
-        await this.d.store.finalizeMembershipPurchase(prepared.id, {
+        return this.d.store.finalizeMembershipPurchase(prepared.id, {
           transactionId,
           buyer: prepared.buyer,
           creator: prepared.creator,
           covenantId: prepared.covenantId,
         });
-        return;
     }
   }
 
   private async rejectMembership(
     workflow: MembershipAttemptStatus,
-    now: number,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimMembershipAttemptTerminal(
-      workflow.preparedMembershipId,
-      "REJECTED",
-      now,
-      "RECONCILED_REJECTED",
-    );
-    if (claimed === null) return;
-    await this.d.store.deleteMembershipAttempt(workflow.preparedMembershipId);
+    if (!(await this.d.store.deleteMembershipAttempt(workflow.preparedMembershipId)))
+      return;
     summary.rejected += 1;
   }
 
   private async abandonMembership(
     workflow: MembershipAttemptStatus,
-    now: number,
     reason: string,
     summary: ReconcileSummary,
   ): Promise<void> {
-    const claimed = await this.d.store.claimMembershipAttemptTerminal(
-      workflow.preparedMembershipId,
-      "REJECTED",
-      now,
-      reason,
-    );
-    if (claimed === null) return;
-    await this.d.store.deleteMembershipAttempt(workflow.preparedMembershipId);
+    if (!(await this.d.store.deleteMembershipAttempt(workflow.preparedMembershipId)))
+      return;
     summary.abandoned += 1;
     this.logger.warn("workflow_reconcile_membership_abandoned", { reason });
   }

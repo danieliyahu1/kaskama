@@ -9,12 +9,10 @@ import type {
   PreparedMembershipTransaction,
   MembershipSubmission,
   MembershipAttemptStatus,
-  MembershipAttemptState,
   PaymentAttempt,
   PreparedPayment,
   PaymentSubmission,
   PaymentAttemptStatus,
-  PaymentAttemptState,
   Profile,
   Purchase,
   Session,
@@ -49,17 +47,13 @@ export interface PaymentAttemptRepository {
   prunePaymentAttempts(now: number): Promise<void>;
   markPaymentSubmitted(value: PaymentAttemptStatus): Promise<void>;
   getPaymentSubmission(preparedPaymentId: string): Promise<PaymentAttemptStatus | null>;
-  deletePaymentAttempt(preparedPaymentId: string): Promise<void>;
   /**
-   * Atomically marks an attempt terminal the first time and returns that time.
-   * Returns null if it was already terminal, so only one caller reconciles it.
+   * Removes an unresolved attempt and reports whether this call removed it, so
+   * exactly one caller owns the outcome. Settlement itself is done by
+   * `finalizePurchase`, which writes the receipt and consumes the attempt in
+   * one transaction; an attempt that is not settled this way stays retryable.
    */
-  claimPaymentAttemptTerminal(
-    preparedPaymentId: string,
-    state: Exclude<PaymentAttemptState, "SUBMITTED">,
-    now: number,
-    rejection?: string | null,
-  ): Promise<number | null>;
+  deletePaymentAttempt(preparedPaymentId: string): Promise<boolean>;
 }
 
 export interface MembershipAttemptRepository {
@@ -72,17 +66,13 @@ export interface MembershipAttemptRepository {
   getMembershipSubmission(
     preparedMembershipId: string,
   ): Promise<MembershipAttemptStatus | null>;
-  deleteMembershipAttempt(preparedMembershipId: string): Promise<void>;
   /**
-   * Atomically marks an attempt terminal the first time and returns that time.
-   * Returns null if it was already terminal, so only one caller reconciles it.
+   * Removes an unresolved attempt and reports whether this call removed it, so
+   * exactly one caller owns the outcome. Settlement itself is done by the
+   * `finalize*` covenant methods, which write the effect and consume the
+   * attempt in one transaction; an attempt that is not settled stays retryable.
    */
-  claimMembershipAttemptTerminal(
-    preparedMembershipId: string,
-    state: Exclude<MembershipAttemptState, "SUBMITTED">,
-    now: number,
-    rejection?: string | null,
-  ): Promise<number | null>;
+  deleteMembershipAttempt(preparedMembershipId: string): Promise<boolean>;
   /** Every unresolved (SUBMITTED) membership attempt, oldest first. */
   pendingMembershipAttempts(limit: number): Promise<MembershipAttemptStatus[]>;
   /** Every unresolved (SUBMITTED) payment attempt, oldest first. */
@@ -173,6 +163,14 @@ export interface Repositories
     MembershipPurchaseRepository,
     TransactionEvidenceStore {
   initialize(): Promise<void>;
+  /**
+   * Cancellations are settled like every other covenant change, so a store the
+   * reconciler drives must be able to complete one.
+   */
+  finalizeCancellation(
+    preparedMembershipId: string,
+    value: Pick<CreatorCovenant, "creator" | "covenantId">,
+  ): Promise<DuplicateOutcome>;
 }
 
 /**

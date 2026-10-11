@@ -118,20 +118,7 @@ export class MemoryStore implements Repositories {
     };
   }
   async deletePaymentAttempt(id: string) {
-    this.paymentAttemptRecords.delete(id);
-  }
-  async claimPaymentAttemptTerminal(
-    id: string,
-    state: "CONFIRMED" | "REJECTED",
-    now: number,
-    rejection: string | null = null,
-  ) {
-    const v = this.paymentAttemptRecords.get(id);
-    if (!v || v.finalizedAt != null || v.state !== "SUBMITTED") return null;
-    v.state = state;
-    v.rejection = rejection;
-    v.finalizedAt = now;
-    return now;
+    return this.paymentAttemptRecords.delete(id);
   }
   async pendingPaymentAttempts(limit: number): Promise<PaymentAttemptStatus[]> {
     return [...this.paymentAttemptRecords.values()]
@@ -170,20 +157,7 @@ export class MemoryStore implements Repositories {
     };
   }
   async deleteMembershipAttempt(id: string) {
-    this.membershipAttemptRecords.delete(id);
-  }
-  async claimMembershipAttemptTerminal(
-    id: string,
-    state: "CONFIRMED" | "REJECTED",
-    now: number,
-    rejection: string | null = null,
-  ) {
-    const v = this.membershipAttemptRecords.get(id);
-    if (!v || v.finalizedAt != null || v.state !== "SUBMITTED") return null;
-    v.state = state;
-    v.rejection = rejection;
-    v.finalizedAt = now;
-    return now;
+    return this.membershipAttemptRecords.delete(id);
   }
   async pendingMembershipAttempts(limit: number): Promise<MembershipAttemptStatus[]> {
     return [...this.membershipAttemptRecords.values()]
