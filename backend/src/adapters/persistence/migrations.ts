@@ -378,13 +378,13 @@ export const migrations: Migration[] = [
       // states of one thing: a payment attempt. They lived in two tables whose
       // lifetimes had to be kept in step by hand, and a mismatch (the template
       // expiring while the transaction was still in flight) made the reconciler
-      // give up on a live transaction. Keep the whole attempt - template,
-      // submission and terminal state - in the row that already identified it,
-      // so its lifetime is its own.
+      // give up on a live transaction. Keep the whole attempt - template and
+      // submission - in the row that already identified it, so its lifetime is
+      // its own.
       //
       // PREPARED  - handed to the client, not yet submitted.
       // SUBMITTED - broadcast, the reconciler is watching it.
-      // CONFIRMED / REJECTED - terminal, about to be deleted.
+      // Settling writes the effect and deletes the row in one transaction.
       "ALTER TABLE prepared_payments ADD COLUMN state TEXT NOT NULL DEFAULT 'PREPARED'",
       "ALTER TABLE prepared_payments ADD COLUMN transaction_id TEXT",
       "ALTER TABLE prepared_payments ADD COLUMN rejection TEXT",
@@ -431,6 +431,25 @@ export const migrations: Migration[] = [
       "CREATE INDEX IF NOT EXISTS payment_attempts_reconcile ON payment_attempts (state, submitted_at)",
       "CREATE INDEX IF NOT EXISTS membership_attempts_expiry ON membership_attempts (expires_at)",
       "CREATE INDEX IF NOT EXISTS membership_attempts_reconcile ON membership_attempts (state, submitted_at)",
+    ],
+  },
+  {
+    version: 22,
+    name: "drop_attempt_finalized_at",
+    statements: [
+      // Settlement writes the effect and deletes the attempt in one
+      // transaction, so an attempt is never left holding a persisted terminal
+      // outcome. The column that recorded one is dead; drop it rather than
+      // keep a field that claims a state the system does not have.
+      //
+      // First move any row the old claim-then-write ordering stranded terminal.
+      // Such a row means the effect was never written, so it belongs back in
+      // SUBMITTED where the reconciler will settle it; leaving the old value
+      // would make the narrowed reader reject a row that is still readable.
+      "UPDATE payment_attempts SET state='SUBMITTED' WHERE state IN ('CONFIRMED', 'REJECTED')",
+      "UPDATE membership_attempts SET state='SUBMITTED' WHERE state IN ('CONFIRMED', 'REJECTED')",
+      "ALTER TABLE payment_attempts DROP COLUMN finalized_at",
+      "ALTER TABLE membership_attempts DROP COLUMN finalized_at",
     ],
   },
 ];

@@ -6,7 +6,9 @@ import type {
   MembershipAttempt,
   PaymentAttempt,
   PaymentAttemptStatus,
+  PaymentAttemptState,
   MembershipAttemptStatus,
+  MembershipAttemptState,
   Profile,
   Purchase,
   Session,
@@ -16,22 +18,20 @@ import type { DuplicateOutcome, Repositories } from "./application/ports.js";
 
 /**
  * One payment attempt, from the template handed to the client through the
- * transaction broadcast and on to its terminal state. The template and the
- * submission are the same row; its lifetime is its own.
+ * transaction broadcast and on to settlement. The template and the submission
+ * are the same row; its lifetime is its own.
  */
 type PaymentAttemptRow = PaymentAttempt & {
-  state: "PREPARED" | "SUBMITTED" | "CONFIRMED" | "REJECTED";
+  state: PaymentAttemptState;
   transactionId: string | null;
   rejection: string | null;
   submittedAt: number | null;
-  finalizedAt: number | null;
 };
 type MembershipAttemptRow = MembershipAttempt & {
-  state: "PREPARED" | "SUBMITTED" | "CONFIRMED" | "REJECTED";
+  state: MembershipAttemptState;
   transactionId: string | null;
   rejection: string | null;
   submittedAt: number | null;
-  finalizedAt: number | null;
 };
 
 export class MemoryStore implements Repositories {
@@ -78,7 +78,6 @@ export class MemoryStore implements Repositories {
         transactionId: null,
         rejection: null,
         submittedAt: null,
-        finalizedAt: null,
       }),
     );
   }
@@ -92,7 +91,7 @@ export class MemoryStore implements Repositories {
   }
   async prunePaymentAttempts(now: number) {
     // Only an attempt that was never submitted may be pruned by age; a
-    // submitted one is owned by the reconciler until it reaches a terminal state.
+    // submitted one is owned by the reconciler until it is settled.
     for (const [id, v] of this.paymentAttemptRecords)
       if (v.expiresAt <= now && v.state === "PREPARED")
         this.paymentAttemptRecords.delete(id);
@@ -114,7 +113,6 @@ export class MemoryStore implements Repositories {
       transactionId: v.transactionId ?? "",
       rejection: v.rejection,
       submittedAt: v.submittedAt,
-      finalizedAt: v.finalizedAt,
     };
   }
   async deletePaymentAttempt(id: string) {
@@ -133,7 +131,6 @@ export class MemoryStore implements Repositories {
         transactionId: v.transactionId ?? "",
         rejection: v.rejection,
         submittedAt: v.submittedAt,
-        finalizedAt: v.finalizedAt,
       }));
   }
   async markMembershipSubmitted(v: MembershipAttemptStatus) {
@@ -153,7 +150,6 @@ export class MemoryStore implements Repositories {
       transactionId: v.transactionId ?? "",
       rejection: v.rejection,
       submittedAt: v.submittedAt,
-      finalizedAt: v.finalizedAt,
     };
   }
   async deleteMembershipAttempt(id: string) {
@@ -173,7 +169,6 @@ export class MemoryStore implements Repositories {
         transactionId: v.transactionId ?? "",
         rejection: v.rejection,
         submittedAt: v.submittedAt,
-        finalizedAt: v.finalizedAt,
       }));
   }
   async saveMembershipAttempt(v: MembershipAttempt) {
@@ -185,7 +180,6 @@ export class MemoryStore implements Repositories {
         transactionId: null,
         rejection: null,
         submittedAt: null,
-        finalizedAt: null,
       }),
     );
   }
@@ -199,7 +193,7 @@ export class MemoryStore implements Repositories {
   }
   async pruneMembershipAttempts(now: number) {
     // Only an attempt that was never submitted may be pruned by age; a
-    // submitted one is owned by the reconciler until it reaches a terminal state.
+    // submitted one is owned by the reconciler until it is settled.
     for (const [id, v] of this.membershipAttemptRecords)
       if (v.expiresAt <= now && v.state === "PREPARED")
         this.membershipAttemptRecords.delete(id);

@@ -161,8 +161,8 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
   }
   async prunePaymentAttempts(now: number) {
     // Only an attempt that was never submitted may be pruned by age. A
-    // submitted one is owned by the reconciler until it reaches a terminal
-    // state; expiring it early is what made a live transaction look missing.
+    // submitted one is owned by the reconciler until it is settled; expiring it
+    // early is what made a live transaction look missing.
     await this.execute({
       sql: `DELETE FROM payment_attempts WHERE expires_at<=? AND state='PREPARED'`,
       args: [now],
@@ -260,7 +260,7 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
   }
   async pruneMembershipAttempts(now: number) {
     // Only an attempt that was never submitted may be pruned by age; a
-    // submitted one belongs to the reconciler until it reaches a terminal state.
+    // submitted one belongs to the reconciler until it is settled.
     await this.execute({
       sql: `DELETE FROM membership_attempts WHERE expires_at<=? AND state='PREPARED'`,
       args: [now],
@@ -792,7 +792,6 @@ const paymentAttemptStatusFromRow = (
   transactionId: r.transaction_id == null ? "" : text(r.transaction_id),
   rejection: r.rejection == null ? null : text(r.rejection),
   submittedAt: nullableNumber(r.submitted_at),
-  finalizedAt: nullableNumber(r.finalized_at),
 });
 const membershipAttemptStatusFromRow = (
   r: Record<string, unknown>,
@@ -802,7 +801,6 @@ const membershipAttemptStatusFromRow = (
   transactionId: r.transaction_id == null ? "" : text(r.transaction_id),
   rejection: r.rejection == null ? null : text(r.rejection),
   submittedAt: nullableNumber(r.submitted_at),
-  finalizedAt: nullableNumber(r.finalized_at),
 });
 const creatorCovenantFromRow = (r: Record<string, unknown>): CreatorCovenant => ({
   creator: text(r.creator),
@@ -885,13 +883,11 @@ const membershipKind = (value: string): MembershipAttempt["kind"] => {
   return value;
 };
 const paymentAttemptState = (value: string): PaymentAttemptStatus["state"] => {
-  if (value !== "SUBMITTED" && value !== "CONFIRMED" && value !== "REJECTED")
-    throw new Error("INVALID_PAYMENT_ATTEMPT_STATE");
+  if (value !== "SUBMITTED") throw new Error("INVALID_PAYMENT_ATTEMPT_STATE");
   return value;
 };
 const membershipAttemptState = (value: string): MembershipAttemptStatus["state"] => {
-  if (value !== "SUBMITTED" && value !== "CONFIRMED" && value !== "REJECTED")
-    throw new Error("INVALID_MEMBERSHIP_ATTEMPT_STATE");
+  if (value !== "SUBMITTED") throw new Error("INVALID_MEMBERSHIP_ATTEMPT_STATE");
   return value;
 };
 const isUniqueConstraint = (error: unknown) =>

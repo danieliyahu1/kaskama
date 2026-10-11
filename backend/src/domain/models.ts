@@ -128,17 +128,16 @@ export interface PaymentAttempt {
   expiresAt: number;
 }
 
-export type PaymentAttemptState = "SUBMITTED" | "CONFIRMED" | "REJECTED";
+export type PaymentAttemptState = "PREPARED" | "SUBMITTED";
 
 export interface PaymentAttemptStatus {
   preparedPaymentId: string;
-  state: PaymentAttemptState;
+  /** The status view exists only for an attempt that is still in flight. */
+  state: "SUBMITTED";
   transactionId: string;
   rejection: string | null;
   /** First time this transaction was persisted as in flight, in epoch ms. */
   submittedAt?: number | null;
-  /** First time the reconciler observed a terminal outcome for this attempt. */
-  finalizedAt?: number | null;
 }
 
 export interface MembershipAttempt {
@@ -156,17 +155,16 @@ export interface MembershipAttempt {
   contract?: MembershipContract;
 }
 
-export type MembershipAttemptState = "SUBMITTED" | "CONFIRMED" | "REJECTED";
+export type MembershipAttemptState = "PREPARED" | "SUBMITTED";
 
 export interface MembershipAttemptStatus {
   preparedMembershipId: string;
-  state: MembershipAttemptState;
+  /** The status view exists only for an attempt that is still in flight. */
+  state: "SUBMITTED";
   transactionId: string;
   rejection: string | null;
   /** First time this transaction was persisted as in flight, in epoch ms. */
   submittedAt?: number | null;
-  /** First time the reconciler observed a terminal outcome for this attempt. */
-  finalizedAt?: number | null;
 }
 
 export type MembershipCheckStatus =
