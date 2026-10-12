@@ -307,7 +307,7 @@ describe("session and wallet reconciliation", () => {
 });
 
 describe("checkout surface", () => {
-  it("carries no marketplace chrome on the checkout", async () => {
+  it("shows the shared footer but no marketplace header on the checkout", async () => {
     const routeAddress = `kaspatest:${"q".repeat(60)}`;
     window.history.pushState({}, "", `/checkout/${routeAddress}`);
     apiMock.mockImplementation(async (path: string) => {
@@ -336,12 +336,14 @@ describe("checkout surface", () => {
 
     expect(await screen.findByRole("button", { name: "Subscribe" })).toBeVisible();
     expect(
+      screen.getByRole("button", { name: COPY.feedbackButton }),
+    ).toBeVisible();
+    expect(
       screen.queryByRole("link", { name: "Creators" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "Publish" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "API" })).not.toBeInTheDocument();
   });
 });
 

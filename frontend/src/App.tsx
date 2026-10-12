@@ -355,10 +355,8 @@ function SiteNav({
   );
 }
 
-/** The marketplace footer, absent on the checkout for the same reason as the header. */
+/** The marketplace footer, shared by every route. */
 function SiteFooter() {
-  const { pathname } = useLocation();
-  if (isCheckoutPath(pathname)) return null;
   return (
     <footer>
       <nav className="legal-links" aria-label="Legal">

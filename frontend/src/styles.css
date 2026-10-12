@@ -110,9 +110,9 @@ textarea:focus-visible {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
-/* The checkout carries no header or footer, so its one row fills the shell. */
+/* The checkout carries no header, so main and the footer fill the shell. */
 .shell:not(:has(> nav)) {
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 /* Header and footer */
