@@ -196,8 +196,8 @@ A visitor who lands through one of those links has that wallet remembered in a
 The credit is paid in the same transaction as the purchase, out of the platform
 fee - the creator's payout is never reduced. The referrer receives half the
 platform fee and the platform keeps the other half. The fee is 1% and only
-charged once it reaches 0.2 KAS, so a referral is paid only when both halves are
-at least 1 KAS: below a 2 KAS fee there is nothing to split, no
+charged once it reaches 1 KAS, so a referral is paid only when both halves are
+at least 1 KAS: when the fee is exactly 1 KAS there is nothing to split, no
 referrer output is built, and the platform keeps the whole fee.
 
 The attribution lives inside the payment: the signed transaction names the
