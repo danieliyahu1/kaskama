@@ -19,7 +19,7 @@ Each network has its own fee recipient: `PLATFORM_FEE_ADDRESS_TESTNET_10` for lo
 
 ## Referrals
 
-Every post and creator page can be shared with a `?ref=<wallet>` query parameter. The visitor's browser keeps that wallet in a `kaskama_ref` cookie for 24 hours, and a purchase in that window credits it. The credit is paid as its own output in the same transaction, out of the platform fee: the referrer receives half the fee and the platform keeps the other half, so the creator's payout is never reduced. Because the fee is only charged once it reaches 1 KAS, a referral is paid only when both halves are at least 1 KAS; an address that is not valid on the configured network is ignored. Attribution lives in the payment's own payload, so the split is verifiable from the chain with no accounts, balances, or payout system. A headless client names the wallet as `referrer` when preparing a post payment.
+Every post and creator page can be shared with a `?ref=<wallet>` query parameter. The visitor's browser keeps that wallet in a `kaskama_ref` cookie for 24 hours, and a purchase in that window credits it. The credit is paid as its own output in the same transaction, out of the platform fee: the referrer receives half the fee and the platform keeps the other half, so the creator's payout is never reduced. Because the fee is only charged once it reaches 0.2 KAS, a referral is paid only when both halves are at least 1 KAS; an address that is not valid on the configured network is ignored. Attribution lives in the payment's own payload, so the split is verifiable from the chain with no accounts, balances, or payout system. A headless client names the wallet as `referrer` when preparing a post payment.
 
 ## Subscriptions
 

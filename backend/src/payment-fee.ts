@@ -1,6 +1,6 @@
 export const PLATFORM_FEE_BPS = 100n;
 export const BPS_DENOMINATOR = 10_000n;
-export const MIN_PLATFORM_FEE_SOMPI = 100_000_000n;
+export const MIN_PLATFORM_FEE_SOMPI = 20_000_000n;
 
 /**
  * The referrer's share of the platform fee, in basis points: half of it. The
