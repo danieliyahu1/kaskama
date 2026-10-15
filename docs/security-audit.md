@@ -17,8 +17,8 @@ independent third-party audit.
 
 - Creator revenue: PPV unlock payments and membership mint payments.
 - Buyer access: paid media and membership content.
-- Platform revenue: the 1% fee. Membership mints charge a 1 KAS floor rather
-  than waiving a sub-1-KAS fee; post payments still waive the fee below the
+- Platform revenue: the 1% fee. Membership mints charge a 0.2 KAS floor rather
+  than waiving a sub-0.2-KAS fee; post payments still waive the fee below the
   floor.
 - Media confidentiality: private R2 objects behind authorization.
 

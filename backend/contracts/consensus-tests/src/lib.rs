@@ -21,14 +21,14 @@ mod tests {
     const DEPOSIT: u64 = 50_000_000;
     const PRICE: u64 = 1_000_000_000;
     const MIN_PRICE: i64 = 200_000_000;
-    const MIN_FEE: i64 = 100_000_000;
+    const MIN_FEE: i64 = 20_000_000;
     const DAA: u64 = 500_000;
     const EXPIRY: i64 = 26_420_000;
     const COMPUTE_BUDGET: u16 = 50;
     const COVENANT_ID: Hash = Hash::from_bytes(*b"kaskama-membership-test-family-1");
 
     /// Mirrors the covenant's fee rule: 1% of the price, rounded, never below
-    /// the 1 KAS floor.
+    /// the 0.2 KAS floor.
     fn platform_fee(price: i64) -> i64 {
         let fee = (price + 50) / 100;
         if fee < MIN_FEE { MIN_FEE } else { fee }
@@ -442,7 +442,7 @@ mod tests {
         let (compiled, minter, member, entries) = mint_fixture();
         let mut outputs = valid_mint_outputs(&minter, &member, PRICE as i64);
         // The 1% fee at PRICE is 0.1 KAS, below the floor. The covenant must
-        // still charge the 1 KAS minimum instead of waiving it.
+        // still charge the 0.2 KAS minimum instead of waiving it.
         outputs[3].value = 0;
         assert_eq!(
             execute(&mint_transaction(&compiled, &minter, &member, PRICE as i64, &entries, outputs), &entries, 0),
@@ -463,10 +463,10 @@ mod tests {
             UtxoEntry::new(1_200_000_000, p2pk(&buyer_key), 1, false, None),
         ];
         let outputs = valid_mint_outputs(&minter, &member, MIN_PRICE);
-        // At the 2 KAS floor the 1% fee is 0.02 KAS, so the creator keeps 1 KAS
-        // and the platform is paid the 1 KAS minimum.
-        assert_eq!(outputs[2].value, 100_000_000);
-        assert_eq!(outputs[3].value, 100_000_000);
+        // At the 2 KAS floor the 1% fee is 0.02 KAS, so the creator keeps 1.8 KAS
+        // and the platform is paid the 0.2 KAS minimum.
+        assert_eq!(outputs[2].value, 180_000_000);
+        assert_eq!(outputs[3].value, 20_000_000);
         assert_eq!(
             execute(&mint_transaction(&compiled, &minter, &member, MIN_PRICE, &entries, outputs), &entries, 0),
             Ok(()),
