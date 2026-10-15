@@ -18,6 +18,8 @@ import { PublishPage } from "./PublishPage.js";
 import { CreatorPage } from "./CreatorPage.js";
 import { CheckoutPage } from "./CheckoutPage.js";
 import { PostPage } from "./PostPage.js";
+import { MessagesPage } from "./MessagesPage.js";
+import { ConversationPage } from "./ConversationPage.js";
 import { FindCreatorPage } from "./FindCreatorPage.js";
 import { PublicCreatorsPage } from "./PublicCreatorsPage.js";
 import { FeedbackButton } from "./FeedbackButton.js";
@@ -266,6 +268,26 @@ export function App() {
                   error={profileError}
                   onRetry={() => setProfileReloadKey((key) => key + 1)}
                   onProfileChange={setProfile}
+                />
+              }
+            />
+            <Route
+              path="/messages"
+              element={
+                <MessagesPage
+                  address={address}
+                  signIn={signIn}
+                  signingIn={signingIn}
+                />
+              }
+            />
+            <Route
+              path="/messages/:address"
+              element={
+                <ConversationPage
+                  address={address}
+                  signIn={signIn}
+                  signingIn={signingIn}
                 />
               }
             />

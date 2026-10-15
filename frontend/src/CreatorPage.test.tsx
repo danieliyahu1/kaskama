@@ -561,3 +561,30 @@ describe("CreatorPage checkout link", () => {
     ).toBeVisible();
   });
 });
+
+describe("CreatorPage message entry", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("offers a visitor a quiet link to message the creator", async () => {
+    vi.mocked(api).mockResolvedValueOnce(creator(false, true));
+    renderCreator(consumerAddress);
+
+    const link = await screen.findByRole("link", { name: "Message" });
+    expect(link).toHaveAttribute(
+      "href",
+      `/messages/${encodeURIComponent(creatorAddress)}`,
+    );
+    // The same quiet weight as Share, never a primary button.
+    expect(link).toHaveClass("message-link");
+  });
+
+  it("keeps the message link off the owner's own page", async () => {
+    vi.mocked(api).mockResolvedValueOnce(creator(true, true));
+    renderCreator(creatorAddress);
+
+    await screen.findByRole("link", { name: "Checkout page" });
+    expect(
+      screen.queryByRole("link", { name: "Message" }),
+    ).not.toBeInTheDocument();
+  });
+});

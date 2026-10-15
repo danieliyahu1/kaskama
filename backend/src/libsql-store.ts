@@ -8,6 +8,8 @@ import {
 } from "@libsql/client";
 import type {
   Challenge,
+  ChatMessage,
+  ChatThread,
   CreatorCovenant,
   MembershipContract,
   MembershipPurchase,
@@ -710,6 +712,86 @@ export class LibsqlStore implements Repositories, FeedbackOutbox {
       [value.transactionId, value.buyer, value.creator, value.covenantId ?? null],
     );
   }
+  async findChatThread(creator: string, fan: string) {
+    const r = await this.execute({
+      sql: "SELECT * FROM chat_threads WHERE creator=? AND fan=?",
+      args: [creator, fan],
+    });
+    return r.rows[0] ? chatThreadFromRow(r.rows[0]) : null;
+  }
+  async createChatThread(value: ChatThread): Promise<"CREATED" | "EXISTS"> {
+    const result = await this.execute({
+      sql: `INSERT OR IGNORE INTO chat_threads (id,creator,fan,created_at,last_message_at) VALUES (?,?,?,?,?)`,
+      args: [value.id, value.creator, value.fan, value.createdAt, value.lastMessageAt],
+    });
+    return result.rowsAffected === 1 ? "CREATED" : "EXISTS";
+  }
+  async chatThreadsFor(address: string) {
+    const r = await this.execute({
+      sql: `SELECT * FROM chat_threads WHERE creator=? OR fan=? ORDER BY last_message_at DESC`,
+      args: [address, address],
+    });
+    return r.rows.map(chatThreadFromRow);
+  }
+  async appendChatMessage(value: ChatMessage) {
+    // The message and its thread's new recency move together, so a listing can
+    // never show a thread older than its own last message.
+    await this.inWriteTransaction(async (transaction) => {
+      await transaction.execute({
+        sql: `INSERT INTO chat_messages (id,thread_id,sender,body,sent_at,read_at) VALUES (?,?,?,?,?,?)`,
+        args: [
+          value.id,
+          value.threadId,
+          value.sender,
+          value.body,
+          value.sentAt,
+          value.readAt,
+        ],
+      });
+      await transaction.execute({
+        sql: "UPDATE chat_threads SET last_message_at=? WHERE id=?",
+        args: [value.sentAt, value.threadId],
+      });
+    });
+  }
+  async chatMessages(threadId: string, limit: number) {
+    const r = await this.execute({
+      sql: `SELECT * FROM (SELECT * FROM chat_messages WHERE thread_id=? ORDER BY sent_at DESC, id DESC LIMIT ?)
+            ORDER BY sent_at ASC, id ASC`,
+      args: [threadId, limit],
+    });
+    return r.rows.map(chatMessageFromRow);
+  }
+  async chatLastMessages(threadIds: string[]) {
+    if (!threadIds.length) return [];
+    const placeholders = threadIds.map(() => "?").join(",");
+    const r = await this.execute({
+      sql: `SELECT m.* FROM chat_messages m
+            JOIN (SELECT thread_id, MAX(sent_at) AS sent_at FROM chat_messages
+                  WHERE thread_id IN (${placeholders}) GROUP BY thread_id) newest
+              ON m.thread_id = newest.thread_id AND m.sent_at = newest.sent_at`,
+      args: threadIds,
+    });
+    return r.rows.map(chatMessageFromRow);
+  }
+  async chatUnreadCounts(address: string) {
+    const r = await this.execute({
+      sql: `SELECT m.thread_id AS thread_id, COUNT(*) AS unread
+            FROM chat_messages m JOIN chat_threads t ON t.id = m.thread_id
+            WHERE (t.creator=? OR t.fan=?) AND m.sender<>? AND m.read_at IS NULL
+            GROUP BY m.thread_id`,
+      args: [address, address, address],
+    });
+    const counts = new Map<string, number>();
+    for (const row of r.rows) counts.set(text(row.thread_id), number(row.unread));
+    return counts;
+  }
+  async markChatRead(threadId: string, reader: string, at: number) {
+    await this.execute({
+      sql: `UPDATE chat_messages SET read_at=? WHERE thread_id=? AND sender<>? AND read_at IS NULL`,
+      args: [at, threadId, reader],
+    });
+  }
   private async transactionalFinalize(
     id: string,
     preparedTable: string,
@@ -817,6 +899,21 @@ const membershipPurchaseFromRow = (r: Record<string, unknown>): MembershipPurcha
     r.covenant_id === null || r.covenant_id === undefined
       ? undefined
       : text(r.covenant_id),
+});
+const chatThreadFromRow = (r: Record<string, unknown>): ChatThread => ({
+  id: text(r.id),
+  creator: text(r.creator),
+  fan: text(r.fan),
+  createdAt: number(r.created_at),
+  lastMessageAt: number(r.last_message_at),
+});
+const chatMessageFromRow = (r: Record<string, unknown>): ChatMessage => ({
+  id: text(r.id),
+  threadId: text(r.thread_id),
+  sender: text(r.sender),
+  body: text(r.body),
+  sentAt: number(r.sent_at),
+  readAt: nullableNumber(r.read_at),
 });
 const paymentAttemptFromRow = (r: Record<string, unknown>): PaymentAttempt => ({
   id: text(r.id),

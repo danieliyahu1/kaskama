@@ -1,4 +1,5 @@
 import {
+  MAX_CHAT_MESSAGE_LENGTH,
   MAX_MEMBERSHIP_PRICE_SOMPI,
   MIN_MEMBERSHIP_FEE_SOMPI,
   MIN_MEMBERSHIP_PRICE_SOMPI,
@@ -10,8 +11,10 @@ import {
   isFreePost,
   isKaspaTestnetAddress,
   networkDefinition,
+  normalizeChatMessage,
   parseKasToSompi,
   parsePostPrice,
+  validateChatMessage,
   validatePost,
 } from "./index.js";
 
@@ -105,6 +108,24 @@ describe("post validation", () => {
 
   it("accepts a multi-line, non-ASCII caption", () => {
     expect(validatePost("First line\nSecond line 🎉 — naïve", "1")).toEqual([]);
+  });
+});
+
+describe("chat message validation", () => {
+  it("trims only the ends and keeps a message's own line breaks", () => {
+    expect(normalizeChatMessage("  first\nsecond  ")).toBe("first\nsecond");
+  });
+
+  it("requires at least one visible character", () => {
+    expect(validateChatMessage("   ")).toBe("Write a message first.");
+    expect(validateChatMessage("hi")).toBeNull();
+  });
+
+  it("caps a message by visible characters, not bytes", () => {
+    expect(validateChatMessage("🎉".repeat(MAX_CHAT_MESSAGE_LENGTH))).toBeNull();
+    expect(validateChatMessage("🎉".repeat(MAX_CHAT_MESSAGE_LENGTH + 1))).toBe(
+      `Messages can be up to ${MAX_CHAT_MESSAGE_LENGTH} characters.`,
+    );
   });
 });
 

@@ -1,5 +1,7 @@
 import type {
   Challenge,
+  ChatMessage,
+  ChatThread,
   CreatorCovenant,
   MembershipPurchase,
   Post,
@@ -44,6 +46,8 @@ export class MemoryStore implements Repositories {
   /** Every covenant, keyed by covenant id; at most one is ACTIVE per creator. */
   readonly covenants = new Map<string, CreatorCovenant>();
   readonly membershipPurchaseRecords = new Map<string, MembershipPurchase>();
+  readonly chatThreads = new Map<string, ChatThread>();
+  readonly chatMessageRecords = new Map<string, ChatMessage>();
   readonly paymentAttemptRecords = new Map<string, PaymentAttemptRow>();
   readonly membershipAttemptRecords = new Map<string, MembershipAttemptRow>();
   readonly transactionEvidence = new Map<string, TransactionEvidence>();
@@ -459,6 +463,66 @@ export class MemoryStore implements Repositories {
     const outcome = await this.createMembershipPurchase(value);
     this.membershipAttemptRecords.delete(id);
     return outcome;
+  }
+  async findChatThread(creator: string, fan: string) {
+    const thread = [...this.chatThreads.values()].find(
+      (value) => value.creator === creator && value.fan === fan,
+    );
+    return thread ? structuredClone(thread) : null;
+  }
+  async createChatThread(value: ChatThread): Promise<"CREATED" | "EXISTS"> {
+    if (await this.findChatThread(value.creator, value.fan)) return "EXISTS";
+    this.chatThreads.set(value.id, structuredClone(value));
+    return "CREATED";
+  }
+  async chatThreadsFor(address: string) {
+    return [...this.chatThreads.values()]
+      .filter((thread) => thread.creator === address || thread.fan === address)
+      .sort((left, right) => right.lastMessageAt - left.lastMessageAt)
+      .map((thread) => structuredClone(thread));
+  }
+  async appendChatMessage(value: ChatMessage) {
+    this.chatMessageRecords.set(value.id, structuredClone(value));
+    const thread = this.chatThreads.get(value.threadId);
+    if (thread) thread.lastMessageAt = value.sentAt;
+  }
+  async chatMessages(threadId: string, limit: number) {
+    return [...this.chatMessageRecords.values()]
+      .filter((message) => message.threadId === threadId)
+      .sort((left, right) => left.sentAt - right.sentAt)
+      .slice(-limit)
+      .map((message) => structuredClone(message));
+  }
+  async chatLastMessages(threadIds: string[]) {
+    const wanted = new Set(threadIds);
+    const newest = new Map<string, ChatMessage>();
+    for (const message of this.chatMessageRecords.values()) {
+      if (!wanted.has(message.threadId)) continue;
+      const current = newest.get(message.threadId);
+      if (!current || message.sentAt >= current.sentAt)
+        newest.set(message.threadId, message);
+    }
+    return [...newest.values()].map((message) => structuredClone(message));
+  }
+  async chatUnreadCounts(address: string) {
+    const unread = new Map<string, number>();
+    for (const message of this.chatMessageRecords.values()) {
+      if (message.sender === address || message.readAt !== null) continue;
+      const thread = this.chatThreads.get(message.threadId);
+      if (!thread || (thread.creator !== address && thread.fan !== address)) continue;
+      unread.set(message.threadId, (unread.get(message.threadId) ?? 0) + 1);
+    }
+    return unread;
+  }
+  async markChatRead(threadId: string, reader: string, at: number) {
+    for (const message of this.chatMessageRecords.values()) {
+      if (
+        message.threadId === threadId &&
+        message.sender !== reader &&
+        message.readAt === null
+      )
+        message.readAt = at;
+    }
   }
 }
 

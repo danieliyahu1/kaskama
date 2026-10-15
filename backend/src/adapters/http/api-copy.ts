@@ -30,6 +30,7 @@ export const API_COPY = {
   transactionRejected: "Transaction rejected. Nothing was charged. Try again.",
   unlocked: "Unlocked.",
   mediaAlreadyPublished: "You've already published this.",
+  chatSubscriptionRequired: "Subscribe to message this creator.",
 } as const;
 
 export function membershipPriceMessage(problem: MembershipPriceProblem): string {

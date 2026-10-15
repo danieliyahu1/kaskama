@@ -372,9 +372,95 @@ export function openApiDocument(origin: string): Record<string, unknown> {
             },
           },
         },
+        ChatMessage: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            sender: { type: "string" },
+            mine: {
+              type: "boolean",
+              description: "Whether the wallet reading it wrote it.",
+            },
+            body: { type: "string" },
+            sentAt: { type: "string" },
+          },
+        },
+        ChatThread: {
+          type: "object",
+          description: "One row of the Messages list.",
+          properties: {
+            address: {
+              type: "string",
+              description: "The other participant in the conversation.",
+            },
+            displayAddress: { type: "string" },
+            displayName: { type: ["string", "null"] },
+            avatarUrl: { type: ["string", "null"] },
+            counterpartIsCreator: {
+              type: "boolean",
+              description: "True when the other person is the creator.",
+            },
+            lastMessage: { type: ["string", "null"] },
+            lastMessageAt: { type: ["string", "null"] },
+            unread: { type: "integer" },
+          },
+        },
+        ChatConversation: {
+          type: "object",
+          properties: {
+            address: { type: "string" },
+            displayAddress: { type: "string" },
+            displayName: { type: ["string", "null"] },
+            avatarUrl: { type: ["string", "null"] },
+            canSend: {
+              type: "boolean",
+              description:
+                "Whether a live subscription lets this wallet write. A lapsed subscriber reads history with `canSend` false.",
+            },
+            messages: { type: "array", items: ref("ChatMessage") },
+          },
+        },
       },
     },
     paths: {
+      "/api/chat/threads": {
+        get: get("List conversations.", {
+          description:
+            "Every off-chain conversation this wallet takes part in, newest message first. A creator sees their subscribers; a subscriber sees the creators they support.",
+          response: {
+            status: "200",
+            schema: {
+              type: "object",
+              properties: {
+                threads: { type: "array", items: ref("ChatThread") },
+              },
+            },
+          },
+        }),
+      },
+      "/api/chat/threads/{address}": {
+        get: get("Read a conversation.", {
+          description:
+            "The thread with one other wallet, either direction. Reading it marks the messages it received as read. A wallet that never subscribed and has no history gets `canSend` false and no messages.",
+          parameters: [pathParam("address", "The other participant's wallet address.")],
+          response: { status: "200", schema: ref("ChatConversation") },
+        }),
+      },
+      "/api/chat/threads/{address}/messages": {
+        post: post("Send a message.", {
+          description:
+            "Conversations are off chain and gated by subscription. Sending requires a live 30-day membership of the creator; a creator may always reply inside an existing thread. A lapsed subscriber may keep reading but cannot write until they resubscribe.",
+          parameters: [pathParam("address", "The other participant's wallet address.")],
+          body: {
+            type: "object",
+            required: ["body"],
+            properties: {
+              body: { type: "string", description: "Up to 2000 characters." },
+            },
+          },
+          response: { status: "201", schema: ref("ChatMessage") },
+        }),
+      },
       "/api/config": {
         get: get("Network identity.", {
           security: false,

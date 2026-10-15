@@ -18,6 +18,7 @@ import {
   membershipPriceProblem,
   networkDefinition,
   normalizeBio,
+  normalizeChatMessage,
   normalizeDisplayName,
   normalizePostText,
   OPENAPI_PATH,
@@ -26,8 +27,12 @@ import {
   PUBLIC_PAGES,
   RETRY_AFTER_REFRESH,
   validateBio,
+  validateChatMessage,
   validateDisplayName,
   validatePost,
+  type ChatConversationResponse,
+  type ChatMessageResponse,
+  type ChatThreadSummary,
   type MembershipAddressVerificationResponse,
   type NetworkConfigResponse,
   type NetworkId,
@@ -49,7 +54,7 @@ import {
   API_COPY as COPY,
   membershipPriceMessage,
 } from "./adapters/http/api-copy.js";
-import type { CreatorCovenant, Post, Profile, Session } from "./domain/models.js";
+import type { ChatMessage, CreatorCovenant, Post, Profile, Session } from "./domain/models.js";
 import { currentMembershipContract } from "./membership-contract.js";
 import {
   MembershipNotFinalizedError,
@@ -93,6 +98,7 @@ import {
 } from "./adapters/http/avatar-upload.js";
 import { createPublishPostUseCase } from "./application/publication-use-cases.js";
 import { createDeletePostUseCase } from "./application/delete-post.js";
+import { ChatService, type ChatInboxEntry } from "./application/chat.js";
 import { MembershipAccess } from "./application/membership-access.js";
 import { MembershipSettlement } from "./application/membership-settlement.js";
 import { MembershipVerification } from "./application/membership-verification.js";
@@ -173,6 +179,9 @@ export function createApp(d: AppDependencies) {
     d.store,
     d.membershipVerifier,
   );
+  // Conversations ride the same subscription the checkout sells, so the gate is
+  // the one place that already decides whether a membership is live.
+  const chat = new ChatService(d.store, membershipAccess, () => randomUUID(), now);
   // The one decision maker for "has this membership transaction settled?",
   // shared with the reconciler so the immediate finalize and the background
   // pass can never disagree about whether a purchase happened.
@@ -822,6 +831,59 @@ export function createApp(d: AppDependencies) {
       res.setHeader("Content-Type", profile.avatarType);
       res.setHeader("Cache-Control", "public, max-age=300");
       res.send(Buffer.from(object.bytes));
+    }),
+  );
+  app.get(
+    "/api/chat/threads",
+    optional,
+    required,
+    asyncHandler(async (req, res) => {
+      const viewer = req.walletSession!.address;
+      const entries = await chat.inbox(viewer);
+      res.json({ threads: await chatThreadSummaries(profiles, entries) });
+    }),
+  );
+  app.get(
+    "/api/chat/threads/:address",
+    optional,
+    required,
+    asyncHandler(async (req, res) => {
+      const viewer = req.walletSession!.address;
+      const address = param(req, "address");
+      if (!addressPattern.test(address)) return apiError(res, 400, "INVALID_ADDRESS");
+      const result = await chat.openConversation(viewer, address);
+      if (result.kind === "SELF") return apiError(res, 400, "CHAT_WITH_SELF");
+      const profile = await profiles.get(address);
+      const body: ChatConversationResponse = {
+        address,
+        displayAddress: shorten(address),
+        displayName: profile?.displayName ?? null,
+        avatarUrl: avatarUrl(address, profile?.avatarKey ?? null),
+        canSend: result.conversation.canSend,
+        messages: result.conversation.messages.map((message) =>
+          chatMessageResponse(message, viewer),
+        ),
+      };
+      res.json(body);
+    }),
+  );
+  app.post(
+    "/api/chat/threads/:address/messages",
+    optional,
+    required,
+    asyncHandler(async (req, res) => {
+      const viewer = req.walletSession!.address;
+      const address = param(req, "address");
+      if (!addressPattern.test(address)) return apiError(res, 400, "INVALID_ADDRESS");
+      const b = z.object({ body: z.string() }).parse(req.body);
+      const problem = validateChatMessage(b.body);
+      if (problem) return apiError(res, 400, "INVALID_MESSAGE", problem);
+      const result = await chat.send(viewer, address, normalizeChatMessage(b.body));
+      if (result.kind === "SUBSCRIBE")
+        return apiError(res, 403, "SUBSCRIPTION_REQUIRED", COPY.chatSubscriptionRequired);
+      if (result.kind === "NOT_FOUND")
+        return apiError(res, 404, "CONVERSATION_NOT_FOUND");
+      res.status(201).json(chatMessageResponse(result.message, viewer));
     }),
   );
   app.get(
@@ -1689,6 +1751,39 @@ async function purchasedPostIds(d: AppDependencies, posts: Post[], buyer: string
     }
   }
   return unlocked;
+}
+function chatMessageResponse(message: ChatMessage, viewer: string): ChatMessageResponse {
+  return {
+    id: message.id,
+    sender: message.sender,
+    mine: message.sender === viewer,
+    body: message.body,
+    sentAt: new Date(message.sentAt).toISOString(),
+  };
+}
+/**
+ * Clothes each conversation for the client: the other participant's identity and
+ * when it was last spoken in. The store answers the threads themselves.
+ */
+async function chatThreadSummaries(
+  profiles: { get(address: string): Promise<Profile | null> },
+  entries: ChatInboxEntry[],
+): Promise<ChatThreadSummary[]> {
+  return Promise.all(
+    entries.map(async (entry): Promise<ChatThreadSummary> => {
+      const profile = await profiles.get(entry.counterpart);
+      return {
+        address: entry.counterpart,
+        displayAddress: shorten(entry.counterpart),
+        displayName: profile?.displayName ?? null,
+        avatarUrl: avatarUrl(entry.counterpart, profile?.avatarKey ?? null),
+        counterpartIsCreator: entry.counterpartIsCreator,
+        lastMessage: entry.lastMessage,
+        lastMessageAt: new Date(entry.lastMessageAt).toISOString(),
+        unread: entry.unread,
+      };
+    }),
+  );
 }
 function postResponse(p: Post, canView: boolean): PostResponse {
   return {

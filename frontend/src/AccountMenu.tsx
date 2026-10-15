@@ -68,6 +68,9 @@ export function AccountMenu({
           Edit profile
           <Icon name="edit" />
         </Link>
+        <Link className="menu-button" to="/messages" onClick={close}>
+          Messages
+        </Link>
         <Link className="menu-button" to={creatorPath(address)} onClick={close}>
           My page
         </Link>

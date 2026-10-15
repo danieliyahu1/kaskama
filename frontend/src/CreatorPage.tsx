@@ -6,6 +6,7 @@ import {
   type PostResponse,
 } from "@kaskama/shared";
 import { api } from "./kasware.js";
+import { conversationPath } from "./chat.js";
 import { unlockPost } from "./purchase.js";
 import { Icon, LockIcon } from "./Icons.js";
 import { CreatorAvatar } from "./CreatorAvatar.js";
@@ -239,6 +240,15 @@ export function CreatorPage({
                 path={creatorPath(currentCreator.address)}
                 compact
               />
+              {!owner && (
+                <Link
+                  className="message-link"
+                  to={conversationPath(currentCreator.address)}
+                >
+                  <Icon name="message" />
+                  {COPY.messageButton}
+                </Link>
+              )}
               {owner && (
                 <>
                   <Link

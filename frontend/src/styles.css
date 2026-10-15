@@ -2404,9 +2404,11 @@ main:has(.single-post) {
   align-self: center;
   margin-top: 0;
 }
-/* Share attaches to the thing it shares: quiet beside page actions, a small
-   icon in the corner of a post card. */
-.share-button {
+/* Share attaches to the thing it shares, and Message is how a visitor reaches
+   the creator: both are quiet beside page actions, and a small icon in the
+   corner of a post card. */
+.share-button,
+.message-link {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -2415,13 +2417,17 @@ main:has(.single-post) {
   background: transparent;
   color: var(--muted);
   font-size: 0.85rem;
+  text-decoration: none;
   transition: color 0.12s ease;
 }
 .share-button:hover,
-.share-button:focus-visible {
+.share-button:focus-visible,
+.message-link:hover,
+.message-link:focus-visible {
   color: var(--acid);
 }
-.share-button .icon {
+.share-button .icon,
+.message-link .icon {
   width: 1rem;
   height: 1rem;
 }
@@ -2519,5 +2525,170 @@ main:has(.message.is-centered) {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+}
+
+/* Messages */
+
+.messages,
+.conversation {
+  width: min(100%, 40rem);
+}
+.messages-title,
+.conversation-name {
+  margin: 0 0 1.25rem;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  letter-spacing: -0.03em;
+}
+.messages-empty {
+  margin: 0;
+  color: var(--muted);
+}
+.thread-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.thread {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.95rem 0.25rem;
+  border-bottom: 1px solid var(--line);
+  text-decoration: none;
+}
+.thread:hover,
+.thread:focus-visible {
+  background: var(--surface);
+}
+.thread .creator-avatar {
+  width: 2.6rem;
+  height: 2.6rem;
+}
+.thread-body {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.thread-name {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.thread-preview {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 0 0 auto;
+}
+.thread-time {
+  color: var(--muted);
+  font:
+    0.72rem "DM Mono",
+    monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+/* A single quiet mark that a reply is waiting; no counts, no noise. */
+.thread-unread {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--acid);
+}
+.conversation-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+.conversation-head .creator-avatar {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+.conversation-back {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-left: -0.5rem;
+  color: var(--muted);
+  font-size: 1.6rem;
+  line-height: 1;
+  text-decoration: none;
+}
+.conversation-back:hover,
+.conversation-back:focus-visible {
+  color: var(--acid);
+}
+.conversation-name {
+  margin: 0;
+  font-size: clamp(1.2rem, 3vw, 1.6rem);
+  overflow-wrap: anywhere;
+}
+.conversation-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  list-style: none;
+}
+.bubble {
+  align-self: flex-start;
+  max-width: 80%;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line);
+  background: var(--card);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.bubble.is-mine {
+  align-self: flex-end;
+  border-color: var(--acid);
+  background: #49eacb1a;
+}
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+.composer-input {
+  flex: 1 1 auto;
+  min-height: 3rem;
+  max-height: 10rem;
+  padding: 0.8rem 0.9rem;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--paper);
+}
+.composer.is-gated {
+  display: grid;
+  gap: 0.85rem;
+  justify-items: start;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--line);
+}
+.composer-gate {
+  margin: 0;
+  color: var(--muted);
+}
+@media (max-width: 720px) {
+  .bubble {
+    max-width: 90%;
   }
 }

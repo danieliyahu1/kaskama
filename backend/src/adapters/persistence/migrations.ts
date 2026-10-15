@@ -452,6 +452,34 @@ export const migrations: Migration[] = [
       "ALTER TABLE membership_attempts DROP COLUMN finalized_at",
     ],
   },
+  {
+    version: 23,
+    name: "chat",
+    statements: [
+      // Off-chain conversations between a creator and one fan. The pair is
+      // unique, so a wallet has at most one thread with any other wallet and
+      // either side is found by its own address.
+      `CREATE TABLE IF NOT EXISTS chat_threads (
+        id TEXT PRIMARY KEY NOT NULL,
+        creator TEXT NOT NULL,
+        fan TEXT NOT NULL,
+        created_at INTEGER NOT NULL CHECK (created_at > 0),
+        last_message_at INTEGER NOT NULL CHECK (last_message_at > 0),
+        UNIQUE (creator, fan)
+      )`,
+      `CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY NOT NULL,
+        thread_id TEXT NOT NULL,
+        sender TEXT NOT NULL,
+        body TEXT NOT NULL,
+        sent_at INTEGER NOT NULL CHECK (sent_at > 0),
+        read_at INTEGER
+      )`,
+      "CREATE INDEX IF NOT EXISTS chat_threads_creator ON chat_threads (creator, last_message_at DESC)",
+      "CREATE INDEX IF NOT EXISTS chat_threads_fan ON chat_threads (fan, last_message_at DESC)",
+      "CREATE INDEX IF NOT EXISTS chat_messages_thread ON chat_messages (thread_id, sent_at)",
+    ],
+  },
 ];
 
 export async function applyMigrations(client: Client): Promise<void> {
@@ -489,6 +517,8 @@ export async function resetDatabase(client: Client): Promise<void> {
     "idempotency_keys",
     "transaction_evidence",
     "feedback_outbox",
+    "chat_messages",
+    "chat_threads",
     "membership_attempts",
     "payment_attempts",
     "pending_publications",

@@ -166,6 +166,27 @@ The `*_NOT_FOUND` variants (`OFFER`, `PRICE_UPDATE`, `CANCELLATION`,
 `MEMBERSHIP_PURCHASE_EXISTS` follow the same retry rules as `MEMBERSHIP_OFFER_STALE`
 and the other `409`s.
 
+## Messages
+
+Creators and their subscribers can talk off chain. A conversation is between a
+creator and one subscriber; the wallet that buys is the wallet that talks, so
+there is no separate chat identity.
+
+- `GET /api/chat/threads` — every conversation this wallet takes part in, newest
+  first, with the other participant and the unread count.
+- `GET /api/chat/threads/{address}` — the thread with one other wallet, in either
+  direction. **Reading it marks the messages it received as read.**
+- `POST /api/chat/threads/{address}/messages` — send a message (`body`, up to
+  2000 characters).
+
+Writing is gated on the subscription: a wallet needs a live 30-day membership of
+the creator to send, and a creator may always reply inside an existing thread. A
+wallet that lapses keeps reading its history but cannot write until it
+resubscribes. A conversation with an address you have never subscribed to comes
+back with `canSend: false` and no messages, and sending returns `403
+SUBSCRIPTION_REQUIRED`. Conversations are stored off chain and are readable by
+Kaskama; they are not end-to-end encrypted.
+
 ## Referrals
 
 Any post or creator page can be shared with a `?ref=<wallet>` query parameter.
@@ -233,7 +254,8 @@ again, then retry. Known codes include `AUTHENTICATION_REQUIRED`,
 `PAYMENT_NOT_FOUND`, `INVALID_REQUEST`, `RATE_LIMITED`, and the media codes
 `INVALID_MEDIA`, `UNSUPPORTED_MEDIA`, `IMAGE_TOO_LARGE`, `VIDEO_TOO_LARGE`,
 `AUDIO_TOO_LARGE`, `DOCUMENT_TOO_LARGE`, `MEDIA_ALREADY_PUBLISHED`, and
-`MEDIA_FORBIDDEN`.
+`MEDIA_FORBIDDEN`. The chat surface adds `SUBSCRIPTION_REQUIRED`,
+`INVALID_MESSAGE`, `CHAT_WITH_SELF`, and `CONVERSATION_NOT_FOUND`.
 
 ## Concurrency
 

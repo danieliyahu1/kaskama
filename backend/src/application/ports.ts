@@ -1,5 +1,7 @@
 import type {
   Challenge,
+  ChatMessage,
+  ChatThread,
   CreatorCovenant,
   MembershipCheck,
   MembershipContract,
@@ -150,6 +152,27 @@ export interface MembershipPurchaseRepository {
   ): Promise<DuplicateOutcome>;
 }
 
+/**
+ * Off-chain conversations. A thread is keyed by its creator and fan, so the
+ * pair is unique and either side is found by its own address.
+ */
+export interface ChatRepository {
+  findChatThread(creator: string, fan: string): Promise<ChatThread | null>;
+  createChatThread(value: ChatThread): Promise<"CREATED" | "EXISTS">;
+  /** Every thread this address takes part in, newest message first. */
+  chatThreadsFor(address: string): Promise<ChatThread[]>;
+  /** Append a message and move its thread's `lastMessageAt` in one step. */
+  appendChatMessage(value: ChatMessage): Promise<void>;
+  /** The most recent `limit` messages of a thread, oldest first. */
+  chatMessages(threadId: string, limit: number): Promise<ChatMessage[]>;
+  /** The newest message of each given thread, for list previews. */
+  chatLastMessages(threadIds: string[]): Promise<ChatMessage[]>;
+  /** Unread message counts per thread for one reader, keyed by thread id. */
+  chatUnreadCounts(address: string): Promise<Map<string, number>>;
+  /** Mark every message this reader received in a thread as read. */
+  markChatRead(threadId: string, reader: string, at: number): Promise<void>;
+}
+
 export interface Repositories
   extends
     ChallengeRepository,
@@ -161,6 +184,7 @@ export interface Repositories
     PurchaseRepository,
     CovenantRepository,
     MembershipPurchaseRepository,
+    ChatRepository,
     TransactionEvidenceStore {
   initialize(): Promise<void>;
   /**

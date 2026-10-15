@@ -180,6 +180,45 @@ export interface MembershipAddressVerificationResponse {
   memberships: MembershipCheckResponse[];
 }
 
+/** The longest a chat message may be. */
+export const MAX_CHAT_MESSAGE_LENGTH = 2000;
+
+/** One message in a conversation, already judged against the reader. */
+export interface ChatMessageResponse {
+  id: string;
+  sender: string;
+  /** Whether the wallet reading it wrote it. */
+  mine: boolean;
+  body: string;
+  sentAt: string;
+}
+
+/** One row of the Messages list: the other person and the last thing said. */
+export interface ChatThreadSummary {
+  address: string;
+  displayAddress: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  /** True when the other person is the creator, so this wallet is the subscriber. */
+  counterpartIsCreator: boolean;
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  unread: number;
+}
+
+/**
+ * A conversation with one other person. A wallet can always read a thread it is
+ * part of; `canSend` says whether the subscription gate currently lets it write.
+ */
+export interface ChatConversationResponse {
+  address: string;
+  displayAddress: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  canSend: boolean;
+  messages: ChatMessageResponse[];
+}
+
 export function normalizePostText(value: string): string {
   return value.trim();
 }
@@ -275,4 +314,18 @@ export function validatePost(caption: string, price: string): string[] {
     errors.push("Caption must be between 1 and 280 characters.");
   if (parsePostPrice(price) === null) errors.push(MEDIA_COPY.invalidPrice);
   return errors;
+}
+
+/** A chat message keeps its line breaks; only the ends are trimmed. */
+export function normalizeChatMessage(value: string): string {
+  return value.trim();
+}
+
+/** Returns why a message is unacceptable, or null when it is fine. */
+export function validateChatMessage(value: string): string | null {
+  const length = Array.from(normalizeChatMessage(value)).length;
+  if (length < 1) return "Write a message first.";
+  if (length > MAX_CHAT_MESSAGE_LENGTH)
+    return `Messages can be up to ${MAX_CHAT_MESSAGE_LENGTH} characters.`;
+  return null;
 }

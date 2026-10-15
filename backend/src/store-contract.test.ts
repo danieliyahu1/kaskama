@@ -537,6 +537,128 @@ describe.each([
       ]),
     );
   });
+
+  it("opens one chat thread per creator and fan", async () => {
+    const thread = {
+      id: "thread-1",
+      creator,
+      fan: buyer,
+      createdAt: now,
+      lastMessageAt: now,
+    };
+
+    expect(await store.createChatThread(thread)).toBe("CREATED");
+    expect(await store.createChatThread({ ...thread, id: "thread-2" })).toBe("EXISTS");
+    expect(await store.findChatThread(creator, buyer)).toEqual(thread);
+    expect(await store.findChatThread(buyer, creator)).toBeNull();
+  });
+
+  it("lists a wallet's threads newest first and previews the last message", async () => {
+    await store.createChatThread({
+      id: "thread-1",
+      creator,
+      fan: buyer,
+      createdAt: now,
+      lastMessageAt: now,
+    });
+    await store.createChatThread({
+      id: "thread-2",
+      creator,
+      fan: "kaspatest:other-fan",
+      createdAt: now,
+      lastMessageAt: now,
+    });
+    await store.appendChatMessage({
+      id: "message-1",
+      threadId: "thread-1",
+      sender: buyer,
+      body: "hello",
+      sentAt: now + 1,
+      readAt: null,
+    });
+
+    await store.appendChatMessage({
+      id: "message-2",
+      threadId: "thread-2",
+      sender: creator,
+      body: "later",
+      sentAt: now + 5,
+      readAt: null,
+    });
+
+    expect(await store.chatThreadsFor(creator)).toMatchObject([
+      { id: "thread-2", lastMessageAt: now + 5 },
+      { id: "thread-1", lastMessageAt: now + 1 },
+    ]);
+    expect(await store.chatThreadsFor(buyer)).toMatchObject([{ id: "thread-1" }]);
+    expect(await store.chatLastMessages(["thread-1", "thread-2"])).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "message-1", body: "hello" }),
+        expect.objectContaining({ id: "message-2", body: "later" }),
+      ]),
+    );
+  });
+
+  it("counts unread messages for the reader and clears them on read", async () => {
+    await store.createChatThread({
+      id: "thread-1",
+      creator,
+      fan: buyer,
+      createdAt: now,
+      lastMessageAt: now,
+    });
+    await store.appendChatMessage({
+      id: "message-1",
+      threadId: "thread-1",
+      sender: buyer,
+      body: "hi",
+      sentAt: now + 1,
+      readAt: null,
+    });
+    await store.appendChatMessage({
+      id: "message-2",
+      threadId: "thread-1",
+      sender: buyer,
+      body: "again",
+      sentAt: now + 2,
+      readAt: null,
+    });
+
+    expect((await store.chatUnreadCounts(creator)).get("thread-1")).toBe(2);
+    expect((await store.chatUnreadCounts(buyer)).get("thread-1")).toBeUndefined();
+
+    await store.markChatRead("thread-1", creator, now + 3);
+
+    expect((await store.chatUnreadCounts(creator)).get("thread-1")).toBeUndefined();
+    expect(
+      (await store.chatMessages("thread-1", 10)).map((message) => message.readAt),
+    ).toEqual([now + 3, now + 3]);
+  });
+
+  it("returns the newest messages of a thread in ascending order", async () => {
+    await store.createChatThread({
+      id: "thread-1",
+      creator,
+      fan: buyer,
+      createdAt: now,
+      lastMessageAt: now,
+    });
+    for (let index = 0; index < 5; index += 1) {
+      await store.appendChatMessage({
+        id: `message-${index}`,
+        threadId: "thread-1",
+        sender: buyer,
+        body: `body-${index}`,
+        sentAt: now + index,
+        readAt: null,
+      });
+    }
+
+    expect((await store.chatMessages("thread-1", 2)).map((m) => m.body)).toEqual([
+      "body-3",
+      "body-4",
+    ]);
+  });
 });
 
 function post(id: string, postCreator: string, publishedAt: number): Post {

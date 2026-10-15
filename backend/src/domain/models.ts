@@ -46,6 +46,28 @@ export interface Purchase {
 }
 
 /**
+ * A conversation between a creator and one fan, off chain. The pair is unique:
+ * a wallet has at most one thread with any other wallet.
+ */
+export interface ChatThread {
+  id: string;
+  creator: string;
+  fan: string;
+  createdAt: number;
+  lastMessageAt: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  threadId: string;
+  sender: string;
+  body: string;
+  sentAt: number;
+  /** When the other participant read it; null while it is unread. */
+  readAt: number | null;
+}
+
+/**
  * The signed transaction a client submitted, kept so reads (purchase access,
  * membership verification) can be answered from evidence we captured rather
  * than re-fetching the transaction from a node whose index may not serve it.
