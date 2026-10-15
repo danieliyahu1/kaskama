@@ -286,7 +286,7 @@ export function parseMembershipPrice(value: string): bigint | null {
 
 /**
  * The platform fee for a membership: 1% of the price, rounded to the nearest
- * sompi, never below the 0.2 KAS floor. The covenant charges the same amount, so
+ * sompi, never below the 1 KAS floor. The covenant charges the same amount, so
  * a low-priced membership is never free and the floor is never waived.
  */
 export function membershipFeeSompi(priceSompi: bigint): bigint {

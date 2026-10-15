@@ -13,7 +13,7 @@ contract Membership(
     int constant MAX_PRICE_SOMPI = 100000000000000;
     int constant MEMBERSHIP_OUTPUT_VALUE = 50000000;
     int constant FEE_DENOMINATOR = 100;
-    int constant MIN_FEE_SOMPI = 20000000;
+    int constant MIN_FEE_SOMPI = 100000000;
 
     byte[32] creator = initialCreator;
     byte[32] platform = initialPlatform;

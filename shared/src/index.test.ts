@@ -48,15 +48,12 @@ describe("membership pricing", () => {
     expect(membershipPriceProblem(value)).toBeNull(),
   );
 
-  it("charges the 0.2 KAS floor whenever one percent is below it", () => {
+  it("charges the 1 KAS floor whenever one percent is below it", () => {
     expect(membershipFeeSompi(2n * 100_000_000n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
-    expect(membershipFeeSompi(19n * 100_000_000n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
-    expect(membershipFeeSompi(20n * 100_000_000n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
-  });
-
-  it("charges the plain one percent once it clears the floor", () => {
-    expect(membershipFeeSompi(50n * 100_000_000n)).toBe(50_000_000n);
-    expect(membershipFeeSompi(100n * 100_000_000n)).toBe(100_000_000n);
+    expect(membershipFeeSompi(50n * 100_000_000n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
+    expect(membershipFeeSompi(9_999_999_949n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
+    expect(membershipFeeSompi(9_999_999_950n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
+    expect(membershipFeeSompi(100n * 100_000_000n)).toBe(MIN_MEMBERSHIP_FEE_SOMPI);
   });
 
   it("rounds the one percent fee to the nearest sompi", () => {
