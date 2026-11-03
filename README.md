@@ -4,6 +4,8 @@ Kaskama is a subscription platform where creators sell access to their work. Cre
 
 Live app: https://kaskama.com/
 
+![Kaskama architecture: the browser app and Kasware wallet talk to one Express process, which reads Turso, stores private media in Cloudflare R2, and reaches the Kaspa network where the membership covenant enforces subscription terms](docs/assets/kaskama-architecture.png)
+
 ## Development
 
 Requirements: Node 24 and pnpm 11.17.
